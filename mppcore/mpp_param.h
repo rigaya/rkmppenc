@@ -31,6 +31,15 @@
 #include "rgy_caption.h"
 #include "rgy_prm.h"
 
+#include "mpp_rc_api.h"
+#include "rk_type.h"
+#include "rk_venc_cmd.h"
+#include "rk_venc_cfg.h"
+
+static const int MPP_DEFAULT_QP = 23;
+static const int MPP_DEFAULT_MAX_BITRATE = 25000;
+static const int MPP_DEFAULT_GOP_LEN = 300;
+
 const CX_DESC list_codec[] = {
     { _T("h264"), MPP_VIDEO_CodingAVC },
     { _T("hevc"), MPP_VIDEO_CodingHEVC },
@@ -47,9 +56,9 @@ const CX_DESC list_codec_all[] = {
 };
 
 const CX_DESC list_avc_profile[] = {
-    { _T("Baseline"), 66   },
-    { _T("Main"),     77   },
-    { _T("High"),     100  },
+    { _T("baseline"), 66   },
+    { _T("main"),     77   },
+    { _T("high"),     100  },
     { NULL, 0 }
 };
 
@@ -228,10 +237,12 @@ struct MPPParam {
     int     bitrate;
     int     maxBitrate;
     int     VBVBufferSize;
-    int     qpI;
-    int     qpP;
-    int     qpB;
+    int     qp;
+    int     qpMax;
+    int     qpMin;
     int     gopLen;
+
+    int     par[2];
 
     MPPParam();
     ~MPPParam();

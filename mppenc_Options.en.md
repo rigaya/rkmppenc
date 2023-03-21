@@ -271,12 +271,6 @@ Show version of mppenc
 ### --option-list
 Show option list.
 
-### --check-hw [&lt;int&gt;]
-Check whether the specified device is able to run VCEEnc. DeviceID: "0" will be checked if not specified.
-
-### --check-features [&lt;int&gt;]
-Show the information of features of the specified device. DeviceID: "0" will be checked if not specified.
-
 ### --check-clinfo
 Show OpenCL information.
 

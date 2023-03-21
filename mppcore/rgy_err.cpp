@@ -396,10 +396,10 @@ static const RGYErrMapMPP ERR_MAP_MPP[] = {
     MPPERR_MAP(NOMEM),
     MPPERR_MAP(PROTOL),
     { RGY_ERR_MPP_FAIL_SPLIT_FRAME, MPP_FAIL_SPLIT_FRAME },
-    MPPERR_MAP(ERR_VPUHW),
+    MPPERR_MAP(VPUHW),
     { RGY_ERR_MPP_EOS_STREAM_REACHED, MPP_EOS_STREAM_REACHED },
-    MPPERR_MAP(ERR_BUFFER_FULL),
-    MPPERR_MAP(ERR_DISPLAY_FULL)
+    MPPERR_MAP(BUFFER_FULL),
+    MPPERR_MAP(DISPLAY_FULL)
 };
 #undef MPPERR_MAP
 
@@ -408,7 +408,7 @@ MPP_RET err_to_mpp(RGY_ERR err) {
     auto ret = std::find_if((const RGYErrMapMPP *)ERR_MAP_MPP, ERR_MAP_MPP_FIN, [err](const RGYErrMapMPP map) {
         return map.rgy == err;
         });
-    return (ret == ERR_MAP_MPP_FIN) ? MPP_ERR_UNKNOW : ret->vk;
+    return (ret == ERR_MAP_MPP_FIN) ? MPP_ERR_UNKNOW : ret->mpp;
 }
 
 RGY_ERR err_to_rgy(MPP_RET err) {
@@ -416,7 +416,7 @@ RGY_ERR err_to_rgy(MPP_RET err) {
     auto ret = std::find_if((const RGYErrMapMPP *)ERR_MAP_MPP, ERR_MAP_MPP_FIN, [err](const RGYErrMapMPP map) {
         return map.mpp == err;
         });
-    return (ret == ERR_MAP_MPP_FIN) ? RGY_ERR_UNKNOW : ret->rgy;
+    return (ret == ERR_MAP_MPP_FIN) ? RGY_ERR_UNKNOWN : ret->rgy;
 }
 #endif //#if ENCODER_MPP
 

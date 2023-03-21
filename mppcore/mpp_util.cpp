@@ -29,37 +29,29 @@
 #include "rgy_aspect_ratio.h"
 #include "mpp_util.h"
 #include "mpp_param.h"
+#include "mpp_frame.h"
+#include "mpp_log_def.h"
 #include "rgy_frame.h"
 
-static const auto RGY_CODEC_TO_MPP = make_array<std::pair<RGY_CODEC, const wchar_t *>>(
-    std::make_pair(RGY_CODEC_UNKNOWN, nullptr),
-    std::make_pair(RGY_CODEC_H264,    AMFVideoEncoderVCE_AVC),
-    std::make_pair(RGY_CODEC_HEVC,    AMFVideoEncoder_HEVC),
-    std::make_pair(RGY_CODEC_AV1,     AMFVideoEncoder_AV1)
+static const auto RGY_CODEC_TO_MPP = make_array<std::pair<RGY_CODEC, MppCodingType>>(
+    std::make_pair(RGY_CODEC_UNKNOWN, MPP_VIDEO_CodingUnused),
+    std::make_pair(RGY_CODEC_H264,    MPP_VIDEO_CodingAVC),
+    std::make_pair(RGY_CODEC_HEVC,    MPP_VIDEO_CodingHEVC),
+    std::make_pair(RGY_CODEC_AV1,     MPP_VIDEO_CodingAV1)
     );
-MAP_PAIR_0_1(codec, rgy, RGY_CODEC, enc, const wchar_t *, RGY_CODEC_TO_MPP, RGY_CODEC_UNKNOWN, nullptr);
+MAP_PAIR_0_1(codec, rgy, RGY_CODEC, enc, MppCodingType, RGY_CODEC_TO_MPP, RGY_CODEC_UNKNOWN, MPP_VIDEO_CodingUnused);
 
-static const auto VCE_CODEC_UVD_NAME = make_array<std::pair<RGY_CODEC, const wchar_t *>>(
-    std::make_pair(RGY_CODEC_H264,  AMFVideoDecoderUVD_H264_AVC ),
-    std::make_pair(RGY_CODEC_HEVC,  AMFVideoDecoderHW_H265_HEVC ),
-    std::make_pair(RGY_CODEC_VC1,   AMFVideoDecoderUVD_VC1 ),
-    //std::make_pair( RGY_CODEC_WMV3,  AMFVideoDecoderUVD_WMV3 ),
-    std::make_pair(RGY_CODEC_VP9,   AMFVideoDecoderHW_VP9),
-    std::make_pair(RGY_CODEC_AV1,   AMFVideoDecoderHW_AV1),
-    std::make_pair(RGY_CODEC_MPEG2, AMFVideoDecoderUVD_MPEG2 )
+static const auto MPP_CODEC_DEC_NAME = make_array<std::pair<RGY_CODEC, MppCodingType>>(
+    std::make_pair(RGY_CODEC_H264,  MPP_VIDEO_CodingAVC ),
+    std::make_pair(RGY_CODEC_HEVC,  MPP_VIDEO_CodingHEVC ),
+    //std::make_pair(RGY_CODEC_VC1,   MPP_VIDEO_CodingVC1 ),
+    //std::make_pair( RGY_CODEC_WMV3,  MPP_VIDEO_CodingWMV ),
+    std::make_pair(RGY_CODEC_VP9,   MPP_VIDEO_CodingVP9),
+    std::make_pair(RGY_CODEC_AV1,   MPP_VIDEO_CodingAV1),
+    std::make_pair(RGY_CODEC_MPEG2, MPP_VIDEO_CodingMPEG2 )
 );
 
-MAP_PAIR_0_1(codec, rgy, RGY_CODEC, dec, const wchar_t *, VCE_CODEC_UVD_NAME, RGY_CODEC_UNKNOWN, nullptr);
-
-const wchar_t * codec_rgy_to_dec_10bit(const RGY_CODEC codec) {
-    switch (codec) {
-    case RGY_CODEC_AV1:  return AMFVideoDecoderHW_AV1_12BIT;
-    case RGY_CODEC_HEVC: return AMFVideoDecoderHW_H265_MAIN10;
-    case RGY_CODEC_VP9:  return AMFVideoDecoderHW_VP9_10BIT;
-    default:
-        return nullptr;
-    }
-}
+MAP_PAIR_0_1(codec, rgy, RGY_CODEC, dec, MppCodingType, MPP_CODEC_DEC_NAME, RGY_CODEC_UNKNOWN, MPP_VIDEO_CodingUnused);
 
 static const auto RGY_CSP_TO_MPP = make_array<std::pair<RGY_CSP, MppFrameFormat>>(
     std::make_pair(RGY_CSP_NA,        MPP_FMT_BUTT),
@@ -94,16 +86,6 @@ static const auto RGY_CSP_TO_MPP = make_array<std::pair<RGY_CSP, MppFrameFormat>
 
 MAP_PAIR_0_1(csp, rgy, RGY_CSP, enc, MppFrameFormat, RGY_CSP_TO_MPP, RGY_CSP_NA, MPP_FMT_BUTT);
 
-static const auto RGY_LOGLEVEL_TO_VCE = make_array<std::pair<int, int>>(
-    std::make_pair(RGY_LOG_TRACE, AMF_TRACE_TRACE),
-    std::make_pair(RGY_LOG_DEBUG, AMF_TRACE_DEBUG),
-    std::make_pair(RGY_LOG_INFO,  AMF_TRACE_INFO),
-    std::make_pair(RGY_LOG_WARN,  AMF_TRACE_WARNING),
-    std::make_pair(RGY_LOG_ERROR, AMF_TRACE_ERROR)
-    );
-MAP_PAIR_0_1(loglevel, rgy, int, enc, int, RGY_LOGLEVEL_TO_VCE, RGY_LOG_INFO, AMF_TRACE_INFO);
-
-
 static const auto RGY_PICSTRUCT_TO_MPP = make_array<std::pair<RGY_PICSTRUCT, uint32_t>>(
     std::make_pair(RGY_PICSTRUCT_UNKNOWN,      MPP_FRAME_FLAG_FRAME),
     std::make_pair(RGY_PICSTRUCT_FRAME,        MPP_FRAME_FLAG_FRAME),
@@ -114,7 +96,16 @@ static const auto RGY_PICSTRUCT_TO_MPP = make_array<std::pair<RGY_PICSTRUCT, uin
     std::make_pair(RGY_PICSTRUCT_FIELD_TOP,    MPP_FRAME_FLAG_TOP_FIELD),
     std::make_pair(RGY_PICSTRUCT_FIELD_BOTTOM, MPP_FRAME_FLAG_BOT_FIELD)
     );
-MAP_PAIR_0_1(frametype, rgy, RGY_PICSTRUCT, enc, uint32_t, RGY_PICSTRUCT_TO_MPP, RGY_PICSTRUCT_UNKNOWN, MPP_FRAME_FLAG_FRAME);
+MAP_PAIR_0_1(picstruct, rgy, RGY_PICSTRUCT, enc, uint32_t, RGY_PICSTRUCT_TO_MPP, RGY_PICSTRUCT_UNKNOWN, MPP_FRAME_FLAG_FRAME);
+
+static const auto RGY_LOGLEVEL_TO_MPP = make_array<std::pair<int, int>>(
+    std::make_pair(RGY_LOG_TRACE, MPP_LOG_VERBOSE),
+    std::make_pair(RGY_LOG_DEBUG, MPP_LOG_DEBUG),
+    std::make_pair(RGY_LOG_INFO,  MPP_LOG_INFO),
+    std::make_pair(RGY_LOG_WARN,  MPP_LOG_WARN),
+    std::make_pair(RGY_LOG_ERROR, MPP_LOG_ERROR)
+    );
+MAP_PAIR_0_1(loglevel, rgy, int, enc, int, RGY_LOGLEVEL_TO_MPP, RGY_LOG_INFO, MPP_LOG_INFO);
 
 void RGYBitstream::addFrameData(RGYFrameData *frameData) {
     if (frameData != nullptr) {
@@ -142,28 +133,23 @@ std::vector<RGYFrameData *> RGYBitstream::getFrameDataList() {
 
 RGY_NOINLINE
 VideoInfo videooutputinfo(
-    RGY_CODEC codec,
-    amf::AMF_SURFACE_FORMAT encFormat,
-    const AMFParams& prm,
+    const MPPCfg &prm,
+    rgy_rational<int>& sar,
     RGY_PICSTRUCT picstruct,
     const VideoVUIInfo& vui) {
-
-    const int bframes = (codec == RGY_CODEC_H264) ? prm.get<int>(AMF_VIDEO_ENCODER_B_PIC_PATTERN) : 0;
-
     VideoInfo info;
-    info.codec = codec;
-    info.codecLevel = prm.get<int>(AMF_PARAM_PROFILE_LEVEL(codec));
-    info.codecProfile = prm.get<int>(AMF_PARAM_PROFILE(codec));
-    info.videoDelay = (codec == RGY_CODEC_AV1) ? 0 : ((bframes > 0) + (bframes > 2));
-    info.dstWidth = prm.get<int>(VCE_PARAM_KEY_OUTPUT_WIDTH);
-    info.dstHeight = prm.get<int>(VCE_PARAM_KEY_OUTPUT_HEIGHT);
-    info.fpsN = prm.get<AMFRate>(AMF_PARAM_FRAMERATE(codec)).num;
-    info.fpsD = prm.get<AMFRate>(AMF_PARAM_FRAMERATE(codec)).den;
-    info.sar[0] = prm.get<AMFRatio>(AMF_PARAM_ASPECT_RATIO(codec)).num;
-    info.sar[1] = prm.get<AMFRatio>(AMF_PARAM_ASPECT_RATIO(codec)).den;
+    info.codec = prm.rgy_codec();
+    info.codecProfile = prm.codec_profile();
+    info.codecLevel = prm.codec_level();
+    info.dstWidth = prm.prep.width;
+    info.dstHeight = prm.prep.height;
+    info.fpsN = prm.rc.fps_out_num;
+    info.fpsD = prm.rc.fps_out_denorm;
+    info.sar[0] = sar.n();
+    info.sar[1] = sar.d();
     adjust_sar(&info.sar[0], &info.sar[1], info.dstWidth, info.dstHeight);
     info.picstruct = picstruct;
-    info.csp = csp_enc_to_rgy(encFormat);
+    info.csp = csp_enc_to_rgy(prm.prep.format);
     info.vui = vui;
     return info;
 }

@@ -31,29 +31,71 @@
 
 #include "rgy_util.h"
 #include "rgy_err.h"
+#include "rgy_opencl.h"
+#include "rgy_frame.h"
+#include "mpp_frame.h"
+
 #include "mpp_param.h"
 #include "convert_csp.h"
 
 class RGYFrameData;
 
-bool check_if_vce_available(int deviceId, const RGYParamLogLevel& loglevel);
-tstring check_vce_enc_features(const std::vector<RGY_CODEC>& codecs, int deviceId, const RGYParamLogLevel& loglevel);
-tstring check_vce_dec_features(int deviceId, const RGYParamLogLevel& loglevel);
-tstring check_vce_filter_features(int deviceId, const RGYParamLogLevel& loglevel);
-
-MAP_PAIR_0_1_PROTO(codec, rgy, RGY_CODEC, enc, const wchar_t *);
-MAP_PAIR_0_1_PROTO(codec, rgy, RGY_CODEC, dec, const wchar_t *);
-MAP_PAIR_0_1_PROTO(csp, rgy, RGY_CSP, enc, amf::AMF_SURFACE_FORMAT);
+MAP_PAIR_0_1_PROTO(codec, rgy, RGY_CODEC, enc, MppCodingType);
+MAP_PAIR_0_1_PROTO(codec, rgy, RGY_CODEC, dec, MppCodingType);
+MAP_PAIR_0_1_PROTO(csp, rgy, RGY_CSP, enc, MppFrameFormat);
+MAP_PAIR_0_1_PROTO(picstruct, rgy, RGY_PICSTRUCT, enc, uint32_t);
 MAP_PAIR_0_1_PROTO(loglevel, rgy, int, enc, int);
-MAP_PAIR_0_1_PROTO(frametype, rgy, RGY_PICSTRUCT, enc, amf::AMF_FRAME_TYPE);
-MAP_PAIR_0_1_PROTO(resize_mode, rgy, RGY_VPP_RESIZE_ALGO, enc, AMF_HQ_SCALER_ALGORITHM_ENUM);
 
-const wchar_t * codec_rgy_to_dec_10bit(const RGY_CODEC codec);
+#define MPP_ALIGN ALIGN16
 
-AMF_VIDEO_ENCODER_PICTURE_STRUCTURE_ENUM picstruct_rgy_to_enc(RGY_PICSTRUCT picstruct);
-RGY_PICSTRUCT picstruct_enc_to_rgy(AMF_VIDEO_ENCODER_PICTURE_STRUCTURE_ENUM picstruct);
+struct MPPCfg {
+    MppEncCfg       cfg;
+    MppEncPrepCfg   prep;
+    MppEncRcCfg     rc;
+    MppEncCodecCfg  codec;
+    MppEncSliceSplit split;
 
-const TCHAR *AMFRetString(AMF_RESULT ret);
+    MPPCfg();
+    RGYFrameInfo frameinfo() const {
+        const int outWidth = prep.width;
+        const int outHeight = prep.height;
+        int bitdepth = 8;
+        auto csp = RGY_CSP_NV12;
+        const bool yuv444 = false;
+        if (bitdepth > 8) {
+            csp = (yuv444) ? RGY_CSP_YUV444_16 : RGY_CSP_P010;
+        } else {
+            csp = (yuv444) ? RGY_CSP_YUV444 : RGY_CSP_NV12;
+        }
+        return RGYFrameInfo(outWidth, outHeight, csp, bitdepth, RGY_PICSTRUCT_FRAME, RGY_MEM_TYPE_MPP);
+    }
+    RGY_CODEC rgy_codec() const {
+        return codec_enc_to_rgy(codec.coding);
+    }
+    int codec_profile() const {
+        switch (rgy_codec()) {
+        case RGY_CODEC_H264: return codec.h264.profile;
+        case RGY_CODEC_HEVC: return codec.h265.profile;
+        default: break;
+        }
+        return 0;
+    }
+    int codec_level() const {
+        switch (rgy_codec()) {
+        case RGY_CODEC_H264: return codec.h264.level;
+        case RGY_CODEC_HEVC: return codec.h265.level;
+        default: break;
+        }
+        return 0;
+    }
+    int codec_tier() const {
+        switch (rgy_codec()) {
+        case RGY_CODEC_HEVC: return codec.h265.tier;
+        default: break;
+        }
+        return 0;
+    }
+};
 
 struct RGYBitstream {
 private:
@@ -332,38 +374,103 @@ static inline RGYBitstream RGYBitstreamInit() {
 static_assert(std::is_pod<RGYBitstream>::value == true, "RGYBitstream should be POD type.");
 #endif
 
+template<typename T>
+struct RGYMPPDeleter {
+    RGYMPPDeleter() : deleter(nullptr) {};
+    RGYMPPDeleter(std::function<MPP_RET(T*)> deleter) : deleter(deleter) {};
+    void operator()(T p) { deleter(&p); }
+    std::function<MPP_RET(T*)> deleter;
+};
+
+using unique_mppframe = std::unique_ptr<std::remove_pointer<MppFrame>::type, RGYMPPDeleter<MppFrame>>;
+
+static unique_mppframe createMPPFrameEmpty() {
+    return unique_mppframe(nullptr, RGYMPPDeleter<MppFrame>(mpp_frame_deinit));
+}
+
+static unique_mppframe createMPPFrame() {
+    MppFrame frame = nullptr;
+    if (mpp_frame_init(&frame) != MPP_OK) {
+        frame = nullptr;
+    }
+    return unique_mppframe(frame, RGYMPPDeleter<MppFrame>(mpp_frame_deinit));
+}
+
+static RGYFrameInfo infoMPP(MppFrame mppframe) {
+    MppBuffer buffer = mpp_frame_get_buffer(mppframe);
+    uint8_t *base = (uint8_t *)mpp_buffer_get_ptr(buffer);
+    const int x_stride = mpp_frame_get_hor_stride(mppframe);
+    const int y_stride = mpp_frame_get_ver_stride(mppframe);
+    const MppFrameFormat fmt = mpp_frame_get_fmt(mppframe);
+
+    RGYFrameInfo info;
+    info.csp = csp_enc_to_rgy(fmt);
+    info.width = mpp_frame_get_width(mppframe);
+    info.height = mpp_frame_get_height(mppframe);
+
+    switch (fmt) {
+    case MPP_FMT_YUV420SP_VU:
+    case MPP_FMT_YUV420SP:
+        info.ptr[0] = base;
+        info.ptr[1] = base + x_stride * y_stride;
+        info.pitch[0] = x_stride;
+        info.pitch[1] = x_stride;
+        break;
+    case MPP_FMT_YUV420P:
+        info.ptr[0] = base;
+        info.ptr[1] = base + (x_stride >> 1) * y_stride;
+        info.ptr[2] = base + (x_stride >> 1) * (info.height >> 1);
+        info.pitch[0] = x_stride;
+        info.pitch[1] = x_stride >> 1;
+        info.pitch[2] = x_stride >> 1;
+        break;
+    default:
+        break;
+    }
+
+    auto meta = mpp_frame_get_meta(mppframe);
+    RK_S64 duration;
+    mpp_meta_get_s64(meta, KEY_USER_DATA, &duration);
+    
+    info.timestamp = mpp_frame_get_pts(mppframe);
+    info.duration = duration;
+    info.picstruct = picstruct_enc_to_rgy(mpp_frame_get_mode(mppframe));
+    info.flags = RGY_FRAME_FLAG_NONE;
+    info.mem_type = RGY_MEM_TYPE_MPP;
+    info.inputFrameId = -1;
+    info.flags = RGY_FRAME_FLAG_NONE;
+    return info;
+}
+
 #if ENABLE_OPENCL
 
 struct RGYFrame {
 private:
-    const wchar_t *PROP_INPUT_FRAMEID = L"RGYFrameInputFrameID";
-    const wchar_t *PROP_FLAGS = L"RGYFrameFlags";
-    amf::AMFSurfacePtr amfptr;
-    unique_ptr<RGYCLFrame> clbuf;
-    std::vector<std::shared_ptr<RGYFrameData>> amfDataList;
+    std::unique_ptr<RGYSysFrame> sysbuf;
+    std::unique_ptr<RGYCLFrame> clbuf;
 public:
-    RGYFrame() : amfptr(), clbuf() {};
-    RGYFrame(const amf::AMFSurfacePtr &pSurface) : amfptr(std::move(pSurface)), clbuf(), amfDataList() {
+    RGYFrame() : sysbuf(), clbuf() {};
+    RGYFrame(std::unique_ptr<RGYSysFrame> sys) : sysbuf(std::move(sys)), clbuf() {
     }
-    RGYFrame(unique_ptr<RGYCLFrame> clframe) : amfptr(), clbuf(std::move(clframe)) {
+    RGYFrame(unique_ptr<RGYCLFrame> clframe) : sysbuf(), clbuf() {
     }
     virtual ~RGYFrame() {
         clbuf.reset();
     }
     virtual bool isempty() const {
-        return amfptr == nullptr && clbuf == nullptr;
+        return sysbuf == nullptr && clbuf == nullptr;
     }
-    virtual const amf::AMFSurfacePtr &amf() const {
-        return amfptr;
+    virtual const std::unique_ptr<RGYSysFrame>& sys() const {
+        return sysbuf;
     }
-    virtual amf::AMFSurfacePtr &amf() {
-        return amfptr;
+    virtual std::unique_ptr<RGYSysFrame>& sys() {
+        return sysbuf;
     }
-    virtual const amf::AMFSurface *surf() const {
-        return amfptr.GetPtr();
+    virtual const RGYSysFrame *sysframe() const {
+        return sysbuf.get();
     }
-    virtual amf::AMFSurface *surf() {
-        return amfptr.GetPtr();
+    virtual RGYSysFrame *sysframe() {
+        return sysbuf.get();
     }
     virtual const unique_ptr<RGYCLFrame> &cl() const {
         return clbuf;
@@ -377,65 +484,23 @@ public:
     virtual RGYCLFrame *clframe() {
         return clbuf.get();
     }
-    virtual amf::AMFSurfacePtr detachSurface() {
-        amf::AMFSurfacePtr ptr = amfptr;
-        amfptr = nullptr;
-        return ptr;
+    virtual std::unique_ptr<RGYSysFrame> detachSysSurface() {
+        return std::move(sysbuf);
     }
     virtual unique_ptr<RGYCLFrame> detachCLFrame() {
         return std::move(clbuf);
     }
-    virtual unique_ptr<RGYFrame> createCopy() {
-        if (amfptr) {
-            return createCopyAMF();
-        } else if (clbuf) {
-            //未実装
-            return std::make_unique<RGYFrame>();
-        } else {
-            return std::make_unique<RGYFrame>();
-        }
-    }
 private:
-    virtual unique_ptr<RGYFrame> createCopyAMF() {
-        amf::AMFDataPtr data;
-        amfptr->Duplicate(amfptr->GetMemoryType(), &data);
-        return std::make_unique<RGYFrame>(amf::AMFSurfacePtr(data));
-    }
-
-    RGYFrameInfo infoAMF() const {
-        RGYFrameInfo info;
-        for (int i = 0; i < 4; i++) {
-            auto plane = amfptr->GetPlaneAt(i);
-            if (plane) {
-                info.ptr[i] = (uint8_t *)plane->GetNative();
-                info.pitch[i] = plane->GetHPitch();
-            }
-        }
-        info.width = amfptr->GetPlaneAt(0)->GetWidth();
-        info.height = amfptr->GetPlaneAt(0)->GetHeight();
-        info.csp = csp_enc_to_rgy(amfptr->GetFormat());
-        info.timestamp = amfptr->GetPts();
-        info.duration = amfptr->GetDuration();
-        info.picstruct = frametype_enc_to_rgy(amfptr->GetFrameType());
-        info.flags = RGY_FRAME_FLAG_NONE;
-        info.mem_type = amfptr->GetMemoryType() == amf::AMF_MEMORY_HOST ? RGY_MEM_TYPE_CPU : RGY_MEM_TYPE_GPU_IMAGE;
-        int64_t value = 0;
-        if (amfptr->GetProperty(PROP_INPUT_FRAMEID, &value) == AMF_OK) {
-            info.inputFrameId = (int)value;
-        }
-        if (amfptr->GetProperty(PROP_FLAGS, &value) == AMF_OK) {
-            info.flags = (RGY_FRAME_FLAGS)value;
-        }
-        info.dataList = amfDataList;
-        return info;
+    RGYFrameInfo infoSys() const {
+        return sysbuf->frame;
     }
     RGYFrameInfo infoCL() const {
         return clbuf->frame;
     }
 public:
     virtual RGYFrameInfo getInfo() const {
-        if (amfptr) {
-            return infoAMF();
+        if (sysbuf) {
+            return infoSys();
         } else if (clbuf) {
             return infoCL();
         } else {
@@ -471,8 +536,8 @@ public:
         return getInfo().timestamp;
     }
     virtual void setTimestamp(uint64_t timestamp) {
-        if (amfptr) {
-            amfptr->SetPts(timestamp);
+        if (sysbuf) {
+            sysbuf->frame.timestamp = timestamp;
         } else if (clbuf) {
             clbuf->frame.timestamp = timestamp;
         }
@@ -481,8 +546,8 @@ public:
         return getInfo().duration;
     }
     virtual void setDuration(uint64_t duration) {
-        if (amfptr) {
-            amfptr->SetDuration(duration);
+        if (sysbuf) {
+            sysbuf->frame.duration = duration;
         } else if (clbuf) {
             clbuf->frame.duration = duration;
         }
@@ -491,8 +556,8 @@ public:
         return getInfo().picstruct;
     }
     virtual void setPicstruct(RGY_PICSTRUCT picstruct) {
-        if (amfptr) {
-            amfptr->SetFrameType(frametype_rgy_to_enc(picstruct));
+        if (sysbuf) {
+            sysbuf->frame.picstruct = picstruct;
         } else if (clbuf) {
             clbuf->frame.picstruct = picstruct;
         }
@@ -501,9 +566,8 @@ public:
         return getInfo().inputFrameId;
     }
     virtual void setInputFrameId(int id) {
-        if (amfptr) {
-            int64_t value = id;
-            amfptr->SetProperty(PROP_INPUT_FRAMEID, value);
+        if (sysbuf) {
+            sysbuf->frame.inputFrameId = id;
         } else if (clbuf) {
             clbuf->frame.inputFrameId = id;
         }
@@ -512,39 +576,38 @@ public:
         return getInfo().flags;
     }
     virtual void setFlags(RGY_FRAME_FLAGS flags) {
-        if (amfptr) {
-            int64_t value = flags;
-            amfptr->SetProperty(PROP_FLAGS, value);
+        if (sysbuf) {
+            sysbuf->frame.flags = flags;
         } else if (clbuf) {
             clbuf->frame.flags = flags;
         }
     }
     virtual void clearDataList() {
-        if (clbuf) {
+        if (sysbuf) {
+            sysbuf->frame.dataList.clear();
+        } else if (clbuf) {
             clbuf->frame.dataList.clear();
-        } else {
-            amfDataList.clear();
         }
     }
     virtual const std::vector<std::shared_ptr<RGYFrameData>>& dataList() const {
         if (clbuf) {
             return clbuf->frame.dataList;
         } else {
-            return amfDataList;
+            return sysbuf->frame.dataList;
         }
     };
     virtual std::vector<std::shared_ptr<RGYFrameData>>& dataList() {
         if (clbuf) {
             return clbuf->frame.dataList;
         } else {
-            return amfDataList;
+            return sysbuf->frame.dataList;
         }
     };
     virtual void setDataList(std::vector<std::shared_ptr<RGYFrameData>>& dataList) {
-        if (clbuf) {
+        if (sysbuf) {
+            sysbuf->frame.dataList = dataList;
+        } else if (clbuf) {
             clbuf->frame.dataList = dataList;
-        } else {
-            amfDataList = dataList;
         }
     }
 };
@@ -557,15 +620,12 @@ public:
     virtual ~RGYFrameRef() { }
     const RGYFrameInfo *info() const { return &frame; }
     virtual bool isempty() const override { return frame.ptr[0] == nullptr; }
-    virtual const amf::AMFSurface *surf() const override { return nullptr; }
-    virtual amf::AMFSurface *surf() override { return nullptr; }
+    virtual const RGYSysFrame *sysframe() const override { return nullptr; }
+    virtual RGYSysFrame *sysframe() override { return nullptr; }
     virtual const RGYCLFrame *clframe() const override { return nullptr; }
     virtual RGYCLFrame *clframe() override { return nullptr; }
-    virtual amf::AMFSurfacePtr detachSurface() override { return nullptr; }
+    virtual unique_ptr<RGYSysFrame> detachSysSurface() override { return nullptr; }
     virtual unique_ptr<RGYCLFrame> detachCLFrame() override { return nullptr; }
-    virtual unique_ptr<RGYFrame> createCopy() override { return nullptr; }
-private:
-    virtual unique_ptr<RGYFrame> createCopyAMF() override { return nullptr; }
 public:
     virtual RGYFrameInfo getInfo() const override { return frame; }
     virtual void setTimestamp(uint64_t timestamp) override {
@@ -603,14 +663,11 @@ typedef void RGYFrame;
 #endif //#if ENABLE_OPENCL
 
 VideoInfo videooutputinfo(
-    RGY_CODEC codec,
-    amf::AMF_SURFACE_FORMAT encFormat,
-    const AMFParams &prm,
+    const MPPCfg &prm,
+    rgy_rational<int>& sar,
     RGY_PICSTRUCT picstruct,
     const VideoVUIInfo& vui);
 
 int64_t rational_rescale(int64_t v, rgy_rational<int> from, rgy_rational<int> to);
-
-tstring AccelTypeToString(amf::AMF_ACCELERATION_TYPE accelType);
 
 #endif //#ifndef __MPP_UTIL_H__

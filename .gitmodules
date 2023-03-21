@@ -10,3 +10,6 @@
 [submodule "build_pkg"]
 	path = build_pkg
 	url = https://github.com/rigaya/build_pkg.git
+[submodule "clRNG"]
+	path = clRNG
+	url = https://github.com/clMathLibraries/clRNG.git

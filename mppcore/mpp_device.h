@@ -26,12 +26,3 @@
 // ------------------------------------------------------------------------------------------
 
 #pragma once
-
-#include <unordered_map>
-
-#include "rgy_version.h"
-#include "rgy_err.h"
-#include "rgy_util.h"
-#include "rgy_log.h"
-#include "mpp_device.h"
-#include "mpp_param.h"

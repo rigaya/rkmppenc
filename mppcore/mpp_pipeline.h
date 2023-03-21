@@ -53,8 +53,18 @@
 #include "rgy_device.h"
 #include "mpp_device.h"
 #include "mpp_param.h"
+#include "rk_mpi.h"
 
 static const int RGY_WAIT_INTERVAL = 60000;
+
+struct MPPContext {
+    MppCtx ctx;
+    MppApi *mpi;
+
+    MPPContext();
+    ~MPPContext();
+    RGY_ERR init(MppCtxType type, MppCodingType codectype);
+};
 
 enum RGYRunState {
     RGY_STATE_STOPPED,
@@ -67,14 +77,11 @@ enum RGYRunState {
 enum class VppType : int {
     VPP_NONE,
 
-    AMF_CONVERTER,
-    AMF_PREPROCESS,
-    AMF_RESIZE,
-    AMF_VQENHANCE,
+    RGA_MIN,
+    RGA_RESIZE,
+    RGA_MAX = RGA_MIN,
 
-    AMF_MAX,
-
-    CL_MIN = AMF_MAX,
+    CL_MIN = RGA_MAX,
 
     CL_CROP,
     CL_AFS,
@@ -109,22 +116,20 @@ enum class VppType : int {
     CL_MAX,
 };
 
-enum class VppFilterType { FILTER_NONE, FILTER_AMF, FILTER_OPENCL };
+enum class VppFilterType { FILTER_NONE, FILTER_RGA, FILTER_OPENCL };
 
 static VppFilterType getVppFilterType(VppType vpptype) {
     if (vpptype == VppType::VPP_NONE) return VppFilterType::FILTER_NONE;
-    if (vpptype < VppType::AMF_MAX) return VppFilterType::FILTER_AMF;
+    if (vpptype < VppType::RGA_MAX) return VppFilterType::FILTER_RGA;
     if (vpptype < VppType::CL_MAX) return VppFilterType::FILTER_OPENCL;
     return VppFilterType::FILTER_NONE;
 }
 
 struct VppVilterBlock {
     VppFilterType type;
-    std::unique_ptr<AMFFilter> vppamf;
     std::vector<std::unique_ptr<RGYFilter>> vppcl;
 
-    VppVilterBlock(std::unique_ptr<AMFFilter>& filter) : type(VppFilterType::FILTER_AMF), vppamf(std::move(filter)), vppcl() {};
-    VppVilterBlock(std::vector<std::unique_ptr<RGYFilter>>& filter) : type(VppFilterType::FILTER_OPENCL), vppamf(), vppcl(std::move(filter)) {};
+    VppVilterBlock(std::vector<std::unique_ptr<RGYFilter>>& filter) : type(VppFilterType::FILTER_OPENCL), vppcl(std::move(filter)) {};
 };
 
 enum class PipelineTaskOutputType {
@@ -136,7 +141,7 @@ enum class PipelineTaskOutputType {
 enum class PipelineTaskSurfaceType {
     UNKNOWN,
     CL,
-    AMF
+    SYS
 };
 
 class PipelineTaskSurface {
@@ -159,14 +164,14 @@ public:
     ~PipelineTaskSurface() { reset(); }
     void reset() { if (surf) (*ref)--; surf = nullptr; ref = nullptr; }
     bool operator !() const {
-        return amfsurf() == nullptr && clframe() == nullptr;
+        return syssurf() == nullptr && clframe() == nullptr;
     }
-    bool operator !=(const PipelineTaskSurface& obj) const { return amfsurf() != obj.amfsurf() || clframe() != obj.clframe(); }
-    bool operator ==(const PipelineTaskSurface& obj) const { return amfsurf() == obj.amfsurf() && clframe() == obj.clframe(); }
-    bool operator !=(std::nullptr_t) const { return amfsurf() != nullptr || clframe() != nullptr; }
-    bool operator ==(std::nullptr_t) const { return amfsurf() == nullptr && clframe() == nullptr; }
-    const amf::AMFSurface *amfsurf() const { return (surf && surf->amf()) ? surf->amf().GetPtr() : nullptr; }
-    amf::AMFSurface *amfsurf() { return (surf && surf->amf()) ? surf->amf().GetPtr() : nullptr; }
+    bool operator !=(const PipelineTaskSurface& obj) const { return syssurf() != obj.syssurf() || clframe() != obj.clframe(); }
+    bool operator ==(const PipelineTaskSurface& obj) const { return syssurf() == obj.syssurf() && clframe() == obj.clframe(); }
+    bool operator !=(std::nullptr_t) const { return syssurf() != nullptr || clframe() != nullptr; }
+    bool operator ==(std::nullptr_t) const { return syssurf() == nullptr && clframe() == nullptr; }
+    const RGYSysFrame *syssurf() const { return (surf && surf->sys()) ? surf->sys().get() : nullptr; }
+    RGYSysFrame *syssurf() { return (surf && surf->sys()) ? surf->sys().get() : nullptr; }
     const RGYCLFrame *clframe() const { return (surf && surf->cl()) ? surf->cl().get() : nullptr; }
     RGYCLFrame *clframe() { return (surf && surf->cl()) ? surf->cl().get() : nullptr; }
     const RGYFrame *frame() const { return surf; }
@@ -190,7 +195,7 @@ private:
         PipelineTaskSurfaceType type() const {
             if (!surf_) return PipelineTaskSurfaceType::UNKNOWN;
             if (surf_->cl()) return PipelineTaskSurfaceType::CL;
-            if (surf_->amf()) return PipelineTaskSurfaceType::AMF;
+            if (surf_->sys()) return PipelineTaskSurfaceType::SYS;
             return PipelineTaskSurfaceType::UNKNOWN;
         }
     };
@@ -202,11 +207,11 @@ public:
     void clear() {
         m_surfaces.clear();
     }
-    void setSurfaces(std::vector<amf::AMFSurfacePtr>& surfs) {
+    void setSurfaces(std::vector<std::unique_ptr<RGYSysFrame>>& surfs) {
         clear();
         m_surfaces.resize(surfs.size());
         for (size_t i = 0; i < m_surfaces.size(); i++) {
-            m_surfaces[i] = std::make_unique<PipelineTaskSurfacesPair>(std::make_unique<RGYFrame>(surfs[i]));
+            m_surfaces[i] = std::make_unique<PipelineTaskSurfacesPair>(std::make_unique<RGYFrame>(std::move(surfs[i])));
         }
     }
     void setSurfaces(std::vector<std::unique_ptr<RGYCLFrame>>& frames) {
@@ -230,7 +235,7 @@ public:
         }
         return PipelineTaskSurface();
     }
-    PipelineTaskSurface get(amf::AMFSurface *surf) {
+    PipelineTaskSurface get(RGYSysFrame *surf) {
         auto s = findSurf(surf);
         if (s != nullptr) {
             return s->getRef();
@@ -269,9 +274,9 @@ protected:
         }
     }
 
-    PipelineTaskSurfacesPair *findSurf(amf::AMFSurface *surf) {
+    PipelineTaskSurfacesPair *findSurf(RGYSysFrame *surf) {
         for (auto& s : m_surfaces) {
-            if (s->surf()->surf() == surf) {
+            if (s->surf()->sysframe() == surf) {
                 return s.get();
             }
         }
@@ -358,7 +363,7 @@ public:
         m_dependencyFrame.reset();
     }
 
-    RGY_ERR writeAMF(RGYOutput *writer) {
+    RGY_ERR writeSys(RGYOutput *writer) {
         auto err = writer->WriteNextFrame(m_surf.frame());
         return err;
     }
@@ -386,7 +391,7 @@ public:
         if (writer->getOutType() != OUT_TYPE_SURFACE) {
             return RGY_ERR_INVALID_OPERATION;
         }
-        auto err = (m_surf.amfsurf() != nullptr) ? writeAMF(writer) : writeCL(writer, clqueue);
+        auto err = (m_surf.syssurf() != nullptr) ? writeSys(writer) : writeCL(writer, clqueue);
         return err;
     }
 };
@@ -419,9 +424,9 @@ public:
 
 enum class PipelineTaskType {
     UNKNOWN,
-    AMFDEC,
-    AMFVPP,
-    AMFENC,
+    MPPDEC,
+    MPPVPP,
+    MPPENC,
     INPUT,
     INPUTCL,
     CHECKPTS,
@@ -434,9 +439,9 @@ enum class PipelineTaskType {
 
 static const TCHAR *getPipelineTaskTypeName(PipelineTaskType type) {
     switch (type) {
-    case PipelineTaskType::AMFVPP:      return _T("AMFVPP");
-    case PipelineTaskType::AMFDEC:      return _T("AMFDEC");
-    case PipelineTaskType::AMFENC:      return _T("AMFENC");
+    case PipelineTaskType::MPPVPP:      return _T("MPPVPP");
+    case PipelineTaskType::MPPDEC:      return _T("MPPDEC");
+    case PipelineTaskType::MPPENC:      return _T("MPPENC");
     case PipelineTaskType::INPUT:       return _T("INPUT");
     case PipelineTaskType::INPUTCL:     return _T("INPUTCL");
     case PipelineTaskType::CHECKPTS:    return _T("CHECKPTS");
@@ -452,9 +457,9 @@ static const TCHAR *getPipelineTaskTypeName(PipelineTaskType type) {
 // Alllocするときの優先度 値が高い方が優先
 static const int getPipelineTaskAllocPriority(PipelineTaskType type) {
     switch (type) {
-    case PipelineTaskType::AMFENC:    return 3;
-    case PipelineTaskType::AMFDEC:    return 2;
-    case PipelineTaskType::AMFVPP:    return 1;
+    case PipelineTaskType::MPPENC:    return 3;
+    case PipelineTaskType::MPPDEC:    return 2;
+    case PipelineTaskType::MPPVPP:    return 1;
     case PipelineTaskType::INPUT:
     case PipelineTaskType::INPUTCL:
     case PipelineTaskType::CHECKPTS:
@@ -470,7 +475,6 @@ static const int getPipelineTaskAllocPriority(PipelineTaskType type) {
 class PipelineTask {
 protected:
     PipelineTaskType m_type;
-    amf::AMFContextPtr m_context;
     std::deque<std::unique_ptr<PipelineTaskOutput>> m_outQeueue;
     PipelineTaskSurfaces m_workSurfs;
     int m_inFrames;
@@ -478,9 +482,9 @@ protected:
     int m_outMaxQueueSize;
     std::shared_ptr<RGYLog> m_log;
 public:
-    PipelineTask() : m_type(PipelineTaskType::UNKNOWN), m_context(), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(0), m_log() {};
-    PipelineTask(PipelineTaskType type, amf::AMFContextPtr conetxt, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
-        m_type(type), m_context(conetxt), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(outMaxQueueSize), m_log(log) {
+    PipelineTask() : m_type(PipelineTaskType::UNKNOWN), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(0), m_log() {};
+    PipelineTask(PipelineTaskType type, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
+        m_type(type), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(outMaxQueueSize), m_log(log) {
     };
     virtual ~PipelineTask() {
         m_workSurfs.clear();
@@ -507,9 +511,9 @@ public:
     }
     bool isAMFTask() const { return isAMFTask(m_type); }
     bool isAMFTask(const PipelineTaskType task) const {
-        return task == PipelineTaskType::AMFDEC
-            || task == PipelineTaskType::AMFVPP
-            || task == PipelineTaskType::AMFENC;
+        return task == PipelineTaskType::MPPDEC
+            || task == PipelineTaskType::MPPVPP
+            || task == PipelineTaskType::MPPENC;
     }
     // mfx関連とそうでないtaskのやり取りでロックが必要
     bool requireSync(const PipelineTaskType nextTaskType) const {
@@ -576,6 +580,26 @@ public:
         m_workSurfs.setSurfaces(frames);
         return RGY_ERR_NONE;
     }
+    RGY_ERR workSurfacesAllocSys(const int numFrames, const RGYFrameInfo &frame) {
+        auto sts = workSurfacesClear();
+        if (sts != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("allocWorkSurfaces:   Failed to clear old surfaces: %s.\n"), get_err_mes(sts));
+            return sts;
+        }
+        PrintMes(RGY_LOG_DEBUG, _T("allocWorkSurfaces:   cleared old surfaces: %s.\n"), get_err_mes(sts));
+
+        std::vector<std::unique_ptr<RGYSysFrame>> frames(numFrames);
+        for (size_t i = 0; i < frames.size(); i++) {
+            //CPUとのやり取りが効率化できるよう、CL_MEM_ALLOC_HOST_PTR を指定する
+            //これでmap/unmapで可能な場合コピーが発生しない
+            frames[i] = std::make_unique<RGYSysFrame>();
+            if ((sts = frames[i]->allocate(frame)) != RGY_ERR_NONE) {
+                return sts;
+            }
+        }
+        m_workSurfs.setSurfaces(frames);
+        return RGY_ERR_NONE;
+    }
     PipelineTaskSurfaceType workSurfaceType() const {
         if (m_workSurfs.bufCount() == 0) {
             return PipelineTaskSurfaceType::UNKNOWN;
@@ -612,8 +636,8 @@ class PipelineTaskInput : public PipelineTask {
     RGYInput *m_input;
     std::shared_ptr<RGYOpenCLContext> m_cl;
 public:
-    PipelineTaskInput(amf::AMFContextPtr context, int outMaxQueueSize, RGYInput *input, std::shared_ptr<RGYOpenCLContext> cl, std::shared_ptr<RGYLog> log)
-        : PipelineTask(PipelineTaskType::INPUT, context, outMaxQueueSize, log), m_input(input), m_cl(cl) {
+    PipelineTaskInput(int outMaxQueueSize, RGYInput *input, std::shared_ptr<RGYOpenCLContext> cl, std::shared_ptr<RGYLog> log)
+        : PipelineTask(PipelineTaskType::INPUT, outMaxQueueSize, log), m_input(input), m_cl(cl) {
 
     };
     virtual ~PipelineTaskInput() {};
@@ -666,27 +690,20 @@ public:
         }
         return err;
     }
-    RGY_ERR LoadNextFrameAMF() {
-        const auto inputFrameInfo = m_input->GetInputFrameInfo();
-        amf::AMFSurfacePtr pSurface;
-        auto ar = m_context->AllocSurface(amf::AMF_MEMORY_HOST, csp_rgy_to_enc(inputFrameInfo.csp),
-            inputFrameInfo.srcWidth - inputFrameInfo.crop.e.left - inputFrameInfo.crop.e.right,
-            inputFrameInfo.srcHeight - inputFrameInfo.crop.e.bottom - inputFrameInfo.crop.e.up,
-            &pSurface);
-        if (ar != AMF_OK) {
-            PrintMes(RGY_LOG_ERROR, _T("Failed to allocate surface: %s.\n"), get_err_mes(err_to_rgy(ar)));
-            return err_to_rgy(ar);
+    RGY_ERR LoadNextFrameSys() {
+        auto surfWork = getWorkSurf();
+        if (surfWork == nullptr) {
+            PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
+            return RGY_ERR_NOT_ENOUGH_BUFFER;
         }
-        pSurface->SetFrameType(frametype_rgy_to_enc(inputFrameInfo.picstruct));
-        auto inputFrame = std::make_unique<RGYFrame>(pSurface);
-        auto err = m_input->LoadNextFrame(inputFrame.get());
+        auto err = m_input->LoadNextFrame(surfWork.frame());
         if (err == RGY_ERR_MORE_DATA) {// EOF
             err = RGY_ERR_MORE_BITSTREAM; // EOF を PipelineTaskMFXDecode のreturnコードに合わせる
         } else if (err != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(err));
         } else {
-            inputFrame->setInputFrameId(m_inFrames++);
-            m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(inputFrame)));
+            surfWork.frame()->setInputFrameId(m_inFrames++);
+            m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfWork));
         }
         return err;
     }
@@ -694,11 +711,11 @@ public:
         if (workSurfaceType() == PipelineTaskSurfaceType::CL) {
             return LoadNextFrameCL();
         }
-        return LoadNextFrameAMF();
+        return LoadNextFrameSys();
     }
 };
 
-class PipelineTaskAMFDecode : public PipelineTask {
+class PipelineTaskMPPDecode : public PipelineTask {
 protected:
     struct FrameFlags {
         int64_t timestamp;
@@ -707,231 +724,243 @@ protected:
         FrameFlags() : timestamp(AV_NOPTS_VALUE), flags(RGY_FRAME_FLAG_NONE) {};
         FrameFlags(int64_t pts, RGY_FRAME_FLAGS f) : timestamp(pts), flags(f) {};
     };
-    amf::AMFComponentPtr m_dec;
+    MPPContext *m_dec;
     RGYInput *m_input;
+    bool m_getNextBitstream;
+    RGYBitstream m_decInputBitstream;
+    MppPacket m_packet;
+    MppBufferGroup m_frameGrp;
     RGYQueueMPMP<RGYFrameDataMetadata*> m_queueHDR10plusMetadata;
     RGYQueueMPMP<FrameFlags> m_dataFlag;
-    RGYRunState m_state;
+    std::unique_ptr<RGYConvertCSP> m_convert;
     int m_decOutFrames;
-#if THREAD_DEC_USE_FUTURE
-    std::future m_thDecoder;
-#else
-    std::thread m_thDecoder;
-#endif //#if THREAD_DEC_USE_FUTURE
 public:
-    PipelineTaskAMFDecode(amf::AMFComponentPtr dec, amf::AMFContextPtr context, int outMaxQueueSize, RGYInput *input, std::shared_ptr<RGYLog> log)
-        : PipelineTask(PipelineTaskType::AMFDEC, context, outMaxQueueSize, log), m_dec(dec), m_input(input),
+    PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
+        : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
+        m_getNextBitstream(false), m_decInputBitstream(RGYBitstreamInit()), m_packet(nullptr), m_frameGrp(),
         m_queueHDR10plusMetadata(), m_dataFlag(),
-        m_state(RGY_STATE_STOPPED), m_decOutFrames(0), m_thDecoder() {
+        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
         m_dataFlag.init();
+        mpp_packet_init(&m_packet, nullptr, 0);
     };
-    virtual ~PipelineTaskAMFDecode() {
-        m_state = RGY_STATE_ABORT;
-        closeThread();
+    virtual ~PipelineTaskMPPDecode() {
+        if (m_packet) {
+            mpp_packet_deinit(&m_packet);
+            m_packet = nullptr;
+        }
+        if (m_frameGrp) {
+            mpp_buffer_group_put(m_frameGrp);
+            m_frameGrp = nullptr;
+        }
         m_queueHDR10plusMetadata.close([](RGYFrameDataMetadata **ptr) { if (*ptr) { delete *ptr; *ptr = nullptr; }; });
     };
-    void setDec(amf::AMFComponentPtr dec) { m_dec = dec; };
+    void setDec(MPPContext *dec) { m_dec = dec; };
 
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
         const auto inputFrameInfo = m_input->GetInputFrameInfo();
         RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_GPU);
-        return std::make_pair(info, 0);
+        return std::make_pair(info, m_outMaxQueueSize);
     };
 
-    void closeThread() {
-#if THREAD_DEC_USE_FUTURE
-        if (m_thDecoder.valid()) {
-            while (m_thDecoder.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
-#else
-        if (m_thDecoder.joinable()) {
-            while (RGYThreadStillActive(m_thDecoder.native_handle())) {
-#endif
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    virtual RGY_ERR sendFrame([[maybe_unused]] std::unique_ptr<PipelineTaskOutput>& frame) override {
+        auto ret = RGY_ERR_NONE;
+        if (m_getNextBitstream
+            //m_DecInputBitstream.size() > 0のときにbitstreamを連結してしまうと
+            //環境によっては正常にフレームが取り出せなくなることがある
+            //これを避けるため、m_DecInputBitstream.size() == 0のときのみbitstreamを取得する
+            //これにより GetNextFrame / SetNextFrame の回数が異常となり、
+            //GetNextFrameのロックが抜けれらなくなる場合がある。
+            //HWデコード時、本来GetNextFrameのロックは必要ないので、
+            //これを無視する実装も併せて行った。
+            && (m_decInputBitstream.size() <= 1)) {
+            ret = m_input->LoadNextFrame(nullptr);
+            if (ret != RGY_ERR_NONE && ret != RGY_ERR_MORE_DATA && ret != RGY_ERR_MORE_BITSTREAM) {
+                PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(ret));
+                return ret;
             }
-#if !THREAD_DEC_USE_FUTURE
-            // linuxでは、これがRGYThreadStillActiveのwhile文を抜けるときに行われるため、
-            // これを呼ぶとエラーになってしまう
-            m_thDecoder.join();
-#endif
+            //この関数がMFX_ERR_NONE以外を返せば、入力ビットストリームは終了
+            ret = m_input->GetNextBitstream(&m_decInputBitstream);
+            if (ret == RGY_ERR_MORE_BITSTREAM) {
+                m_getNextBitstream = false;
+                return ret; //入力ビットストリームは終了
+            }
+            if (ret != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Error on getting video bitstream: %s.\n"), get_err_mes(ret));
+                return ret;
+            }
+            for (auto& frameData : m_decInputBitstream.getFrameDataList()) {
+                if (frameData->dataType() == RGY_FRAME_DATA_HDR10PLUS) {
+                    auto ptr = dynamic_cast<RGYFrameDataHDR10plus*>(frameData);
+                    if (ptr) {
+                        m_queueHDR10plusMetadata.push(new RGYFrameDataHDR10plus(*ptr));
+                    }
+                } else if (frameData->dataType() == RGY_FRAME_DATA_DOVIRPU) {
+                    auto ptr = dynamic_cast<RGYFrameDataDOVIRpu*>(frameData);
+                    if (ptr) {
+                        m_queueHDR10plusMetadata.push(new RGYFrameDataDOVIRpu(*ptr));
+                    }
+                }
+            }
+            const auto flags = FrameFlags(m_decInputBitstream.pts(), (RGY_FRAME_FLAGS)m_decInputBitstream.dataflag());
+            m_dataFlag.push(flags);
         }
-    }
-    RGY_ERR startThread() {
-        m_state = RGY_STATE_RUNNING;
-#if THREAD_DEC_USE_FUTURE
-        m_thDecoder = std::async(std::launch::async, [this]() {
-#else
-        m_thDecoder = std::thread([this]() {
-#endif //#if THREAD_DEC_USE_FUTURE
-            const auto VCE_TIMEBASE = rgy_rational<int>(1, AMF_SECOND); // In 100 NanoSeconds
-            RGYBitstream bitstream = RGYBitstreamInit();
-            RGY_ERR sts = RGY_ERR_NONE;
-            for (int i = 0; sts == RGY_ERR_NONE && m_state == RGY_STATE_RUNNING; i++) {
-                if (((  sts = m_input->LoadNextFrame(nullptr)) != RGY_ERR_NONE //進捗表示のため
-                    || (sts = m_input->GetNextBitstream(&bitstream)) != RGY_ERR_NONE)
-                    && sts != RGY_ERR_MORE_DATA) {
-                    m_state = RGY_STATE_ERROR;
+        if (m_decInputBitstream.size() > 0) {
+            mpp_packet_set_data(m_packet, m_decInputBitstream.data());
+            mpp_packet_set_size(m_packet, m_decInputBitstream.size());
+            //mpp_packet_set_pos(m_packet, m_decInputBitstream.data());
+            //mpp_packet_set_length(m_packet, m_decInputBitstream.size());
+
+            //const auto duration = rgy_change_scale(m_decInputBitstream.duration(), to_rgy(inTimebase), VCE_TIMEBASE);
+            //const auto pts = rgy_change_scale(m_decInputBitstream.pts(), to_rgy(inTimebase), VCE_TIMEBASE);
+            auto meta = mpp_packet_get_meta(m_packet);
+            mpp_meta_set_s64(meta, KEY_USER_DATA, m_decInputBitstream.duration());
+            mpp_packet_set_pts(m_packet, m_decInputBitstream.pts());
+        } else if (ret == RGY_ERR_MORE_BITSTREAM) {
+            mpp_packet_set_data(m_packet, nullptr);
+            mpp_packet_set_size(m_packet, 0);
+            mpp_packet_set_flag(m_packet, 0);
+            mpp_packet_set_pts(m_packet, 0);
+            mpp_packet_set_eos(m_packet);
+        } else {
+            PrintMes(RGY_LOG_ERROR, _T("ERROR: Faield to get input bitstream.\n"));
+            return ret;
+        }
+
+
+        MppFrame mppframe = nullptr;
+        bool pkt_send = false;
+        while (!pkt_send && ret == RGY_ERR_NONE) {
+            if (!pkt_send) {
+                ret = err_to_rgy(m_dec->mpi->decode_put_packet(m_dec->ctx, m_packet));
+                if (ret == RGY_ERR_NONE) {
+                    pkt_send = true;
+                }
+            }
+            for (int trycount = 0; ret == RGY_ERR_NONE; trycount++) {
+                ret = err_to_rgy(m_dec->mpi->decode_get_frame(m_dec->ctx, &mppframe));
+                if (ret == RGY_ERR_MPP_ERR_TIMEOUT) {
+                    if (trycount >= 1000) {
+                        PrintMes(RGY_LOG_ERROR, _T("decode_get_frame timeout too much time\n"));
+                        return ret;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
+                trycount = 0;
+
+                if (ret != RGY_ERR_NONE) {
+                    PrintMes(RGY_LOG_ERROR, _T("decode_get_frame failed: %s\n"), get_err_mes(ret));
+                    return ret;
+                }
+                if (!mppframe) {
                     break;
                 }
+                const int width = mpp_frame_get_width(mppframe);
+                const int height = mpp_frame_get_height(mppframe);
+                const int stride_w = mpp_frame_get_hor_stride(mppframe);
+                const int stride_h = mpp_frame_get_ver_stride(mppframe);
+                const int buf_size = mpp_frame_get_buf_size(mppframe);
+                if (mpp_frame_get_info_change(mppframe)) {
+                    if (m_frameGrp == nullptr) {
+                        ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_ION));
+                        if (ret != RGY_ERR_NONE) {
+                            PrintMes(RGY_LOG_ERROR, _T("Get mpp buffer group failed : %s\n"), get_err_mes(ret));
+                            break;
+                        }
 
-                amf::AMFBufferPtr pictureBuffer;
-                if (sts == RGY_ERR_NONE) {
-                    m_inFrames++;
-
-                    auto ar = m_context->AllocBuffer(amf::AMF_MEMORY_HOST, bitstream.size(), &pictureBuffer);
-                    if (ar != AMF_OK) {
-                        return err_to_rgy(ar);
-                    }
-                    memcpy(pictureBuffer->GetNative(), bitstream.data(), bitstream.size());
-
-                    //const auto duration = rgy_change_scale(bitstream.duration(), to_rgy(inTimebase), VCE_TIMEBASE);
-                    //const auto pts = rgy_change_scale(bitstream.pts(), to_rgy(inTimebase), VCE_TIMEBASE);
-                    pictureBuffer->SetDuration(bitstream.duration());
-                    pictureBuffer->SetPts(bitstream.pts());
-
-                    for (auto& frameData : bitstream.getFrameDataList()) {
-                        if (frameData->dataType() == RGY_FRAME_DATA_HDR10PLUS) {
-                            auto ptr = dynamic_cast<RGYFrameDataHDR10plus*>(frameData);
-                            if (ptr) {
-                                m_queueHDR10plusMetadata.push(new RGYFrameDataHDR10plus(*ptr));
-                            }
-                        } else if (frameData->dataType() == RGY_FRAME_DATA_DOVIRPU) {
-                            auto ptr = dynamic_cast<RGYFrameDataDOVIRpu*>(frameData);
-                            if (ptr) {
-                                m_queueHDR10plusMetadata.push(new RGYFrameDataDOVIRpu(*ptr));
-                            }
+                        // Set buffer to mpp decoder
+                        ret = err_to_rgy(m_dec->mpi->control(m_dec->ctx, MPP_DEC_SET_EXT_BUF_GROUP, m_frameGrp));
+                        if (ret != RGY_ERR_NONE) {
+                            PrintMes(RGY_LOG_ERROR, _T("Set buffer group failed : %s\n"), get_err_mes(ret));
+                            break;
+                        }
+                    } else {
+                        // If old buffer group exist clear it
+                        ret = err_to_rgy(mpp_buffer_group_clear(m_frameGrp));
+                        if (ret != RGY_ERR_NONE) {
+                            PrintMes(RGY_LOG_ERROR, _T("Clear buffer group failed : %s\n"), get_err_mes(ret));
+                            break;
                         }
                     }
-                    const auto flags = FrameFlags(bitstream.pts(), (RGY_FRAME_FLAGS)bitstream.dataflag());
-                    m_dataFlag.push(flags);
+
+                    // Use limit config to limit buffer count to 32 with buf_size
+                    ret = err_to_rgy(mpp_buffer_group_limit_config(m_frameGrp, buf_size, 32));
+                    if (ret != RGY_ERR_NONE) {
+                        PrintMes(RGY_LOG_ERROR, _T("Limit buffer group failed : %s\n"), get_err_mes(ret));
+                        break;
+                    }
+
+                    // All buffer group config done.
+                    // Set info change ready to let decoder continue decoding
+                    ret = err_to_rgy(m_dec->mpi->control(m_dec->ctx, MPP_DEC_SET_INFO_CHANGE_READY, nullptr));
+                    if (ret != RGY_ERR_NONE) {
+                        PrintMes(RGY_LOG_ERROR, _T("Info change ready failed : %s\n"), get_err_mes(ret));
+                        break;
+                    }
+                } else if (mpp_frame_get_eos(mppframe)) {
+                    ret = RGY_ERR_MORE_BITSTREAM; // EOS
+                } else if (mpp_frame_get_discard(mppframe)) {
+                    PrintMes(RGY_LOG_ERROR, _T("Received a discard frame.\n"));
+                    ret = RGY_ERR_UNKNOWN;
+                } else if (mpp_frame_get_errinfo(mppframe)) {
+                    PrintMes(RGY_LOG_ERROR, _T("Received a errinfo frame.\n"));
+                    ret = RGY_ERR_UNKNOWN;
+                } else {
+                    //copy
+                    setOutputSurf(mppframe);
                 }
-                bitstream.setSize(0);
-                bitstream.setOffset(0);
-                if (pictureBuffer || sts == RGY_ERR_MORE_BITSTREAM /*EOFの場合はDrainを送る*/) {
-                    auto ar = AMF_OK;
-                    do {
-                        if (sts == RGY_ERR_MORE_BITSTREAM) {
-                            ar = m_dec->Drain();
-                        } else {
-                            try {
-                                ar = m_dec->SubmitInput(pictureBuffer);
-                            } catch (...) {
-                                PrintMes(RGY_LOG_ERROR, _T("ERROR: Unexpected error while submitting bitstream to decoder.\n"));
-                                ar = AMF_UNEXPECTED;
-                            }
-                        }
-                        if (ar == AMF_NEED_MORE_INPUT) {
-                            break;
-                        } else if (ar == AMF_RESOLUTION_CHANGED || ar == AMF_RESOLUTION_UPDATED) {
-                            PrintMes(RGY_LOG_ERROR, _T("ERROR: Resolution changed during decoding.\n"));
-                            break;
-                        } else if (ar == AMF_INPUT_FULL || ar == AMF_DECODER_NO_FREE_SURFACES) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                        } else if (ar == AMF_REPEAT) {
-                            pictureBuffer = nullptr;
-                        } else {
-                            break;
-                        }
-                    } while (m_state == RGY_STATE_RUNNING);
-                    if (ar != AMF_OK) {
-                        m_state = RGY_STATE_ERROR;
-                        return err_to_rgy(ar);
-                    }
-                }
-            }
-            m_dec->Drain();
-            return sts;
-        });
-        PrintMes(RGY_LOG_DEBUG, _T("Started Decode thread.\n"));
-        return RGY_ERR_NONE;
-    }
-
-    //データを使用すると、bitstreamのsizeを0にする
-    //これを確認すること
-    RGY_ERR sendFrame(RGYBitstream *bitstream) {
-        return getOutput();
-    }
-    virtual RGY_ERR sendFrame([[maybe_unused]] std::unique_ptr<PipelineTaskOutput>& frame) override {
-        return getOutput();
-    }
-protected:
-    RGY_ERR getOutput() {
-        auto ret = RGY_ERR_NONE;
-        amf::AMFSurfacePtr surfDecOut;
-        auto ar = AMF_REPEAT;
-        auto timeS = std::chrono::system_clock::now();
-        if (m_state == RGY_STATE_STOPPED) {
-            m_state = RGY_STATE_RUNNING;
-            startThread();
-        }
-        while (m_state == RGY_STATE_RUNNING) {
-            amf::AMFDataPtr data;
-            try {
-                ar = m_dec->QueryOutput(&data);
-            } catch (...) {
-                PrintMes(RGY_LOG_ERROR, _T("ERROR: Unexpected error while getting frame from decoder.\n"));
-                ar = AMF_UNEXPECTED;
-            }
-            if (ar == AMF_EOF) {
-                break;
-            }
-            if (ar == AMF_REPEAT) {
-                ar = AMF_OK; //これ重要...ここが欠けると最後の数フレームが欠落する
-            }
-            if (ar == AMF_OK && data != nullptr) {
-                surfDecOut = amf::AMFSurfacePtr(data);
-                break;
-            }
-            if (ar != AMF_OK) break;
-            if (false && (std::chrono::system_clock::now() - timeS) > std::chrono::seconds(10)) {
-                PrintMes(RGY_LOG_ERROR, _T("10 sec has passed after getting last frame from decoder.\n"));
-                PrintMes(RGY_LOG_ERROR, _T("Decoder seems to have crushed.\n"));
-                ar = AMF_FAIL;
-                break;
+                mpp_frame_deinit(&mppframe);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        if (ar == AMF_EOF) {
-            ret = RGY_ERR_MORE_BITSTREAM;
-        } else if (ar != AMF_OK) {
-            ret = err_to_rgy(ar); m_state = RGY_STATE_ERROR;
+        if (ret != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to load input frame: %s.\n"), get_err_mes(ret));
             return ret;
         }
-        if (surfDecOut != nullptr) {
-            // pre-analysis使用時などに発生するSubmitInput時のAMF_DECODER_NO_FREE_SURFACESを回避するため、
-            // 明示的にsurface->Duplicateを行ってコピーを下流に渡していく
-            // デコーダのオプションのAMF_VIDEO_DECODER_SURFACE_COPYでも同様になるはずだが、
-            // メモリ確保エラーが発生することがある(AMF_DIRECTX_FAIL)ので、明示的なコピーのほうがよい
-            amf::AMFDataPtr dataCopy;
-            ar = surfDecOut->Duplicate(surfDecOut->GetMemoryType(), &dataCopy);
-            if (ar != AMF_OK) {
-                ret = err_to_rgy(ar); m_state = RGY_STATE_ERROR;
-                PrintMes(RGY_LOG_ERROR, _T("Faield to copy decoded frame: %s.\n"), get_err_mes(ret));
-                return ret;
-            }
-            if (auto surfCopy = amf::AMFSurfacePtr(dataCopy); surfCopy != nullptr) {
-                auto surfDecOutCopy = std::make_unique<RGYFrame>(surfCopy);
-                surfDecOutCopy->setInputFrameId(m_decOutFrames++);
+        return RGY_ERR_NONE;
+    }
+protected:
+    RGY_ERR setOutputSurf(MppFrame mppframe) {
+        const auto mppinfo = infoMPP(mppframe);
+        auto workFrame = getWorkSurf();
+        auto surfDecOut = workFrame.frame();
+        if (surfDecOut == nullptr) {
+            return RGY_ERR_NULL_PTR;
+        }
+        const auto surfDecOutInfo = surfDecOut->getInfo();
 
-                auto flags = RGY_FRAME_FLAG_NONE;
-                if (getDataFlag(surfDecOutCopy->timestamp()) & RGY_FRAME_FLAG_RFF) {
-                    flags |= RGY_FRAME_FLAG_RFF;
-                }
-                surfDecOutCopy->setFlags(flags);
-
-                surfDecOutCopy->clearDataList();
-                if (auto data = getMetadata(RGY_FRAME_DATA_HDR10PLUS, surfDecOutCopy->timestamp()); data) {
-                    surfDecOutCopy->dataList().push_back(data);
-                }
-                if (auto data = getMetadata(RGY_FRAME_DATA_DOVIRPU, surfDecOutCopy->timestamp()); data) {
-                    surfDecOutCopy->dataList().push_back(data);
-                }
-                m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(surfDecOutCopy)));
+        if (m_convert->getFunc() == nullptr) {
+            if (m_convert->getFunc(mppinfo.csp, mppinfo.csp, false, RGY_SIMD::SIMD_ALL) == nullptr) {
+                PrintMes(RGY_LOG_ERROR, _T("Failed to find conversion for %s -> %s.\n"),
+                    RGY_CSP_NAMES[mppinfo.csp], RGY_CSP_NAMES[mppinfo.csp]);
+                return RGY_ERR_UNSUPPORTED;
             }
         }
-        return ret;
+        auto crop = initCrop();
+        m_convert->run((mppinfo.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
+            (void **)surfDecOutInfo.ptr, (const void **)mppinfo.ptr,
+            mppinfo.width, mppinfo.pitch[0], mppinfo.pitch[1], surfDecOutInfo.pitch[0],
+            mppinfo.height, surfDecOutInfo.height, crop.c);
+
+        surfDecOut->setInputFrameId(m_decOutFrames++);
+
+        auto flags = RGY_FRAME_FLAG_NONE;
+        if (getDataFlag(surfDecOut->timestamp()) & RGY_FRAME_FLAG_RFF) {
+            flags |= RGY_FRAME_FLAG_RFF;
+        }
+        surfDecOut->setFlags(flags);
+
+        surfDecOut->clearDataList();
+        if (auto data = getMetadata(RGY_FRAME_DATA_HDR10PLUS, surfDecOut->timestamp()); data) {
+            surfDecOut->dataList().push_back(data);
+        }
+        if (auto data = getMetadata(RGY_FRAME_DATA_DOVIRPU, surfDecOut->timestamp()); data) {
+            surfDecOut->dataList().push_back(data);
+        }
+        m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(workFrame));
+        return RGY_ERR_NONE;
     }
     RGY_FRAME_FLAGS getDataFlag(const int64_t timestamp) {
         FrameFlags pts_flag;
@@ -1001,8 +1030,8 @@ protected:
     uint32_t m_inputFramePosIdx;
     FramePosList *m_framePosList;
 public:
-    PipelineTaskCheckPTS(amf::AMFContextPtr context, rgy_rational<int> srcTimebase, rgy_rational<int> streamTimebase, rgy_rational<int> outputTimebase, int64_t outFrameDuration, RGYAVSync avsync, bool vpp_afs_rff_aware, FramePosList *framePosList, std::shared_ptr<RGYLog> log) :
-        PipelineTask(PipelineTaskType::CHECKPTS, context, /*outMaxQueueSize = */ 0 /*常に0である必要がある*/, log),
+    PipelineTaskCheckPTS(rgy_rational<int> srcTimebase, rgy_rational<int> streamTimebase, rgy_rational<int> outputTimebase, int64_t outFrameDuration, RGYAVSync avsync, bool vpp_afs_rff_aware, FramePosList *framePosList, std::shared_ptr<RGYLog> log) :
+        PipelineTask(PipelineTaskType::CHECKPTS, /*outMaxQueueSize = */ 0 /*常に0である必要がある*/, log),
         m_srcTimebase(srcTimebase), m_streamTimebase(streamTimebase), m_outputTimebase(outputTimebase), m_avsync(avsync), m_vpp_rff(false), m_vpp_afs_rff_aware(vpp_afs_rff_aware), m_outFrameDuration(outFrameDuration),
         m_tsOutFirst(-1), m_tsOutEstimated(0), m_tsPrev(-1), m_inputFramePosIdx(std::numeric_limits<decltype(m_inputFramePosIdx)>::max()), m_framePosList(framePosList) {
     };
@@ -1064,7 +1093,7 @@ public:
                 // 少しのずれはrffによるものとみなし、基準値を修正する
                 m_tsOutEstimated = outPtsSource;
             }
-            if (ENCODER_VCEENC && m_framePosList) {
+            if ((ENCODER_VCEENC || ENCODER_MPP) && m_framePosList) {
                 //cuvidデコード時は、timebaseの分子はかならず1なので、streamIn->time_baseとズレているかもしれないのでオリジナルを計算
                 const auto orig_pts = rational_rescale(taskSurf->surf().frame()->timestamp(), m_srcTimebase, m_streamTimebase);
                 //ptsからフレーム情報を取得する
@@ -1094,39 +1123,20 @@ public:
             while (ptsDiff >= std::max<int64_t>(1, m_outFrameDuration * 7 / 8)) {
                 PrintMes(RGY_LOG_DEBUG, _T("Insert frame: framepts %lld, estimated next %lld, diff %lld [%.1f]\n"), outPtsSource, m_tsOutEstimated, ptsDiff, ptsDiff / (double)m_outFrameDuration);
                 //水増しが必要
-                if (auto surf = taskSurf->surf().amfsurf(); surf != nullptr) {
-                    //AMFのsurfaceの場合はコピーを作成する
-                    amf::AMFDataPtr dataCopy;
-                    auto ar = surf->Duplicate(surf->GetMemoryType(), &dataCopy);
-                    if (ar != AMF_OK) {
-                        PrintMes(RGY_LOG_ERROR, _T("Failed to copy frame: %s.\n"), get_err_mes(err_to_rgy(ar)));
-                        return err_to_rgy(ar);
-                    }
-                    auto surfCopy = amf::AMFSurfacePtr(dataCopy);
-                    auto surfOutCopy = std::make_unique<RGYFrame>(surfCopy);
-                    surfOutCopy->setDataList(taskSurf->surf().frame()->dataList());
-                    surfOutCopy->setInputFrameId(taskSurf->surf().frame()->inputFrameId());
-                    surfOutCopy->setTimestamp(m_tsOutEstimated);
-                    if (ENCODER_VCEENC) {
-                        surfOutCopy->setDuration(outDuration);
-                    }
-                    m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(surfOutCopy)));
-                } else {
-                    PipelineTaskSurface surfVppOut = taskSurf->surf();
-                    surfVppOut.frame()->setInputFrameId(taskSurf->surf().frame()->inputFrameId());
-                    surfVppOut.frame()->setTimestamp(m_tsOutEstimated);
-                    if (ENCODER_VCEENC) {
-                        surfVppOut.frame()->setDuration(outDuration);
-                    }
-                    //timestampの上書き情報
-                    //surfVppOut内部のmfxSurface1自体は同じデータを指すため、複数のタイムスタンプを持つことができない
-                    //この問題をm_outQeueueのPipelineTaskOutput(これは個別)に与えるPipelineTaskOutputDataCheckPtsの値で、
-                    //PipelineTaskCheckPTS::getOutput時にtimestampを変更するようにする
-                    //そのため、checkptsからgetOutputしたフレームは
-                    //(次にPipelineTaskCheckPTS::getOutputを呼ぶより前に)直ちに後続タスクに投入するよう制御する必要がある
-                    std::unique_ptr<PipelineTaskOutputDataCustom> timestampOverride(new PipelineTaskOutputDataCheckPts(m_tsOutEstimated));
-                    m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfVppOut, timestampOverride));
+                PipelineTaskSurface surfVppOut = taskSurf->surf();
+                surfVppOut.frame()->setInputFrameId(taskSurf->surf().frame()->inputFrameId());
+                surfVppOut.frame()->setTimestamp(m_tsOutEstimated);
+                if (ENCODER_VCEENC) {
+                    surfVppOut.frame()->setDuration(outDuration);
                 }
+                //timestampの上書き情報
+                //surfVppOut内部のmfxSurface1自体は同じデータを指すため、複数のタイムスタンプを持つことができない
+                //この問題をm_outQeueueのPipelineTaskOutput(これは個別)に与えるPipelineTaskOutputDataCheckPtsの値で、
+                //PipelineTaskCheckPTS::getOutput時にtimestampを変更するようにする
+                //そのため、checkptsからgetOutputしたフレームは
+                //(次にPipelineTaskCheckPTS::getOutputを呼ぶより前に)直ちに後続タスクに投入するよう制御する必要がある
+                std::unique_ptr<PipelineTaskOutputDataCustom> timestampOverride(new PipelineTaskOutputDataCheckPts(m_tsOutEstimated));
+                m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfVppOut, timestampOverride));
                 m_tsOutEstimated += m_outFrameDuration;
                 ptsDiff = outPtsSource - m_tsOutEstimated;
             }
@@ -1205,8 +1215,8 @@ protected:
     RGYInput *m_input;
     rgy_rational<int> m_srcTimebase;
 public:
-    PipelineTaskTrim(amf::AMFContextPtr context, const sTrimParam &trimParam, RGYInput *input, const rgy_rational<int>& srcTimebase, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
-        PipelineTask(PipelineTaskType::TRIM, context, outMaxQueueSize, log),
+    PipelineTaskTrim(const sTrimParam &trimParam, RGYInput *input, const rgy_rational<int>& srcTimebase, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
+        PipelineTask(PipelineTaskType::TRIM, outMaxQueueSize, log),
         m_trimParam(trimParam), m_input(input), m_srcTimebase(srcTimebase) {
     };
     virtual ~PipelineTaskTrim() {};
@@ -1239,8 +1249,8 @@ protected:
     std::map<int, RGYFilter *> m_filterForStreams;
     std::vector<std::shared_ptr<RGYInput>> m_audioReaders;
 public:
-    PipelineTaskAudio(amf::AMFContextPtr context, RGYInput *input, std::vector<std::shared_ptr<RGYInput>>& audioReaders, std::vector<std::shared_ptr<RGYOutput>>& fileWriterListAudio, std::vector<VppVilterBlock>& vpFilters, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
-        PipelineTask(PipelineTaskType::AUDIO, context, outMaxQueueSize, log),
+    PipelineTaskAudio(RGYInput *input, std::vector<std::shared_ptr<RGYInput>>& audioReaders, std::vector<std::shared_ptr<RGYOutput>>& fileWriterListAudio, std::vector<VppVilterBlock>& vpFilters, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
+        PipelineTask(PipelineTaskType::AUDIO, outMaxQueueSize, log),
         m_input(input), m_audioReaders(audioReaders) {
         //streamのindexから必要なwriteへのポインタを返すテーブルを作成
         for (auto writer : fileWriterListAudio) {
@@ -1365,14 +1375,15 @@ private:
     std::shared_ptr<RGYOpenCLContext> m_cl;
     RGYFilterSsim *m_videoMetric;
 public:
-    PipelineTaskVideoQualityMetric(amf::AMFContextPtr context, RGYFilterSsim *videoMetric, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, std::shared_ptr<RGYLog> log)
-        : PipelineTask(PipelineTaskType::VIDEOMETRIC, context, outMaxQueueSize, log), m_cl(cl), m_videoMetric(videoMetric) {
+    PipelineTaskVideoQualityMetric(RGYFilterSsim *videoMetric, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, std::shared_ptr<RGYLog> log)
+        : PipelineTask(PipelineTaskType::VIDEOMETRIC, outMaxQueueSize, log), m_cl(cl), m_videoMetric(videoMetric) {
     };
 
     virtual bool isPassThrough() const override { return true; }
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
+#if 0
         if (!frame) {
             return RGY_ERR_MORE_DATA;
         }
@@ -1385,20 +1396,20 @@ public:
             return RGY_ERR_NULL_PTR;
         }
         RGYFrameInfo inputFrame;
-        if (auto surfVppIn = taskSurf->surf().amfsurf(); surfVppIn != nullptr) {
+        if (auto surfVppIn = taskSurf->surf().mppsurf(); surfVppIn != nullptr) {
             if (taskSurf->surf().frame()->getInfo().mem_type != RGY_MEM_TYPE_CPU
-                && surfVppIn->GetMemoryType() != amf::AMF_MEMORY_OPENCL) {
-                amf::AMFContext::AMFOpenCLLocker locker(m_context);
+                && surfVppIn->GetMemoryType() != mpp::AMF_MEMORY_OPENCL) {
+                mpp::AMFContext::AMFOpenCLLocker locker(m_context);
 #if 0
-                auto ar = inAmf->Interop(amf::AMF_MEMORY_OPENCL);
+                auto ar = inAmf->Interop(mpp::AMF_MEMORY_OPENCL);
 #else
 #if 0
                 //dummyのCPUへのメモリコピーを行う
                 //こうしないとデコーダからの出力をOpenCLに渡したときに、フレームが壊れる(フレーム順序が入れ替わってガクガクする)
-                amf::AMFDataPtr data;
-                surfVppIn->Duplicate(amf::AMF_MEMORY_HOST, &data);
+                mpp::AMFDataPtr data;
+                surfVppIn->Duplicate(mpp::AMF_MEMORY_HOST, &data);
 #endif
-                auto ar = surfVppIn->Convert(amf::AMF_MEMORY_OPENCL);
+                auto ar = surfVppIn->Convert(mpp::AMF_MEMORY_OPENCL);
 #endif
                 if (ar != AMF_OK) {
                     PrintMes(RGY_LOG_ERROR, _T("Failed to convert plane: %s.\n"), get_err_mes(err_to_rgy(ar)));
@@ -1429,70 +1440,101 @@ public:
         //eventを入力フレームを使用し終わったことの合図として登録する
         taskSurf->addClEvent(inputReleaseEvent);
         m_outQeueue.push_back(std::move(frame));
+#endif
         return RGY_ERR_NONE;
     }
 };
 
-class PipelineTaskAMFEncode : public PipelineTask {
+class PipelineTaskMPPEncode : public PipelineTask {
 protected:
-    amf::AMFComponentPtr m_encoder;
+    MPPContext *m_encoder;
     RGY_CODEC m_encCodec;
-    AMFParams& m_encParams;
+    MPPCfg& m_encParams;
     RGYTimecode *m_timecode;
     RGYTimestamp *m_encTimestamp;
     rgy_rational<int> m_outputTimebase;
+    MppBufferGroup m_frameGrp;
+    MppBuffer m_frameBuf;
+    MppBuffer m_pktBuf;
+    std::vector<uint8_t> m_extradata;
     RGYListRef<RGYBitstream> m_bitStreamOut;
     RGYHDR10Plus *m_hdr10plus;
     bool m_hdr10plusMetadataCopy;
+    std::unique_ptr<RGYConvertCSP> m_convert;
 public:
-    PipelineTaskAMFEncode(
-        amf::AMFComponentPtr enc, RGY_CODEC encCodec, AMFParams& encParams, amf::AMFContextPtr context, int outMaxQueueSize,
-        RGYTimecode *timecode, RGYTimestamp *encTimestamp, rgy_rational<int> outputTimebase, RGYHDR10Plus *hdr10plus, bool hdr10plusMetadataCopy, std::shared_ptr<RGYLog> log)
-        : PipelineTask(PipelineTaskType::AMFENC, context, outMaxQueueSize, log),
-        m_encoder(enc), m_encCodec(encCodec), m_encParams(encParams), m_timecode(timecode), m_encTimestamp(encTimestamp), m_outputTimebase(outputTimebase), m_bitStreamOut(), m_hdr10plus(hdr10plus), m_hdr10plusMetadataCopy(hdr10plusMetadataCopy) {
+    PipelineTaskMPPEncode(
+        MPPContext *enc, RGY_CODEC encCodec, MPPCfg& encParams, int outMaxQueueSize,
+        RGYTimecode *timecode, RGYTimestamp *encTimestamp, rgy_rational<int> outputTimebase, RGYHDR10Plus *hdr10plus, bool hdr10plusMetadataCopy,
+        int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
+        : PipelineTask(PipelineTaskType::MPPENC, outMaxQueueSize, log),
+        m_encoder(enc), m_encCodec(encCodec), m_encParams(encParams), m_timecode(timecode), m_encTimestamp(encTimestamp), m_outputTimebase(outputTimebase),
+        m_frameGrp(nullptr), m_frameBuf(nullptr), m_pktBuf(nullptr), m_extradata(),
+        m_bitStreamOut(), m_hdr10plus(hdr10plus), m_hdr10plusMetadataCopy(hdr10plusMetadataCopy), m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)) {
     };
-    virtual ~PipelineTaskAMFEncode() {
+    virtual ~PipelineTaskMPPEncode() {
+        if (m_frameBuf) {
+            mpp_buffer_put(m_frameBuf);
+            m_frameBuf = nullptr;
+        }
+        if (m_pktBuf) {
+            mpp_buffer_put(m_pktBuf);
+            m_pktBuf = nullptr;
+        }
+        if (m_frameGrp) {
+            mpp_buffer_group_put(m_frameGrp);
+            m_frameGrp = nullptr;
+        }
         m_outQeueue.clear(); // m_bitStreamOutが解放されるよう前にこちらを解放する
     };
-    void setEnc(amf::AMFComponentPtr encode) { m_encoder = encode; };
+    void setEnc(MPPContext *encode) { m_encoder = encode; };
 
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override {
-        int outWidth = 0, outHeight = 0;
-        m_encParams.GetParam(VCE_PARAM_KEY_OUTPUT_WIDTH, outWidth);
-        m_encParams.GetParam(VCE_PARAM_KEY_OUTPUT_HEIGHT, outHeight);
-        int bitdepth = 8;
-        if (m_encCodec == RGY_CODEC_HEVC || m_encCodec == RGY_CODEC_AV1) {
-            m_encParams.GetParam(AMF_PARAM_COLOR_BIT_DEPTH(m_encCodec), bitdepth);
-        }
-        auto csp = RGY_CSP_NV12;
-        const bool yuv444 = false;
-        if (bitdepth > 8) {
-            csp = (yuv444) ? RGY_CSP_YUV444_16 : RGY_CSP_P010;
-        } else {
-            csp = (yuv444) ? RGY_CSP_YUV444 : RGY_CSP_NV12;
-        }
-        RGYFrameInfo info(outWidth, outHeight, csp, bitdepth, RGY_PICSTRUCT_FRAME, RGY_MEM_TYPE_GPU_IMAGE);
-        return std::make_pair(info, 0);
+        return std::make_pair(m_encParams.frameinfo(), 0);
     }
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
 
+    RGY_ERR allocateMppBuffer() {
+        const int planeSize = ALIGN(m_encParams.prep.hor_stride, 64) * ALIGN(m_encParams.prep.ver_stride, 64);
+        int frameSize = 0;
+        switch (m_encParams.prep.format & MPP_FRAME_FMT_MASK) {
+            case MPP_FMT_YUV420SP:
+            case MPP_FMT_YUV420P: {
+                frameSize = planeSize * 3 / 2;
+            } break;
+            default:
+                PrintMes(RGY_LOG_ERROR, _T("Unspported colorspace.\n"));
+                return RGY_ERR_UNSUPPORTED;
+        }
+
+        auto ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(ret));
+            return ret;
+        }
+
+        ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &m_frameBuf, frameSize));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("failed to get buffer for input frame : %s\n"), get_err_mes(ret));
+            return ret;
+        }
+
+        ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &m_pktBuf, frameSize));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("failed to get buffer for output packet : %s\n"), get_err_mes(ret));
+            return ret;
+        }
+        return RGY_ERR_NONE;
+    }
+
     std::pair<RGY_ERR, std::shared_ptr<RGYBitstream>> getOutputBitstream() {
-        const auto VCE_TIMEBASE = rgy_rational<int>(1, AMF_SECOND);
-        amf::AMFDataPtr data;
-        try {
-            auto ar = m_encoder->QueryOutput(&data);
-            if (ar == AMF_REPEAT || (ar == AMF_OK && data == nullptr)) {
-                return { RGY_ERR_MORE_SURFACE, nullptr };
-            }
-            if (ar == AMF_EOF) {
-                return { RGY_ERR_MORE_DATA, nullptr };
-            }
-            if (ar != AMF_OK) {
-                return { err_to_rgy(ar), nullptr };
-            }
-        } catch (...) {
-            PrintMes(RGY_LOG_ERROR, _T("Fatal error when getting output bitstream from encoder.\n"));
-            return { RGY_ERR_DEVICE_FAILED, nullptr };
+        MppPacket packet = nullptr;
+        auto err = err_to_rgy(m_encoder->mpi->encode_get_packet(m_encoder->ctx, &packet));
+        if (err == RGY_ERR_MPP_ERR_TIMEOUT) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            return { RGY_ERR_MORE_SURFACE, nullptr };
+        } else if (err != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to get packet from encoder: %s\n"), get_err_mes(err));
+            return { err, nullptr };
         }
 
         auto output = m_bitStreamOut.get([](RGYBitstream *bs) {
@@ -1502,33 +1544,24 @@ public:
         if (!output) {
             return { RGY_ERR_NULL_PTR, nullptr };
         }
-        amf::AMFBufferPtr buffer(data);
-        int64_t value = 0;
-        int64_t pts = rgy_change_scale(buffer->GetPts(), VCE_TIMEBASE, m_outputTimebase);
-        int64_t duration = rgy_change_scale(buffer->GetDuration(), VCE_TIMEBASE, m_outputTimebase);
-        if (buffer->GetProperty(RGY_PROP_TIMESTAMP, &value) == AMF_OK) {
-            pts = value;
+        const auto pts = mpp_packet_get_pts(packet);
+        const auto pktval = m_encTimestamp->get(pts);
+        if (m_extradata.size() > 0) {
+            output->copy(m_extradata.data(), m_extradata.size(), pts, 0, pktval.duration);
+            output->append((uint8_t *)mpp_packet_get_pos(packet), mpp_packet_get_length(packet));
+            m_extradata.clear();
+        } else {
+            output->copy((uint8_t *)mpp_packet_get_pos(packet), mpp_packet_get_length(packet), pts, 0, pktval.duration);
         }
-        if (buffer->GetProperty(RGY_PROP_DURATION, &value) == AMF_OK) {
-            duration = value;
-        }
-        output->copy((uint8_t *)buffer->GetNative(), buffer->GetSize(), pts, 0, duration);
-        if (buffer->GetProperty(AMF_PARAM_OUTPUT_DATA_TYPE(m_encCodec), &value) == AMF_OK) {
-            switch ((AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_ENUM)value) {
-            case AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_IDR: output->setFrametype(RGY_FRAMETYPE_IDR); break;
-            case AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_I:   output->setFrametype(RGY_FRAMETYPE_I); break;
-            case AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_P:   output->setFrametype(RGY_FRAMETYPE_P); break;
-            case AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_B:
-            default:
-                output->setFrametype((m_encCodec == RGY_CODEC_AV1) ? RGY_FRAMETYPE_P : RGY_FRAMETYPE_B); break;
+
+        if (mpp_packet_has_meta(packet)) {
+            auto meta = mpp_packet_get_meta(packet);
+            RK_S32 avg_qp = -1;
+            if (mpp_meta_get_s32(meta, KEY_ENC_AVERAGE_QP, &avg_qp) == MPP_OK) {
+                output->setAvgQP(avg_qp);
             }
         }
-        if (m_encCodec == RGY_CODEC_H264 || m_encCodec == RGY_CODEC_HEVC) {
-            uint32_t value32 = 0;
-            if (buffer->GetProperty(AMF_PARAM_STATISTIC_AVERAGE_QP(m_encCodec), &value32) == AMF_OK) {
-                output->setAvgQP(value32);
-            }
-        }
+        mpp_packet_deinit(&packet);
         return { RGY_ERR_NONE, output };
     }
 
@@ -1549,49 +1582,94 @@ public:
             }
         }
 
-        //以下の処理は
-        amf::AMFSurfacePtr pSurface = nullptr;
+        if (!m_frameBuf) {
+            auto err = allocateMppBuffer();
+            if (err != RGY_ERR_NONE) {
+                return err;
+            }
+
+            std::vector<char> extradata(16 * 1024, 0);
+            MppPacket packet = nullptr;
+            mpp_packet_init(&packet, extradata.data(), extradata.size());
+            mpp_packet_set_length(packet, 0);
+
+            err = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_GET_HDR_SYNC, packet));
+            if (err != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Failed to get header: %s\n"), get_err_mes(err));
+                return err;
+            }
+
+            void *ptr   = mpp_packet_get_pos(packet);
+            size_t len  = mpp_packet_get_length(packet);
+
+            m_extradata.resize(len);
+            memcpy(m_extradata.data(), ptr, len);
+
+            mpp_packet_deinit(&packet);
+        }
+
         RGYFrame *surfEncodeIn = (frame) ? dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf().frame() : nullptr;
-        const bool drain = surfEncodeIn == nullptr;
-        if (surfEncodeIn) {
-            int64_t pts = surfEncodeIn->timestamp();
-            int64_t duration = surfEncodeIn->duration();
-            auto frameDataList = surfEncodeIn->dataList();
-            const auto inputFrameId = surfEncodeIn->inputFrameId();
-            if (inputFrameId < 0) {
-                PrintMes(RGY_LOG_ERROR, _T("Invalid inputFrameId: %d.\n"), inputFrameId);
-                return RGY_ERR_UNKNOWN;
+        
+        MppFrame mppframe = nullptr;
+        auto err = err_to_rgy(mpp_frame_init(&mppframe));
+        if (err != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to get header: %s\n"), get_err_mes(err));
+            return err;
+        }
+        mpp_frame_set_width(mppframe, m_encParams.prep.width);
+        mpp_frame_set_height(mppframe, m_encParams.prep.height);
+        mpp_frame_set_hor_stride(mppframe, m_encParams.prep.hor_stride);
+        mpp_frame_set_ver_stride(mppframe, m_encParams.prep.ver_stride);
+        mpp_frame_set_fmt(mppframe, m_encParams.prep.format);
+        if (!surfEncodeIn) {
+            mpp_frame_set_buffer(mppframe, nullptr);
+            mpp_frame_set_eos(mppframe, 1);
+        } else {
+            mpp_frame_set_buffer(mppframe, m_frameBuf);
+            auto mppinfo = infoMPP(mppframe);
+            const auto surfEncInInfo = surfEncodeIn->getInfo();
+            if (m_convert->getFunc() == nullptr) {
+                if (m_convert->getFunc(surfEncInInfo.csp, mppinfo.csp, false, RGY_SIMD::SIMD_ALL) == nullptr) {
+                    PrintMes(RGY_LOG_ERROR, _T("Failed to find conversion for %s -> %s.\n"),
+                        RGY_CSP_NAMES[mppinfo.csp], RGY_CSP_NAMES[mppinfo.csp]);
+                    return RGY_ERR_UNSUPPORTED;
+                }
             }
-            pSurface = surfEncodeIn->detachSurface();
-            //現状VCEはインタレをサポートしないので、強制的にプログレとして処理する
-            pSurface->SetFrameType(amf::AMF_FRAME_PROGRESSIVE);
-            //現状VCEはインタレをサポートしないので、強制的にプログレとして処理する
-            //フレーム情報のほうもプログレに書き換えなければ、SubmitInputでエラーが返る
-            if (m_encCodec == RGY_CODEC_H264) {
-                m_encParams.SetParam(AMF_VIDEO_ENCODER_PICTURE_STRUCTURE, AMF_VIDEO_ENCODER_PICTURE_STRUCTURE_TOP_FIELD);
-            }
-            // apply frame-specific properties to the current frame
-            m_encParams.Apply(pSurface, AMF_PARAM_FRAME, m_log.get());
-            // apply dynamic properties to the encoder
-            //m_encParams.Apply(m_pEncoder, AMF_PARAM_DYNAMIC, m_pLog.get());
+            auto crop = initCrop();
+            m_convert->run((mppinfo.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
+                (void **)mppinfo.ptr, (const void **)surfEncInInfo.ptr,
+                surfEncInInfo.width, surfEncInInfo.pitch[0], surfEncInInfo.pitch[1], mppinfo.pitch[0],
+                surfEncInInfo.height, mppinfo.height, crop.c);
 
-            pSurface->SetProperty(RGY_PROP_TIMESTAMP, pts);
-            pSurface->SetProperty(RGY_PROP_DURATION, duration);
-
-            pSurface->SetProperty(AMF_PARAM_STATISTICS_FEEDBACK(m_encCodec), true);
+            const auto pts = surfEncInInfo.timestamp;
+            mpp_frame_set_pts(mppframe, pts);
+            mpp_frame_set_poc(mppframe, m_inFrames);
 
             if (m_timecode) {
                 m_timecode->write(pts, m_outputTimebase);
             }
-            m_encTimestamp->add(pts, inputFrameId, m_inFrames, duration, metadatalist);
+            m_encTimestamp->add(pts, surfEncInInfo.inputFrameId, m_inFrames, surfEncInInfo.duration, metadatalist);
             m_inFrames++;
 
             //エンコーダまでたどり着いたフレームについてはdataListを解放
             surfEncodeIn->clearDataList();
         }
 
-        auto enc_sts = RGY_ERR_NONE;
-        auto ar = (drain) ? AMF_INPUT_FULL : AMF_OK;
+        MppPacket packet = nullptr;
+        mpp_packet_init_with_buffer(&packet, m_pktBuf);
+        mpp_packet_set_length(packet, 0); //It is important to clear output packet length!!
+
+        auto meta = mpp_frame_get_meta(mppframe);
+        mpp_meta_set_packet(meta, KEY_OUTPUT_PACKET, packet);
+
+        err = err_to_rgy(m_encoder->mpi->encode_put_frame(m_encoder->ctx, mppframe));
+        if (err != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to put frame to encoder: %s\n"), get_err_mes(err));
+            mpp_frame_deinit(&mppframe);
+            return err;
+        }
+        mpp_frame_deinit(&mppframe);
+
         for (;;) {
             //エンコーダからの取り出し
             auto outBs = getOutputBitstream();
@@ -1603,53 +1681,19 @@ public:
                     m_outQeueue.push_back(std::make_unique<PipelineTaskOutputBitstream>(outBs.second));
                 }
             } else if (out_ret == RGY_ERR_MORE_DATA) { //EOF
-                enc_sts = RGY_ERR_MORE_DATA;
+                err = RGY_ERR_MORE_DATA;
                 break;
             } else {
-                enc_sts = out_ret;
+                err = out_ret;
                 break;
             }
-
-            if (drain) {
-                if (ar == AMF_INPUT_FULL) {
-                    //エンコーダのflush
-                    try {
-                        ar = m_encoder->Drain();
-                    } catch (...) {
-                        PrintMes(RGY_LOG_ERROR, _T("Fatal error when submitting frame to encoder.\n"));
-                        return RGY_ERR_DEVICE_FAILED;
-                    }
-                    if (ar == AMF_INPUT_FULL) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    } else {
-                        enc_sts = err_to_rgy(ar);
-                    }
-                }
-            } else {
-                //エンコードへの投入
-                try {
-                    ar = m_encoder->SubmitInput(pSurface);
-                } catch (...) {
-                    PrintMes(RGY_LOG_ERROR, _T("Fatal error when submitting frame to encoder.\n"));
-                    return RGY_ERR_DEVICE_FAILED;
-                }
-                if (ar == AMF_NEED_MORE_INPUT) {
-                    break;
-                } else if (ar == AMF_INPUT_FULL) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                } else if (ar == AMF_REPEAT) {
-                    pSurface = nullptr;
-                } else {
-                    enc_sts = err_to_rgy(ar);
-                    break;
-                }
-            }
-        };
-        return enc_sts;
+        }
+        return err;
     }
 };
 
-class PipelineTaskAMFPreProcess : public PipelineTask {
+#if ENABLE_VPPRGA
+class PipelineTaskMPPPreProcess : public PipelineTask {
 protected:
     std::shared_ptr<RGYOpenCLContext> m_cl;
     std::unique_ptr<AMFFilter>& m_vppFilter;
@@ -1658,8 +1702,8 @@ protected:
     std::deque<std::unique_ptr<PipelineTaskOutput>> m_prevInputFrame; //前回投入されたフレーム、完了通知を待ってから解放するため、参照を保持する
     RGYFilterSsim *m_videoMetric;
 public:
-    PipelineTaskAMFPreProcess(amf::AMFContextPtr context, std::unique_ptr<AMFFilter>& vppfilter, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
-        PipelineTask(PipelineTaskType::AMFVPP, context, outMaxQueueSize, log), m_cl(cl), m_vppFilter(vppfilter), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame() {
+    PipelineTaskAMFPreProcess(std::unique_ptr<AMFFilter>& vppfilter, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
+        PipelineTask(PipelineTaskType::MPPVPP, context, outMaxQueueSize, log), m_cl(cl), m_vppFilter(vppfilter), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame() {
 
     };
     virtual ~PipelineTaskAMFPreProcess() {
@@ -1686,7 +1730,7 @@ public:
             return RGY_ERR_UNSUPPORTED;
         }
 
-        amf::AMFSurfacePtr pSurface = nullptr;
+        mpp::AMFSurfacePtr pSurface = nullptr;
         RGYFrame *surfVppIn = (frame) ? dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf().frame() : nullptr;
         const bool drain = surfVppIn == nullptr;
         if (surfVppIn) {
@@ -1703,7 +1747,7 @@ public:
             }
             pSurface = surfVppIn->detachSurface();
             //現状VCEはインタレをサポートしないので、強制的にプログレとして処理する
-            pSurface->SetFrameType(amf::AMF_FRAME_PROGRESSIVE);
+            pSurface->SetFrameType(mpp::AMF_FRAME_PROGRESSIVE);
             pSurface->SetProperty(RGY_PROP_TIMESTAMP, pts);
             pSurface->SetProperty(RGY_PROP_DURATION, duration);
             pSurface->SetProperty(RGY_PROP_INPUT_FRAMEID, inputFrameId);
@@ -1718,7 +1762,7 @@ public:
         for (;;) {
             {
                 //VPPからの取り出し
-                amf::AMFDataPtr data;
+                mpp::AMFDataPtr data;
                 const auto ar_out = m_vppFilter->filter()->QueryOutput(&data);
                 if (ar_out == AMF_EOF) {
                     enc_sts = RGY_ERR_MORE_DATA;
@@ -1729,7 +1773,7 @@ public:
                     enc_sts = err_to_rgy(ar_out);
                     break;
                 } else if (data != nullptr) {
-                    auto surfVppOut = amf::AMFSurfacePtr(data);
+                    auto surfVppOut = mpp::AMFSurfacePtr(data);
                     int64_t pts = 0, duration = 0, inputFrameId = 0;
                     surfVppOut->GetProperty(RGY_PROP_TIMESTAMP, &pts);
                     surfVppOut->GetProperty(RGY_PROP_DURATION, &duration);
@@ -1785,17 +1829,17 @@ public:
         return enc_sts;
     }
 };
+#endif
 
 class PipelineTaskOpenCL : public PipelineTask {
 protected:
     std::shared_ptr<RGYOpenCLContext> m_cl;
-    bool m_dx11interlop;
     std::vector<std::unique_ptr<RGYFilter>>& m_vpFilters;
     std::deque<std::unique_ptr<PipelineTaskOutput>> m_prevInputFrame; //前回投入されたフレーム、完了通知を待ってから解放するため、参照を保持する
     RGYFilterSsim *m_videoMetric;
 public:
-    PipelineTaskOpenCL(amf::AMFContextPtr context, std::vector<std::unique_ptr<RGYFilter>>& vppfilters, RGYFilterSsim *videoMetric, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, bool dx11interlop, std::shared_ptr<RGYLog> log) :
-        PipelineTask(PipelineTaskType::OPENCL, context, outMaxQueueSize, log), m_cl(cl), m_dx11interlop(dx11interlop), m_vpFilters(vppfilters), m_prevInputFrame(), m_videoMetric(videoMetric) {
+    PipelineTaskOpenCL(std::vector<std::unique_ptr<RGYFilter>>& vppfilters, RGYFilterSsim *videoMetric, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
+        PipelineTask(PipelineTaskType::OPENCL, outMaxQueueSize, log), m_cl(cl), m_vpFilters(vppfilters), m_prevInputFrame(), m_videoMetric(videoMetric) {
 
     };
     virtual ~PipelineTaskOpenCL() {
@@ -1810,6 +1854,7 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
+#if 0
         if (m_prevInputFrame.size() > 0) {
             //前回投入したフレームの処理が完了していることを確認したうえで参照を破棄することでロックを解放する
             auto prevframe = std::move(m_prevInputFrame.front());
@@ -1827,20 +1872,19 @@ public:
                 PrintMes(RGY_LOG_ERROR, _T("Invalid task surface.\n"));
                 return RGY_ERR_NULL_PTR;
             }
-            if (auto surfVppInAMF = taskSurf->surf().amfsurf(); surfVppInAMF != nullptr) {
+            if (auto surfVppInAMF = taskSurf->surf().mppsurf(); surfVppInAMF != nullptr) {
                 if (taskSurf->surf().frame()->getInfo().mem_type != RGY_MEM_TYPE_CPU
-                    && surfVppInAMF->GetMemoryType() != amf::AMF_MEMORY_OPENCL) {
-                    amf::AMFContext::AMFOpenCLLocker locker(m_context);
+                    && surfVppInAMF->GetMemoryType() != mpp::AMF_MEMORY_OPENCL) {
 #if 0
-                    auto ar = inAmf->Interop(amf::AMF_MEMORY_OPENCL);
+                    auto ar = inAmf->Interop(mpp::AMF_MEMORY_OPENCL);
 #else
 #if 0
                     //dummyのCPUへのメモリコピーを行う
                     //こうしないとデコーダからの出力をOpenCLに渡したときに、フレームが壊れる(フレーム順序が入れ替わってガクガクする)
-                    amf::AMFDataPtr data;
-                    surfVppInAMF->Duplicate(amf::AMF_MEMORY_HOST, &data);
+                    mpp::AMFDataPtr data;
+                    surfVppInAMF->Duplicate(mpp::AMF_MEMORY_HOST, &data);
 #endif
-                    auto ar = surfVppInAMF->Convert(amf::AMF_MEMORY_OPENCL);
+                    auto ar = surfVppInAMF->Convert(mpp::AMF_MEMORY_OPENCL);
 #endif
                     if (ar != AMF_OK) {
                         PrintMes(RGY_LOG_ERROR, _T("Failed to convert plane: %s.\n"), get_err_mes(err_to_rgy(ar)));
@@ -1851,7 +1895,7 @@ public:
             } else if (auto surfVppInCL = taskSurf->surf().clframe(); surfVppInCL != nullptr) {
                 filterframes.push_back(std::make_pair(taskSurf->surf().frame()->getInfo(), 0u));
             } else {
-                PrintMes(RGY_LOG_ERROR, _T("Invalid task surface (not opencl or amf).\n"));
+                PrintMes(RGY_LOG_ERROR, _T("Invalid task surface (not opencl or mpp).\n"));
                 return RGY_ERR_NULL_PTR;
             }
             //ここでinput frameの参照を m_prevInputFrame で保持するようにして、OpenCLによるフレームの処理が完了しているかを確認できるようにする
@@ -1910,24 +1954,23 @@ public:
                 }
             } else {
                 //エンコードバッファにコピー
-                amf::AMFContext::AMFOpenCLLocker locker(m_context);
                 auto &lastFilter = m_vpFilters[m_vpFilters.size() - 1];
                 const auto lastFilterOut = lastFilter->GetFilterParam()->frameOut;
-                amf::AMFSurfacePtr pSurface;
+                mpp::AMFSurfacePtr pSurface;
                 if (m_dx11interlop) {
-                    auto ar = m_context->AllocSurface(amf::AMF_MEMORY_DX11, csp_rgy_to_enc(lastFilterOut.csp),
+                    auto ar = m_context->AllocSurface(mpp::AMF_MEMORY_DX11, csp_rgy_to_enc(lastFilterOut.csp),
                         lastFilterOut.width, lastFilterOut.height, &pSurface);
                     if (ar != AMF_OK) {
                         PrintMes(RGY_LOG_ERROR, _T("Failed to allocate surface: %s.\n"), get_err_mes(err_to_rgy(ar)));
                         return err_to_rgy(ar);
                     }
-                    ar = pSurface->Interop(amf::AMF_MEMORY_OPENCL);
+                    ar = pSurface->Interop(mpp::AMF_MEMORY_OPENCL);
                     if (ar != AMF_OK) {
                         PrintMes(RGY_LOG_ERROR, _T("Failed to get interop of surface: %s.\n"), get_err_mes(err_to_rgy(ar)));
                         return err_to_rgy(ar);
                     }
                 } else {
-                    auto ar = m_context->AllocSurface(amf::AMF_MEMORY_OPENCL, csp_rgy_to_enc(lastFilterOut.csp),
+                    auto ar = m_context->AllocSurface(mpp::AMF_MEMORY_OPENCL, csp_rgy_to_enc(lastFilterOut.csp),
                         lastFilterOut.width, lastFilterOut.height, &pSurface);
                     if (ar != AMF_OK) {
                         PrintMes(RGY_LOG_ERROR, _T("Failed to allocate surface: %s.\n"), get_err_mes(err_to_rgy(ar)));
@@ -2013,6 +2056,7 @@ public:
         }
         clFrameOutInterop->release(&clevent);
         m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_mfxSession, surfVppOut, frame, clevent));
+#endif
 #endif
         return RGY_ERR_NONE;
     }

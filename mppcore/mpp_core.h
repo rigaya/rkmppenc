@@ -43,6 +43,7 @@
 #include "mpp_pipeline.h"
 #include "rgy_filter.h"
 #include "rgy_filter_ssim.h"
+#include "rk_mpi.h"
 
 #pragma warning(pop)
 
@@ -55,11 +56,14 @@
 #define THREAD_DEC_USE_FUTURE 1
 #endif
 
+#define ENABLE_VPPRGA 0
+
 #if ENABLE_AVSW_READER
 struct AVChapter;
 #endif //#if ENABLE_AVSW_READER
 class RGYTimecode;
 
+#if 0
 class RGYPipelineFrame {
     RGYPipelineFrame(amf::AMFSurfacePtr surf) : surface(surf), frame() {};
     RGYPipelineFrame(shared_ptr<RGYCLFrame> clframe) : surface(), frame(clframe) {};
@@ -71,57 +75,59 @@ protected:
     amf::AMFSurfacePtr surface;
     shared_ptr<RGYCLFrame> frame;
 };
+#endif
 
-class VCECore : public VCEAMF {
+class MPPCore {
 public:
-    VCECore();
-    virtual ~VCECore();
+    MPPCore();
+    virtual ~MPPCore();
 
-    virtual RGY_ERR init(VCEParam *prm);
-    virtual RGY_ERR initLog(VCEParam *prm);
-    virtual RGY_ERR initDevice(std::vector<std::unique_ptr<VCEDevice>> &gpuList, int deviceId);
-    virtual RGY_ERR initInput(VCEParam *pParams, std::vector<std::unique_ptr<VCEDevice>> &gpuList);
-    virtual RGY_ERR initOutput(VCEParam *prm);
+    virtual RGY_ERR init(MPPParam *prm);
+    virtual RGY_ERR initLog(MPPParam *prm);
+    virtual RGY_ERR initDevice(const bool enableOpenCL, const bool checkVppPerformance);
+    virtual RGY_ERR initInput(MPPParam *pParams);
+    virtual RGY_ERR initOutput(MPPParam *prm);
     virtual RGY_ERR run2();
-    virtual void Terminate() override;
+    virtual void Terminate();
 
     tstring GetEncoderParam();
     void PrintEncoderParam();
     void PrintResult();
-
-    VCEDevice *dev() { return m_dev.get(); };
+    
+    void PrintMes(RGYLogLevel log_level, const TCHAR *format, ...);
 
     void SetAbortFlagPointer(bool *abortFlag);
 protected:
     virtual RGY_ERR readChapterFile(tstring chapfile);
 
-    RGY_ERR checkGPUListByEncoder(std::vector<std::unique_ptr<VCEDevice>> &gpuList, const VCEParam *prm, int deviceId);
-    RGY_ERR gpuAutoSelect(std::vector<std::unique_ptr<VCEDevice>> &gpuList, const VCEParam *prm);
-    virtual RGY_CSP GetEncoderCSP(const VCEParam *inputParam) const;
-    virtual int GetEncoderBitdepth(const VCEParam *inputParam) const;
-    virtual RGY_ERR checkParam(VCEParam *prm);
-    virtual RGY_ERR initPerfMonitor(VCEParam *prm);
-    virtual RGY_ERR initDecoder(VCEParam *prm);
-    virtual RGY_ERR initFilters(VCEParam *prm);
-    virtual std::vector<VppType> InitFiltersCreateVppList(const VCEParam *inputParam,
+    virtual RGY_CSP GetEncoderCSP(const MPPParam *inputParam) const;
+    virtual int GetEncoderBitdepth(const MPPParam *inputParam) const;
+    virtual RGY_ERR checkParam(MPPParam *prm);
+    virtual RGY_ERR initPerfMonitor(MPPParam *prm);
+    virtual RGY_ERR initDecoder(MPPParam *prm);
+    virtual RGY_ERR initFilters(MPPParam *prm);
+    virtual std::vector<VppType> InitFiltersCreateVppList(const MPPParam *inputParam,
         const bool cspConvRequired, const bool cropRequired, const RGY_VPP_RESIZE_TYPE resizeRequired);
     virtual RGY_ERR AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilters,
-        RGYFrameInfo & inputFrame, const VppType vppType, const VCEParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
+        RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
+#if ENABLE_VPPRGA
     virtual std::tuple<RGY_ERR, std::unique_ptr<AMFFilter>> AddFilterAMF(
-        RGYFrameInfo & inputFrame, const VppType vppType, const VCEParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
-    virtual RGY_ERR createOpenCLCopyFilterForPreVideoMetric(const VCEParam *inputParam);
-    virtual RGY_ERR initChapters(VCEParam *prm);
-    virtual RGY_ERR initEncoder(VCEParam *prm);
-    virtual RGY_ERR initPowerThrottoling(VCEParam *prm);
-    virtual RGY_ERR initSSIMCalc(VCEParam *prm);
-    virtual RGY_ERR initPipeline(VCEParam *prm);
+        RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
+#endif
+    virtual RGY_ERR createOpenCLCopyFilterForPreVideoMetric(const MPPParam *inputParam);
+    virtual RGY_ERR initChapters(MPPParam *prm);
+    virtual RGY_ERR initEncoderPrep(const MPPParam *prm);
+    virtual RGY_ERR initEncoderRC(const MPPParam *prm);
+    virtual RGY_ERR initEncoderCodec(const MPPParam *prm);
+    virtual RGY_ERR initEncoder(MPPParam *prm);
+    virtual RGY_ERR initPowerThrottoling(MPPParam *prm);
+    virtual RGY_ERR initSSIMCalc(MPPParam *prm);
+    virtual RGY_ERR initPipeline(MPPParam *prm);
 
     bool VppAfsRffAware() const;
     virtual RGY_ERR allocatePiplelineFrames();
 
-    virtual RGY_ERR run_decode();
-    virtual RGY_ERR run_output();
-
+    std::shared_ptr<RGYLog> m_pLog;
     RGY_CODEC          m_encCodec;
     bool m_bTimerPeriodTuning;
 #if ENABLE_AVSW_READER
@@ -158,7 +164,11 @@ protected:
     RGY_PICSTRUCT      m_picStruct;
     VideoVUIInfo       m_encVUI;
 
-    std::unique_ptr<VCEDevice> m_dev;
+    std::shared_ptr<RGYOpenCLContext> m_cl;
+
+    MPPCfg             m_enccfg;
+    std::unique_ptr<MPPContext> m_encoder;
+    std::unique_ptr<MPPContext> m_decoder;
 
     vector<VppVilterBlock>        m_vpFilters;
     shared_ptr<RGYFilterParam>    m_pLastFilterParam;
@@ -168,8 +178,6 @@ protected:
 
     sTrimParam *m_pTrimParam;
 
-    amf::AMFComponentPtr m_pDecoder;
-    amf::AMFComponentPtr m_pEncoder;
 #if THREAD_DEC_USE_FUTURE
     std::future<RGY_ERR> m_thDecoder;
 #else
@@ -177,24 +185,7 @@ protected:
 #endif
     std::future<RGY_ERR> m_thOutput;
 
-    AMFParams m_params;
-
     std::vector<std::unique_ptr<PipelineTask>> m_pipelineTasks;
 
     bool *m_pAbortByUser;
-};
-
-class VCEFeatures {
-public:
-    VCEFeatures() : m_core() {};
-
-    virtual ~VCEFeatures() {};
-
-    RGY_ERR init(int deviceId, const RGYParamLogLevel& loglevel);
-    tstring devName() const { return m_core->dev()->getGPUInfo(); }
-    tstring checkEncFeatures(RGY_CODEC codec);
-    tstring checkDecFeatures(RGY_CODEC codec);
-    tstring checkFilterFeatures(const std::wstring& filter);
-protected:
-    std::unique_ptr<VCECore> m_core;
 };

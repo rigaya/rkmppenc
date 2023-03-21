@@ -100,7 +100,7 @@ ENABLE_DEBUG=0
 CC=${CC:-gcc}
 CXX=${CXX:-g++}
 LD=${LD:-g++}
-PROGRAM=mppencc
+PROGRAM=mppenc
 PREFIX=${PREFIX:-/usr/local}
 EXTRACXXFLAGS=""
 EXTRALDFLAGS=""
@@ -272,15 +272,24 @@ if [ `echo | ${CXX} -E -dM - | egrep "WIN32|WIN64" | wc --lines` -ne 0 ]; then
     exit 1 
 fi
 
-if [ `echo | ${CXX} -E -dM - | grep "x86_64" | wc --lines` -eq 0 ]; then
+if [ `echo | ${CXX} -E -dM - | grep "__ARM_ARCH_ISA_A64" | wc --lines` -ne 0 ]; then
+    ARM64=1
     X86_64=0
+    OBJCOPY_ARCH_ELF="elf64-littleaarch64"
+    OBJCOPY_ARCH_BIN="aarch64"
+elif [ `echo | ${CXX} -E -dM - | grep "x86_64" | wc --lines` -eq 0 ]; then
+    ARM64=0
+    X86_64=1
+    OBJCOPY_ARCH_ELF="elf64-x86-64"
+    OBJCOPY_ARCH_BIN="i386"
 fi
 
 CFLAGS="-Wall -Wno-missing-braces -Wno-unknown-pragmas -Wno-unused \
--DLINUX -DUNIX -D_FILE_OFFSET_BITS=64 -D__USE_LARGEFILE64 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS"
+-DLINUX -DUNIX -D_FILE_OFFSET_BITS=64 -D__USE_LARGEFILE64 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS \
+ -I${SRCDIR}/clRNG/src/include"
 CXXFLAGS="-Wall -Wno-missing-braces -Wno-unknown-pragmas -Wno-unused \
 -DLINUX -DUNIX -D_FILE_OFFSET_BITS=64 -D__USE_LARGEFILE64 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS \
--I${SRCDIR} -I${SRCDIR}/mpp/inc \
+-I${SRCDIR} -I${SRCDIR}/mpp/inc -I${SRCDIR}/clRNG/src/include \
 -I${SRCDIR}/mppcore -I${SRCDIR}/tinyxml2 -I${SRCDIR}/ttmath \
 "
 
@@ -293,7 +302,9 @@ else
 fi
 
 LDFLAGS="-L. -ldl -lm -lstdc++ -lstdc++fs"
-if [ $X86_64 -ne 0 ]; then
+if [ $ARM64 -ne 0 ]; then
+    CXXINC="${CXXINC} -DLINUX64"
+elif [ $X86_64 -ne 0 ]; then
     CFLAGS="${CFLAGS} -DLINUX64 -m64"
     CXXFLAGS="${CXXFLAGS} -DLINUX64 -m64"
     LDFLAGS="${LDFLAGS} -m64"
@@ -320,11 +331,13 @@ else
 fi
 cnf_write "OK"
 
-if cxx_check "-msse4.1" "${CXXFLAGS} -msse4.1 ${LDFLAGS}" ; then
-    CXXFLAGS="$CXXFLAGS -msse4.1"
-else
-    cnf_write "SSE4.1 not supported with this compiler." 
-    exit 1
+if [ $X86_64 -ne 0 ]; then
+    if cxx_check "-msse4.1" "${CXXFLAGS} -msse4.1 ${LDFLAGS}" ; then
+        CXXFLAGS="$CXXFLAGS -msse4.1"
+    else
+        cnf_write "SSE4.1 not supported with this compiler." 
+        exit 1
+    fi
 fi
 cnf_write "OK"
 
@@ -399,6 +412,15 @@ if [ -n "$EXTRALDFLAGS" ]; then
         exit 1
     fi
     cnf_write "OK"
+fi
+
+LIBMPP_LIBS="-lrockchip_mpp"
+if cxx_check "mpp" "${CXXFLAGS} ${EXTRACXXFLAGS} ${LIBVPL_CFLAGS} ${LDFLAGS} ${EXTRALDFLAGS} ${LIBMPP_LIBS}" "" "mpp_log.h" "mpp_get_log_level();" ; then
+    LDFLAGS="${LDFLAGS} ${LIBMPP_LIBS}"
+    cnf_write "yes"
+else
+    cnf_write "mpp not installed." 
+    exit 1
 fi
 
 if [ $ENABLE_AVSW_READER -ne 0 ]; then
@@ -545,11 +567,10 @@ if [ $ENABLE_DTL -ne 0 ]; then
 fi
 
 SRC_mppcore=" \
-convert_csp.cpp             convert_csp_avx.cpp \
-convert_csp_avx2.cpp        convert_csp_sse2.cpp           convert_csp_sse41.cpp       convert_csp_ssse3.cpp \
+convert_csp.cpp  \
 cpu_info.cpp                gpu_info.cpp                   gpuz_info.cpp               logo.cpp \
 rgy_aspect_ratio.cpp        rgy_avlog.cpp \
-rgy_avutil.cpp              rgy_bitstream.cpp              rgy_bitstream_avx2.cpp      rgy_bitstream_avx512bw.cpp \
+rgy_avutil.cpp              rgy_bitstream.cpp \
 rgy_caption.cpp             rgy_chapter.cpp \
 rgy_cmd.cpp                 rgy_codepage.cpp               rgy_def.cpp                 rgy_device.cpp \
 rgy_env.cpp                 rgy_err.cpp                    rgy_event.cpp               rgy_filesystem.cpp \
@@ -608,7 +629,7 @@ PYW_PERF_MONITOR="perf_monitor.pyw"
 
 RESOURCE_NNEDI_WEIGHT="nnedi3_weights.bin"
 
-SRC_mppencC="mppencC.cpp"
+SRC_mppenc="mppenc.cpp"
 
 # for src in $SRC_MFX_DISPATCH; do
 #     SRCS="$SRCS mfx_dispatch/src/$src"
@@ -651,7 +672,7 @@ for src in $SRC_TINYXML2; do
 done
 
 for src in $SRC_mppenc; do
-    SRCS="$SRCS mppenc/$src"
+    SRCS="$SRCS mppencc/$src"
 done
 
 ENCODER_REV=`git rev-list HEAD | wc --lines`
@@ -665,6 +686,8 @@ echo "RBINS = $RBINS" >> config.mak
 echo "RHS = $RHS" >> config.mak
 echo "RCLS = $RCLS" >> config.mak
 echo "RCLHS = $RCLHS" >> config.mak
+echo "OBJCOPY_ARCH_ELF = $OBJCOPY_ARCH_ELF" >> config.mak
+echo "OBJCOPY_ARCH_BIN = $OBJCOPY_ARCH_BIN" >> config.mak
 write_config_mak "SRCDIR = $SRCDIR"
 write_config_mak "CC  = $CC"
 write_config_mak "CXX = $CXX"
@@ -676,6 +699,7 @@ write_config_mak "CXXFLAGS = $CXXFLAGS $EXTRACXXFLAGS $LIBAV_CFLAGS $VAPOURSYNTH
 write_config_mak "LDFLAGS = $LDFLAGS $EXTRALDFLAGS $LIBAV_LIBS $LIBASS_LIBS"
 write_config_mak "PREFIX = $PREFIX"
 echo "X86_64 = ${X86_64}"
+echo "ARM64 = ${ARM64}"
 write_app_rev    "#define ENCODER_REV                  \"$ENCODER_REV\""
 write_enc_config "#define ENABLE_RAW_READER             1"
 write_enc_config "#define ENABLE_AVI_READER             0"
@@ -685,7 +709,7 @@ write_enc_config "#define ENABLE_AVSW_READER            $ENABLE_AVSW_READER"
 write_enc_config "#define ENABLE_SM_READER              0"
 write_enc_config "#define ENABLE_CUSTOM_VPP             1"
 write_enc_config "#define ENABLE_LIBASS_SUBBURN         $ENABLE_LIBASS"
-write_enc_config "#define ENABLE_OPENCL                 0"
+write_enc_config "#define ENABLE_OPENCL                 1"
 write_enc_config "#define ENABLE_AVCODEC_OUT_THREAD     1"
 write_enc_config "#define ENABLE_CPP_REGEX              $ENABLE_CPP_REGEX"
 write_enc_config "#define ENABLE_DTL                    $ENABLE_DTL"

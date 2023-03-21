@@ -53,6 +53,9 @@
 #include "core/Result.h"
 #include "rgy_vulkan.h"
 #endif
+#if ENCODER_MPP
+#include "mpp_err.h"
+#endif //#if ENCODER_MPP
 
 #include <algorithm>
 
@@ -252,7 +255,7 @@ enum RGY_ERR {
     RGY_ERR_NVCV_CUDA                  = RGY_ERR_NVCV_OFFSET -60, //!< An otherwise unspecified CUDA error has been reported.
 
     //mpp
-    RGY_ERR_MPP_NOK = -300
+    RGY_ERR_MPP_NOK = -300,
     RGY_ERR_MPP_ERR_UNKNOW          = RGY_ERR_MPP_NOK -  1,
     RGY_ERR_MPP_ERR_NULL_PTR        = RGY_ERR_MPP_NOK -  2,
     RGY_ERR_MPP_ERR_MALLOC          = RGY_ERR_MPP_NOK -  3,
@@ -319,6 +322,12 @@ VkResult err_to_vk(RGY_ERR err);
 RGY_ERR err_to_rgy(VkResult err);
 #endif //#if ENABLE_VULKAN
 #endif //#if ENCODER_VCEENC
+
+#if ENCODER_MPP
+MPP_RET err_to_mpp(RGY_ERR err);
+RGY_ERR err_to_rgy(MPP_RET err);
+#endif //#if ENCODER_MPP
+
 
 const TCHAR *get_err_mes(RGY_ERR sts);
 

@@ -28,10 +28,7 @@
 #include <algorithm>
 #include "rgy_util.h"
 #include "mpp_param.h"
-
-static const int MPP_DEFAULT_QPI = 23;
-static const int MPP_DEFAULT_QPP = 26;
-static const int MPP_DEFAULT_QPB = 29;
+#include "rk_venc_cmd.h"
 
 MPPParam::MPPParam() :
     input(),
@@ -43,23 +40,30 @@ MPPParam::MPPParam() :
     codecParam(),
     outputDepth(8),
     rateControl(MPP_ENC_RC_MODE_FIXQP),
-    qualityPreset(MPP_ENC_RC_QUALITY_MEDIUM),
+    qualityPreset((int)MPP_ENC_RC_QUALITY_MEDIUM),
     bitrate(5000),
     maxBitrate(0),
     VBVBufferSize(0),
-    qpI(MPP_DEFAULT_QPI),
-    qpP(MPP_DEFAULT_QPP),
-    qpB(MPP_DEFAULT_QPB),
-    gopLen(0) {
+    qp(MPP_DEFAULT_QP),
+    qpMax(63),
+    qpMin(0),
+    gopLen(MPP_DEFAULT_GOP_LEN),
+    par() {
     codecParam[RGY_CODEC_H264].level   = 51;
     codecParam[RGY_CODEC_H264].profile = 100;
+
     codecParam[RGY_CODEC_HEVC].level   = 0;
     codecParam[RGY_CODEC_HEVC].profile = 0;
     codecParam[RGY_CODEC_HEVC].tier    = 0;
+
     codecParam[RGY_CODEC_AV1].level    = -1; // as auto
     codecParam[RGY_CODEC_AV1].profile  = 0;
     codecParam[RGY_CODEC_AV1].tier     = 0;
+
     input.vui = VideoVUIInfo();
+
+    par[0] = 0;
+    par[1] = 0;
 }
 
 MPPParam::~MPPParam() {

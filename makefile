@@ -41,19 +41,19 @@ $(PROGRAM): .depend $(OBJS) $(OBJCS) $(OBJPYWS) $(OBJRBINS) $(OBJRHS) $(OBJRCLS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 %.o: %.pyw
-	objcopy -I binary -O elf64-x86-64 -B i386 $< $@
+	objcopy -I binary -O $(OBJCOPY_ARCH_ELF) -B $(OBJCOPY_ARCH_BIN) $< $@
 
 %.o: %.bin
-	objcopy -I binary -O elf64-x86-64 -B i386 $< $@
+	objcopy -I binary -O $(OBJCOPY_ARCH_ELF) -B $(OBJCOPY_ARCH_BIN) $< $@
 
 %.h.o: %.h
-	objcopy -I binary -O elf64-x86-64 -B i386 $< $@
+	objcopy -I binary -O $(OBJCOPY_ARCH_ELF) -B $(OBJCOPY_ARCH_BIN) $< $@
 
 %.o: %.cl
-	objcopy -I binary -O elf64-x86-64 -B i386 $< $@
+	objcopy -I binary -O $(OBJCOPY_ARCH_ELF) -B $(OBJCOPY_ARCH_BIN) $< $@
 
 %.o: %.clh
-	objcopy -I binary -O elf64-x86-64 -B i386 $< $@
+	objcopy -I binary -O $(OBJCOPY_ARCH_ELF) -B $(OBJCOPY_ARCH_BIN) $< $@
 	
 .depend: config.mak
 	@rm -f .depend

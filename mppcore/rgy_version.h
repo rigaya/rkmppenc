@@ -117,8 +117,8 @@ const char *get_encoder_version();
 #define ENABLE_SM_READER          0
 
 #include "rgy_config.h"
-#define ENCODER_NAME              "VCEEncC"
-#define DECODER_NAME              "vce"
+#define ENCODER_NAME              "mppenc"
+#define DECODER_NAME              "mpp"
 #define HW_TIMEBASE 10000000L //AMF_SECOND
 #endif // #if defined(WIN32) || defined(WIN64)
 
