@@ -68,7 +68,7 @@ clean:
 	rm -f $(OBJS) $(OBJCS) $(OBJPYWS) $(OBJRBINS) $(OBJRHS) $(OBJRCLS) $(OBJRCLHS) $(PROGRAM) .depend
 
 distclean: clean
-	rm -f config.mak VCECore/rgy_config.h
+	rm -f config.mak mppcore/rgy_config.h
 
 install:
 	install -d $(PREFIX)/bin
