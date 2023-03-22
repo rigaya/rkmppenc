@@ -63,6 +63,7 @@ struct MPPContext {
 
     MPPContext();
     ~MPPContext();
+    RGY_ERR create();
     RGY_ERR init(MppCtxType type, MppCodingType codectype);
 };
 
@@ -1447,6 +1448,7 @@ public:
 
 class PipelineTaskMPPEncode : public PipelineTask {
 protected:
+    static const int BUF_COUNT = 5;
     MPPContext *m_encoder;
     RGY_CODEC m_encCodec;
     MPPCfg& m_encParams;
@@ -1454,8 +1456,12 @@ protected:
     RGYTimestamp *m_encTimestamp;
     rgy_rational<int> m_outputTimebase;
     MppBufferGroup m_frameGrp;
-    MppBuffer m_frameBuf;
-    MppBuffer m_pktBuf;
+    struct MPPBufferPair {
+        MppBuffer frame;
+        MppBuffer pkt;
+    };
+    std::array<MPPBufferPair, BUF_COUNT> m_buffer;
+    std::deque<MppBuffer> m_queueFrameList;
     std::vector<uint8_t> m_extradata;
     RGYListRef<RGYBitstream> m_bitStreamOut;
     RGYHDR10Plus *m_hdr10plus;
@@ -1468,17 +1474,23 @@ public:
         int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPENC, outMaxQueueSize, log),
         m_encoder(enc), m_encCodec(encCodec), m_encParams(encParams), m_timecode(timecode), m_encTimestamp(encTimestamp), m_outputTimebase(outputTimebase),
-        m_frameGrp(nullptr), m_frameBuf(nullptr), m_pktBuf(nullptr), m_extradata(),
+        m_frameGrp(nullptr), m_buffer(), m_queueFrameList(), m_extradata(),
         m_bitStreamOut(), m_hdr10plus(hdr10plus), m_hdr10plusMetadataCopy(hdr10plusMetadataCopy), m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)) {
+        for (auto& buf : m_buffer) {
+            buf.frame = nullptr;
+            buf.pkt = nullptr;
+        }
     };
     virtual ~PipelineTaskMPPEncode() {
-        if (m_frameBuf) {
-            mpp_buffer_put(m_frameBuf);
-            m_frameBuf = nullptr;
-        }
-        if (m_pktBuf) {
-            mpp_buffer_put(m_pktBuf);
-            m_pktBuf = nullptr;
+        for (auto& buf : m_buffer) {
+            if (buf.frame) {
+                mpp_buffer_put(buf.frame);
+                buf.frame = nullptr;
+            }
+            if (buf.pkt) {
+                mpp_buffer_put(buf.pkt);
+                buf.pkt = nullptr;
+            }
         }
         if (m_frameGrp) {
             mpp_buffer_group_put(m_frameGrp);
@@ -1512,16 +1524,18 @@ public:
             return ret;
         }
 
-        ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &m_frameBuf, frameSize));
-        if (ret != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("failed to get buffer for input frame : %s\n"), get_err_mes(ret));
-            return ret;
-        }
-
-        ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &m_pktBuf, frameSize));
-        if (ret != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("failed to get buffer for output packet : %s\n"), get_err_mes(ret));
-            return ret;
+        for (auto& buf : m_buffer) {
+            ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &buf.frame, frameSize));
+            if (ret != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("failed to get buffer for input frame : %s\n"), get_err_mes(ret));
+                return ret;
+            }
+            ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &buf.pkt, frameSize));
+            if (ret != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("failed to get buffer for output packet : %s\n"), get_err_mes(ret));
+                return ret;
+            }
+            m_queueFrameList.push_back(buf.frame);
         }
         return RGY_ERR_NONE;
     }
@@ -1529,7 +1543,7 @@ public:
     std::pair<RGY_ERR, std::shared_ptr<RGYBitstream>> getOutputBitstream() {
         MppPacket packet = nullptr;
         auto err = err_to_rgy(m_encoder->mpi->encode_get_packet(m_encoder->ctx, &packet));
-        if (err == RGY_ERR_MPP_ERR_TIMEOUT) {
+        if (err == RGY_ERR_MPP_ERR_TIMEOUT || !packet) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             return { RGY_ERR_MORE_SURFACE, nullptr };
         } else if (err != RGY_ERR_NONE) {
@@ -1544,14 +1558,19 @@ public:
         if (!output) {
             return { RGY_ERR_NULL_PTR, nullptr };
         }
+        const bool eos = mpp_packet_get_eos(packet);
+        const auto pktLength = mpp_packet_get_length(packet);
+        if (pktLength == 0) {
+            return { eos ? RGY_ERR_MORE_DATA : RGY_ERR_NONE, nullptr };
+        }
         const auto pts = mpp_packet_get_pts(packet);
         const auto pktval = m_encTimestamp->get(pts);
         if (m_extradata.size() > 0) {
             output->copy(m_extradata.data(), m_extradata.size(), pts, 0, pktval.duration);
-            output->append((uint8_t *)mpp_packet_get_pos(packet), mpp_packet_get_length(packet));
+            output->append((uint8_t *)mpp_packet_get_pos(packet), pktLength);
             m_extradata.clear();
         } else {
-            output->copy((uint8_t *)mpp_packet_get_pos(packet), mpp_packet_get_length(packet), pts, 0, pktval.duration);
+            output->copy((uint8_t *)mpp_packet_get_pos(packet), pktLength, pts, 0, pktval.duration);
         }
 
         if (mpp_packet_has_meta(packet)) {
@@ -1560,9 +1579,18 @@ public:
             if (mpp_meta_get_s32(meta, KEY_ENC_AVERAGE_QP, &avg_qp) == MPP_OK) {
                 output->setAvgQP(avg_qp);
             }
+            
+            MppFrame frm = nullptr;
+            if (mpp_meta_get_frame(meta, KEY_INPUT_FRAME, &frm) == MPP_OK) {
+                MppBuffer frm_buf = mpp_frame_get_buffer(frm);
+                if (frm_buf) {
+                    m_queueFrameList.push_back(frm_buf);
+                }
+                mpp_frame_deinit(&frm);
+            }
         }
         mpp_packet_deinit(&packet);
-        return { RGY_ERR_NONE, output };
+        return { eos ? RGY_ERR_MORE_DATA : RGY_ERR_NONE, output };
     }
 
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
@@ -1582,7 +1610,7 @@ public:
             }
         }
 
-        if (!m_frameBuf) {
+        if (!m_frameGrp) {
             auto err = allocateMppBuffer();
             if (err != RGY_ERR_NONE) {
                 return err;
@@ -1625,7 +1653,13 @@ public:
             mpp_frame_set_buffer(mppframe, nullptr);
             mpp_frame_set_eos(mppframe, 1);
         } else {
-            mpp_frame_set_buffer(mppframe, m_frameBuf);
+            if (m_queueFrameList.empty()) {
+                PrintMes(RGY_LOG_ERROR, _T("Not enough buffer!\n"));
+                return RGY_ERR_MPP_ERR_BUFFER_FULL;
+            }
+            auto framebuf = m_queueFrameList.front();
+            m_queueFrameList.pop_front();
+            mpp_frame_set_buffer(mppframe, framebuf);
             auto mppinfo = infoMPP(mppframe);
             const auto surfEncInInfo = surfEncodeIn->getInfo();
             if (m_convert->getFunc() == nullptr) {
@@ -1650,44 +1684,42 @@ public:
             }
             m_encTimestamp->add(pts, surfEncInInfo.inputFrameId, m_inFrames, surfEncInInfo.duration, metadatalist);
             m_inFrames++;
+            PrintMes(RGY_LOG_TRACE, _T("m_inFrames %d.\n"), m_inFrames);
 
             //エンコーダまでたどり着いたフレームについてはdataListを解放
             surfEncodeIn->clearDataList();
         }
 
-        MppPacket packet = nullptr;
-        mpp_packet_init_with_buffer(&packet, m_pktBuf);
-        mpp_packet_set_length(packet, 0); //It is important to clear output packet length!!
+        //MppPacket packet = nullptr;
+        //mpp_packet_init_with_buffer(&packet, m_pktBuf);
+        //mpp_packet_set_length(packet, 0); //It is important to clear output packet length!!
 
-        auto meta = mpp_frame_get_meta(mppframe);
-        mpp_meta_set_packet(meta, KEY_OUTPUT_PACKET, packet);
+        //auto meta = mpp_frame_get_meta(mppframe);
+        //mpp_meta_set_packet(meta, KEY_OUTPUT_PACKET, packet);
 
-        err = err_to_rgy(m_encoder->mpi->encode_put_frame(m_encoder->ctx, mppframe));
-        if (err != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("Failed to put frame to encoder: %s\n"), get_err_mes(err));
-            mpp_frame_deinit(&mppframe);
-            return err;
-        }
-        mpp_frame_deinit(&mppframe);
-
-        for (;;) {
+        do {
             //エンコーダからの取り出し
+            PrintMes(RGY_LOG_TRACE, _T("getOutputBitstream %d.\n"), m_inFrames);
             auto outBs = getOutputBitstream();
             const auto out_ret = outBs.first;
             if (out_ret == RGY_ERR_MORE_SURFACE) {
                 ; // もっとエンコーダへの投入が必要
-            } else if (out_ret == RGY_ERR_NONE) {
-                if (outBs.second) {
+            } else if (out_ret == RGY_ERR_NONE || out_ret == RGY_ERR_MORE_DATA) {
+                if (outBs.second && outBs.second->size() > 0) {
                     m_outQeueue.push_back(std::make_unique<PipelineTaskOutputBitstream>(outBs.second));
                 }
-            } else if (out_ret == RGY_ERR_MORE_DATA) { //EOF
-                err = RGY_ERR_MORE_DATA;
-                break;
+                if (out_ret == RGY_ERR_MORE_DATA) { //EOF
+                    err = RGY_ERR_MORE_DATA;
+                    break;
+                }
             } else {
                 err = out_ret;
                 break;
             }
-        }
+
+            err = err_to_rgy(m_encoder->mpi->encode_put_frame(m_encoder->ctx, mppframe));
+            PrintMes(RGY_LOG_TRACE, _T("encode_put_frame %d: %d.\n"), m_inFrames, err);
+        } while (err != RGY_ERR_NONE);
         return err;
     }
 };

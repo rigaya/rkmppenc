@@ -98,13 +98,16 @@ MPPContext::~MPPContext() {
     mpp_destroy(ctx);
 }
 
-RGY_ERR MPPContext::init(MppCtxType type, MppCodingType codectype) {
+RGY_ERR MPPContext::create() {
     auto ret = err_to_rgy(mpp_create(&ctx, &mpi));
     if (ret != RGY_ERR_NONE) {
         return ret;
     }
+    return RGY_ERR_NONE;
+}
 
-    ret = err_to_rgy(mpp_init(ctx, type, codectype));
+RGY_ERR MPPContext::init(MppCtxType type, MppCodingType codectype) {
+    auto ret = err_to_rgy(mpp_init(ctx, type, codectype));
     if (ret != RGY_ERR_NONE) {
         return ret;
     }
@@ -663,6 +666,11 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
     }
 
     m_decoder = std::make_unique<MPPContext>();
+    ret = m_decoder->create();
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to create decoder: %s.\n"), get_err_mes(ret));
+        return ret;
+    }
     ret = m_decoder->init(MPP_CTX_DEC, codec_rgy_to_dec(inputCodec));
     if (ret != RGY_ERR_NONE) {
         PrintMes(RGY_LOG_ERROR, _T("Failed to initalized decoder: %s.\n"), get_err_mes(ret));
@@ -1753,8 +1761,30 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
         PrintMes(RGY_LOG_ERROR, _T("Codec type (%s) unsupported by MPP\n"), CodecToStr(prm->codec).c_str());
         return ret;
     }
-
     m_encoder = std::make_unique<MPPContext>();
+
+    ret = m_encoder->create();
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to create encoder: %s.\n"), get_err_mes(ret));
+        return ret;
+    }
+
+    //MPP_POLL_NON_BLOCKを設定してから、initを呼ぶ必要があると思われる
+    MppPollType timeout_in  = MPP_POLL_NON_BLOCK;
+    MppPollType timeout_out = MPP_POLL_NON_BLOCK;
+    
+    ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_SET_INPUT_TIMEOUT, &timeout_in));
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to set input timeout %d : %s\n"), timeout_in, get_err_mes(ret));
+        return ret;
+    }
+
+    ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout_out));
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to set output timeout %d : %s\n"), timeout_out, get_err_mes(ret));
+        return ret;
+    }
+
     ret = m_encoder->init(MPP_CTX_ENC, codec_rgy_to_enc(prm->codec));
     if (ret != RGY_ERR_NONE) {
         PrintMes(RGY_LOG_ERROR, _T("Failed to initalized encoder: %s.\n"), get_err_mes(ret));
@@ -1789,10 +1819,11 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
         auto header_mode = MPP_ENC_HEADER_MODE_EACH_IDR;
         ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_HEADER_MODE, &header_mode));
         if (ret != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("mpi control enc set header mode failed ret: %s\n"), get_err_mes(ret));
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set header mode failed ret: %s\n"), get_err_mes(ret));
             return ret;
         }
     }
+
     return RGY_ERR_NONE;
 }
 
