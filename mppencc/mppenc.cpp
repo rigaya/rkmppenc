@@ -393,7 +393,7 @@ int _tmain(int argc, TCHAR **argv) {
     }
 
     if (mpp_run(&prm)) {
-        fprintf(stderr, "Finished with error in VCEEncC.\n");
+        fprintf(stderr, "Finished with error in mppenc.\n");
         return 1;
     }
     return 0;
