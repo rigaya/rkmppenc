@@ -222,11 +222,13 @@ public:
             m_surfaces[i] = std::make_unique<PipelineTaskSurfacesPair>(std::make_unique<RGYFrame>(std::move(frames[i])));
         }
     }
+#if 0
     PipelineTaskSurface addSurface(std::unique_ptr<RGYFrame>& surf) {
         deleteFreedSurface();
         m_surfaces.push_back(std::move(std::unique_ptr<PipelineTaskSurfacesPair>(new PipelineTaskSurfacesPair(std::move(surf)))));
         return m_surfaces.back()->getRef();
     }
+#endif
 
     PipelineTaskSurface getFreeSurf() {
         for (auto& s : m_surfaces) {
@@ -645,7 +647,7 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
         const auto inputFrameInfo = m_input->GetInputFrameInfo();
-        RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_GPU);
+        RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
         return std::make_pair(info, m_outMaxQueueSize);
     };
     RGY_ERR LoadNextFrameCL() {
@@ -727,20 +729,21 @@ protected:
     };
     MPPContext *m_dec;
     RGYInput *m_input;
-    bool m_getNextBitstream;
     RGYBitstream m_decInputBitstream;
     MppPacket m_packet;
     MppBufferGroup m_frameGrp;
     RGYQueueMPMP<RGYFrameDataMetadata*> m_queueHDR10plusMetadata;
     RGYQueueMPMP<FrameFlags> m_dataFlag;
     std::unique_ptr<RGYConvertCSP> m_convert;
+    bool m_decInBitStreamEOS;
+    bool m_decOutFrameEOS;
     int m_decOutFrames;
 public:
     PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
-        m_getNextBitstream(false), m_decInputBitstream(RGYBitstreamInit()), m_packet(nullptr), m_frameGrp(),
+        m_decInputBitstream(RGYBitstreamInit()), m_packet(nullptr), m_frameGrp(),
         m_queueHDR10plusMetadata(), m_dataFlag(),
-        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_decOutFrames(0) {
+        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
         m_dataFlag.init();
         mpp_packet_init(&m_packet, nullptr, 0);
@@ -761,36 +764,106 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
         const auto inputFrameInfo = m_input->GetInputFrameInfo();
-        RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_GPU);
-        return std::make_pair(info, m_outMaxQueueSize);
+        RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
+        return std::make_pair(info, m_outMaxQueueSize + 16);
     };
 
-    virtual RGY_ERR sendFrame([[maybe_unused]] std::unique_ptr<PipelineTaskOutput>& frame) override {
-        auto ret = RGY_ERR_NONE;
-        if (m_getNextBitstream
-            //m_DecInputBitstream.size() > 0のときにbitstreamを連結してしまうと
-            //環境によっては正常にフレームが取り出せなくなることがある
-            //これを避けるため、m_DecInputBitstream.size() == 0のときのみbitstreamを取得する
-            //これにより GetNextFrame / SetNextFrame の回数が異常となり、
-            //GetNextFrameのロックが抜けれらなくなる場合がある。
-            //HWデコード時、本来GetNextFrameのロックは必要ないので、
-            //これを無視する実装も併せて行った。
-            && (m_decInputBitstream.size() <= 1)) {
-            ret = m_input->LoadNextFrame(nullptr);
-            if (ret != RGY_ERR_NONE && ret != RGY_ERR_MORE_DATA && ret != RGY_ERR_MORE_BITSTREAM) {
-                PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(ret));
+    virtual RGY_ERR getOutputFrame(int& trycount) {
+        MppFrame mppframe = nullptr;
+        auto ret = err_to_rgy(m_dec->mpi->decode_get_frame(m_dec->ctx, &mppframe));
+        if (ret == RGY_ERR_MPP_ERR_TIMEOUT || !mppframe) {
+            ret = RGY_ERR_MPP_ERR_TIMEOUT;
+            if (trycount >= 10000) {
+                PrintMes(RGY_LOG_ERROR, _T("decode_get_frame timeout too much time\n"));
                 return ret;
             }
-            //この関数がMFX_ERR_NONE以外を返せば、入力ビットストリームは終了
-            ret = m_input->GetNextBitstream(&m_decInputBitstream);
-            if (ret == RGY_ERR_MORE_BITSTREAM) {
-                m_getNextBitstream = false;
-                return ret; //入力ビットストリームは終了
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            return ret;
+        }
+        trycount = 0;
+
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("decode_get_frame failed: %s\n"), get_err_mes(ret));
+            return ret;
+        }
+        const int width = mpp_frame_get_width(mppframe);
+        const int height = mpp_frame_get_height(mppframe);
+        const int stride_w = mpp_frame_get_hor_stride(mppframe);
+        const int stride_h = mpp_frame_get_ver_stride(mppframe);
+        const int buf_size = mpp_frame_get_buf_size(mppframe);
+        if (mpp_frame_get_info_change(mppframe)) {
+            if (m_frameGrp == nullptr) {
+                ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_ION));
+                if (ret != RGY_ERR_NONE) {
+                    PrintMes(RGY_LOG_ERROR, _T("Get mpp buffer group failed : %s\n"), get_err_mes(ret));
+                    return ret;
+                }
+
+                // Set buffer to mpp decoder
+                ret = err_to_rgy(m_dec->mpi->control(m_dec->ctx, MPP_DEC_SET_EXT_BUF_GROUP, m_frameGrp));
+                if (ret != RGY_ERR_NONE) {
+                    PrintMes(RGY_LOG_ERROR, _T("Set buffer group failed : %s\n"), get_err_mes(ret));
+                    return ret;
+                }
+            } else {
+                // If old buffer group exist clear it
+                ret = err_to_rgy(mpp_buffer_group_clear(m_frameGrp));
+                if (ret != RGY_ERR_NONE) {
+                    PrintMes(RGY_LOG_ERROR, _T("Clear buffer group failed : %s\n"), get_err_mes(ret));
+                    return ret;
+                }
             }
+
+            // Use limit config to limit buffer count to 32 with buf_size
+            ret = err_to_rgy(mpp_buffer_group_limit_config(m_frameGrp, buf_size, 32));
             if (ret != RGY_ERR_NONE) {
-                PrintMes(RGY_LOG_ERROR, _T("Error on getting video bitstream: %s.\n"), get_err_mes(ret));
+                PrintMes(RGY_LOG_ERROR, _T("Limit buffer group failed : %s\n"), get_err_mes(ret));
                 return ret;
             }
+
+            // All buffer group config done.
+            // Set info change ready to let decoder continue decoding
+            ret = err_to_rgy(m_dec->mpi->control(m_dec->ctx, MPP_DEC_SET_INFO_CHANGE_READY, nullptr));
+            if (ret != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Info change ready failed : %s\n"), get_err_mes(ret));
+                return ret;
+            }
+        } else if (mpp_frame_get_discard(mppframe)) {
+            PrintMes(RGY_LOG_ERROR, _T("Received a discard frame.\n"));
+            ret = RGY_ERR_UNKNOWN;
+        } else if (auto e = mpp_frame_get_errinfo(mppframe); e != 0) {
+            PrintMes(RGY_LOG_ERROR, _T("Received a errinfo frame: 0x%08x.\n"), e);
+            ret = RGY_ERR_UNKNOWN;
+        } else {
+            //copy
+            ret = setOutputSurf(mppframe);
+            if (mpp_frame_get_eos(mppframe)) {
+                PrintMes(RGY_LOG_ERROR, _T("Received a eos frame.\n"));
+                m_decOutFrameEOS = true;
+                ret = RGY_ERR_MORE_BITSTREAM; // EOS
+            }
+        }
+        mpp_frame_deinit(&mppframe);
+        return ret;
+    }
+
+    virtual RGY_ERR sendFrame([[maybe_unused]] std::unique_ptr<PipelineTaskOutput>& frame) override {
+        auto ret = m_input->LoadNextFrame(nullptr);
+        if (ret != RGY_ERR_NONE && ret != RGY_ERR_MORE_DATA && ret != RGY_ERR_MORE_BITSTREAM) {
+            PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(ret));
+            return ret;
+        }
+        //この関数がMFX_ERR_NONE以外を返せば、入力ビットストリームは終了
+        ret = m_input->GetNextBitstream(&m_decInputBitstream); 
+        if (ret == RGY_ERR_MORE_BITSTREAM) { //入力ビットストリームは終了
+            if (m_decInBitStreamEOS) { // すでにeosを送信していた場合
+                PrintMes(RGY_LOG_ERROR, _T("Already sent null packet.\n"));
+                return ret;
+            }
+        } else if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Error on getting video bitstream: %s.\n"), get_err_mes(ret));
+            return ret;
+        } else {
             for (auto& frameData : m_decInputBitstream.getFrameDataList()) {
                 if (frameData->dataType() == RGY_FRAME_DATA_HDR10PLUS) {
                     auto ptr = dynamic_cast<RGYFrameDataHDR10plus*>(frameData);
@@ -807,116 +880,69 @@ public:
             const auto flags = FrameFlags(m_decInputBitstream.pts(), (RGY_FRAME_FLAGS)m_decInputBitstream.dataflag());
             m_dataFlag.push(flags);
         }
+#define USE_LOCAL_PACKET 1
+        MppPacket packet;
         if (m_decInputBitstream.size() > 0) {
+#if USE_LOCAL_PACKET
+            mpp_packet_init(&packet, m_decInputBitstream.data(), m_decInputBitstream.size());
+#else
             mpp_packet_set_data(m_packet, m_decInputBitstream.data());
             mpp_packet_set_size(m_packet, m_decInputBitstream.size());
-            //mpp_packet_set_pos(m_packet, m_decInputBitstream.data());
-            //mpp_packet_set_length(m_packet, m_decInputBitstream.size());
-
+            mpp_packet_set_pos(m_packet, m_decInputBitstream.data());
+            mpp_packet_set_length(m_packet, m_decInputBitstream.size());
+#endif
             //const auto duration = rgy_change_scale(m_decInputBitstream.duration(), to_rgy(inTimebase), VCE_TIMEBASE);
             //const auto pts = rgy_change_scale(m_decInputBitstream.pts(), to_rgy(inTimebase), VCE_TIMEBASE);
             auto meta = mpp_packet_get_meta(m_packet);
             mpp_meta_set_s64(meta, KEY_USER_DATA, m_decInputBitstream.duration());
             mpp_packet_set_pts(m_packet, m_decInputBitstream.pts());
+            PrintMes(RGY_LOG_INFO, _T("Send input bitstream: %lld.\n"), m_decInputBitstream.pts());
         } else if (ret == RGY_ERR_MORE_BITSTREAM) {
+#if USE_LOCAL_PACKET
+            mpp_packet_init(&packet, nullptr, 0);
+#else
             mpp_packet_set_data(m_packet, nullptr);
+            mpp_packet_set_pos(m_packet, nullptr);
             mpp_packet_set_size(m_packet, 0);
-            mpp_packet_set_flag(m_packet, 0);
             mpp_packet_set_pts(m_packet, 0);
+#endif
+            mpp_packet_set_flag(m_packet, 0);
             mpp_packet_set_eos(m_packet);
+            m_decInBitStreamEOS = true;
+            PrintMes(RGY_LOG_ERROR, _T("Send null packet.\n"));
+            ret = RGY_ERR_NONE;
         } else {
-            PrintMes(RGY_LOG_ERROR, _T("ERROR: Faield to get input bitstream.\n"));
+            PrintMes(RGY_LOG_ERROR, _T("ERROR: Failed to get input bitstream: %s.\n"), get_err_mes(ret));
             return ret;
         }
 
-
-        MppFrame mppframe = nullptr;
         bool pkt_send = false;
-        while (!pkt_send && ret == RGY_ERR_NONE) {
+        for (int trycount = 0; !(pkt_send && ret != RGY_ERR_NONE); trycount++) {
             if (!pkt_send) {
+                PrintMes(RGY_LOG_INFO, _T("decode_put_packet: %s\n"), get_err_mes(ret));
+#if USE_LOCAL_PACKET
+                ret = err_to_rgy(m_dec->mpi->decode_put_packet(m_dec->ctx, packet));
+                if (ret == RGY_ERR_NONE) {
+                    pkt_send = true;
+                    mpp_packet_deinit(&packet);
+                }
+#else
                 ret = err_to_rgy(m_dec->mpi->decode_put_packet(m_dec->ctx, m_packet));
                 if (ret == RGY_ERR_NONE) {
                     pkt_send = true;
                 }
+#endif
             }
-            for (int trycount = 0; ret == RGY_ERR_NONE; trycount++) {
-                ret = err_to_rgy(m_dec->mpi->decode_get_frame(m_dec->ctx, &mppframe));
-                if (ret == RGY_ERR_MPP_ERR_TIMEOUT) {
-                    if (trycount >= 1000) {
-                        PrintMes(RGY_LOG_ERROR, _T("decode_get_frame timeout too much time\n"));
-                        return ret;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                    continue;
-                }
-                trycount = 0;
-
-                if (ret != RGY_ERR_NONE) {
-                    PrintMes(RGY_LOG_ERROR, _T("decode_get_frame failed: %s\n"), get_err_mes(ret));
-                    return ret;
-                }
-                if (!mppframe) {
-                    break;
-                }
-                const int width = mpp_frame_get_width(mppframe);
-                const int height = mpp_frame_get_height(mppframe);
-                const int stride_w = mpp_frame_get_hor_stride(mppframe);
-                const int stride_h = mpp_frame_get_ver_stride(mppframe);
-                const int buf_size = mpp_frame_get_buf_size(mppframe);
-                if (mpp_frame_get_info_change(mppframe)) {
-                    if (m_frameGrp == nullptr) {
-                        ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_ION));
-                        if (ret != RGY_ERR_NONE) {
-                            PrintMes(RGY_LOG_ERROR, _T("Get mpp buffer group failed : %s\n"), get_err_mes(ret));
-                            break;
-                        }
-
-                        // Set buffer to mpp decoder
-                        ret = err_to_rgy(m_dec->mpi->control(m_dec->ctx, MPP_DEC_SET_EXT_BUF_GROUP, m_frameGrp));
-                        if (ret != RGY_ERR_NONE) {
-                            PrintMes(RGY_LOG_ERROR, _T("Set buffer group failed : %s\n"), get_err_mes(ret));
-                            break;
-                        }
-                    } else {
-                        // If old buffer group exist clear it
-                        ret = err_to_rgy(mpp_buffer_group_clear(m_frameGrp));
-                        if (ret != RGY_ERR_NONE) {
-                            PrintMes(RGY_LOG_ERROR, _T("Clear buffer group failed : %s\n"), get_err_mes(ret));
-                            break;
-                        }
-                    }
-
-                    // Use limit config to limit buffer count to 32 with buf_size
-                    ret = err_to_rgy(mpp_buffer_group_limit_config(m_frameGrp, buf_size, 32));
-                    if (ret != RGY_ERR_NONE) {
-                        PrintMes(RGY_LOG_ERROR, _T("Limit buffer group failed : %s\n"), get_err_mes(ret));
-                        break;
-                    }
-
-                    // All buffer group config done.
-                    // Set info change ready to let decoder continue decoding
-                    ret = err_to_rgy(m_dec->mpi->control(m_dec->ctx, MPP_DEC_SET_INFO_CHANGE_READY, nullptr));
-                    if (ret != RGY_ERR_NONE) {
-                        PrintMes(RGY_LOG_ERROR, _T("Info change ready failed : %s\n"), get_err_mes(ret));
-                        break;
-                    }
-                } else if (mpp_frame_get_eos(mppframe)) {
-                    ret = RGY_ERR_MORE_BITSTREAM; // EOS
-                } else if (mpp_frame_get_discard(mppframe)) {
-                    PrintMes(RGY_LOG_ERROR, _T("Received a discard frame.\n"));
-                    ret = RGY_ERR_UNKNOWN;
-                } else if (mpp_frame_get_errinfo(mppframe)) {
-                    PrintMes(RGY_LOG_ERROR, _T("Received a errinfo frame.\n"));
-                    ret = RGY_ERR_UNKNOWN;
-                } else {
-                    //copy
-                    setOutputSurf(mppframe);
-                }
-                mpp_frame_deinit(&mppframe);
-            }
+            ret = getOutputFrame(trycount);
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        if (ret != RGY_ERR_NONE) {
+        if (pkt_send) {
+            m_decInputBitstream.setSize(0);
+            m_decInputBitstream.setOffset(0);
+        }
+        if (ret == RGY_ERR_MORE_BITSTREAM) {
+            return ret;
+        } else if (ret != RGY_ERR_NONE && ret != RGY_ERR_MPP_ERR_TIMEOUT && ret != RGY_ERR_MPP_ERR_BUFFER_FULL) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to load input frame: %s.\n"), get_err_mes(ret));
             return ret;
         }
@@ -946,8 +972,9 @@ protected:
             mppinfo.height, surfDecOutInfo.height, crop.c);
 
         surfDecOut->setInputFrameId(m_decOutFrames++);
-
-        auto flags = RGY_FRAME_FLAG_NONE;
+        surfDecOut->setTimestamp(mppinfo.timestamp);
+        surfDecOut->setDuration(mppinfo.duration);
+        auto flags = mppinfo.flags;
         if (getDataFlag(surfDecOut->timestamp()) & RGY_FRAME_FLAG_RFF) {
             flags |= RGY_FRAME_FLAG_RFF;
         }
@@ -961,6 +988,7 @@ protected:
             surfDecOut->dataList().push_back(data);
         }
         m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(workFrame));
+        PrintMes(RGY_LOG_WARN, _T("setOutputSurf: %d: %lld.\n"), m_decOutFrames, mppinfo.timestamp);
         return RGY_ERR_NONE;
     }
     RGY_FRAME_FLAGS getDataFlag(const int64_t timestamp) {
@@ -1448,7 +1476,7 @@ public:
 
 class PipelineTaskMPPEncode : public PipelineTask {
 protected:
-    static const int BUF_COUNT = 5;
+    static const int BUF_COUNT = 16;
     MPPContext *m_encoder;
     RGY_CODEC m_encCodec;
     MPPCfg& m_encParams;
@@ -1540,7 +1568,7 @@ public:
         return RGY_ERR_NONE;
     }
 
-    std::pair<RGY_ERR, std::shared_ptr<RGYBitstream>> getOutputBitstream() {
+    std::tuple<RGY_ERR, std::shared_ptr<RGYBitstream>> getOutputBitstream() {
         MppPacket packet = nullptr;
         auto err = err_to_rgy(m_encoder->mpi->encode_get_packet(m_encoder->ctx, &packet));
         if (err == RGY_ERR_MPP_ERR_TIMEOUT || !packet) {
@@ -1653,6 +1681,9 @@ public:
             mpp_frame_set_buffer(mppframe, nullptr);
             mpp_frame_set_eos(mppframe, 1);
         } else {
+            //明示的に待機が必要
+            frame->depend_clear();
+
             if (m_queueFrameList.empty()) {
                 PrintMes(RGY_LOG_ERROR, _T("Not enough buffer!\n"));
                 return RGY_ERR_MPP_ERR_BUFFER_FULL;
@@ -1697,29 +1728,35 @@ public:
         //auto meta = mpp_frame_get_meta(mppframe);
         //mpp_meta_set_packet(meta, KEY_OUTPUT_PACKET, packet);
 
+        bool sendFrame = false;
         do {
             //エンコーダからの取り出し
             PrintMes(RGY_LOG_TRACE, _T("getOutputBitstream %d.\n"), m_inFrames);
-            auto outBs = getOutputBitstream();
-            const auto out_ret = outBs.first;
+            auto [out_ret, outBs] = getOutputBitstream();
             if (out_ret == RGY_ERR_MORE_SURFACE) {
-                ; // もっとエンコーダへの投入が必要
+                err = out_ret; // もっとエンコーダへの投入が必要
             } else if (out_ret == RGY_ERR_NONE || out_ret == RGY_ERR_MORE_DATA) {
-                if (outBs.second && outBs.second->size() > 0) {
-                    m_outQeueue.push_back(std::make_unique<PipelineTaskOutputBitstream>(outBs.second));
+                if (outBs && outBs->size() > 0) {
+                    m_outQeueue.push_back(std::make_unique<PipelineTaskOutputBitstream>(outBs));
                 }
                 if (out_ret == RGY_ERR_MORE_DATA) { //EOF
                     err = RGY_ERR_MORE_DATA;
                     break;
                 }
             } else {
-                err = out_ret;
+                err = out_ret; // エラー
                 break;
             }
 
-            err = err_to_rgy(m_encoder->mpi->encode_put_frame(m_encoder->ctx, mppframe));
-            PrintMes(RGY_LOG_TRACE, _T("encode_put_frame %d: %d.\n"), m_inFrames, err);
-        } while (err != RGY_ERR_NONE);
+            if (!sendFrame) {
+                err = err_to_rgy(m_encoder->mpi->encode_put_frame(m_encoder->ctx, mppframe));
+                PrintMes(RGY_LOG_TRACE, _T("encode_put_frame %d: %d.\n"), m_inFrames, err);
+                if (err == RGY_ERR_NONE) {
+                    sendFrame = true;
+                } else {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));}
+                }
+        } while (!sendFrame || err != RGY_ERR_NONE);
         return err;
     }
 };

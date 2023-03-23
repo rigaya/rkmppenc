@@ -671,9 +671,28 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
         PrintMes(RGY_LOG_ERROR, _T("Failed to create decoder: %s.\n"), get_err_mes(ret));
         return ret;
     }
+
     ret = m_decoder->init(MPP_CTX_DEC, codec_rgy_to_dec(inputCodec));
     if (ret != RGY_ERR_NONE) {
         PrintMes(RGY_LOG_ERROR, _T("Failed to initalized decoder: %s.\n"), get_err_mes(ret));
+        return ret;
+    }
+
+    //MPP_POLL_NON_BLOCKを設定してから、initを呼ぶ必要があると思われる
+    MppPollType timeout_in  = MPP_POLL_NON_BLOCK;
+    MppPollType timeout_out = MPP_POLL_NON_BLOCK;
+    
+    if (false) {
+        ret = err_to_rgy(m_decoder->mpi->control(m_decoder->ctx, MPP_SET_INPUT_TIMEOUT, &timeout_in));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set decoder input timeout %d : %s\n"), timeout_in, get_err_mes(ret));
+            return ret;
+        }
+    }
+
+    ret = err_to_rgy(m_decoder->mpi->control(m_decoder->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout_out));
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to set decoder output timeout %d : %s\n"), timeout_out, get_err_mes(ret));
         return ret;
     }
 
@@ -687,12 +706,28 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
         return ret;
     }
 
+    // デコーダの設定
+    // 設定項目は、https://github.com/Lockzhiner/MPP/blob/main/mpp/codec/mpp_dec.cpp等を参照
     if (false) {
         // split_parse is to enable mpp internal frame spliter when the input
         // packet is not splited into frames.
         ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:split_parse", true));
         if (ret != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to set split_parse ret %d\n"), get_err_mes(ret));
+            return ret;
+        }
+    }
+    if (true) {
+        // disable deinterlacer、有効にするとbob化のような処理になる、デフォルトで有効
+        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:enable_vproc", false));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set enable_vproc to false ret %d\n"), get_err_mes(ret));
+            return ret;
+        }
+        // pts順に並び替え
+        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:sort_pts", 0));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set sort_pts to true ret %d\n"), get_err_mes(ret));
             return ret;
         }
     }
@@ -1775,13 +1810,13 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
     
     ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_SET_INPUT_TIMEOUT, &timeout_in));
     if (ret != RGY_ERR_NONE) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to set input timeout %d : %s\n"), timeout_in, get_err_mes(ret));
+        PrintMes(RGY_LOG_ERROR, _T("Failed to set encoder input timeout %d : %s\n"), timeout_in, get_err_mes(ret));
         return ret;
     }
 
     ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout_out));
     if (ret != RGY_ERR_NONE) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to set output timeout %d : %s\n"), timeout_out, get_err_mes(ret));
+        PrintMes(RGY_LOG_ERROR, _T("Failed to set encoder output timeout %d : %s\n"), timeout_out, get_err_mes(ret));
         return ret;
     }
 
@@ -2274,6 +2309,12 @@ RGY_ERR MPPCore::run2() {
                 if (d.task < m_pipelineTasks.size()) {
                     err = RGY_ERR_NONE;
                     auto& task = m_pipelineTasks[d.task];
+                    PipelineTaskOutputSurf *taskSurf = dynamic_cast<PipelineTaskOutputSurf *>(d.data.get());
+                    if (taskSurf) {
+                        PrintMes(RGY_LOG_ERROR, _T("Send task %s: %lld.\n"), task->print().c_str(), taskSurf->surf().frame()->timestamp());
+                    } else {
+                        PrintMes(RGY_LOG_ERROR, _T("Send task %s: %d.\n"), task->print().c_str());
+                    }
                     err = task->sendFrame(d.data);
                     if (!checkContinue(err)) {
                         PrintMes(setloglevel(err), _T("Break in task %s: %s.\n"), task->print().c_str(), get_err_mes(err));
@@ -2282,6 +2323,7 @@ RGY_ERR MPPCore::run2() {
                     if (err == RGY_ERR_NONE) {
                         auto output = task->getOutput(requireSync(d.task));
                         if (output.size() == 0) break;
+                        PrintMes(RGY_LOG_INFO, _T("Get task output %s: %d.\n"), task->print().c_str(), output.size());
                         //出てきたものは先頭に追加していく
                         std::for_each(output.rbegin(), output.rend(), [itask = d.task, &dataqueue](auto&& o) {
                             dataqueue.push_front(PipelineTaskData(itask + 1, o));
@@ -2445,10 +2487,13 @@ tstring MPPCore::GetEncoderParam() {
     //tstring gpu_info = m_dev->getGPUInfo();
 
     mes += strsprintf(_T("%s\n"), get_encoder_version());
+
 #if defined(_WIN32) || defined(_WIN64)
     OSVERSIONINFOEXW osversioninfo = { 0 };
     tstring osversionstr = getOSVersion(&osversioninfo);
     mes += strsprintf(_T("OS:            %s %s (%d) [%s]\n"), osversionstr.c_str(), rgy_is_64bit_os() ? _T("x64") : _T("x86"), osversioninfo.dwBuildNumber, getACPCodepageStr().c_str());
+#elif (defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64__) || defined(__ARM_ARCH))
+    mes += strsprintf(_T("OS:            %s %s\n"), getOSVersion().c_str(), _T("aarch64"));
 #else
     mes += strsprintf(_T("OS:            %s %s\n"), getOSVersion().c_str(), rgy_is_64bit_os() ? _T("x64") : _T("x86"));
 #endif
