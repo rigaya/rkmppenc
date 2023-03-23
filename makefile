@@ -37,7 +37,7 @@ $(PROGRAM): .depend $(OBJS) $(OBJCS) $(OBJPYWS) $(OBJRBINS) $(OBJRHS) $(OBJRCLS)
 %.cpp.o: %.cpp .depend
 	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
-%.c.o: %.c
+%.c.o: %.c .depend
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 %.o: %.pyw
@@ -58,7 +58,7 @@ $(PROGRAM): .depend $(OBJS) $(OBJCS) $(OBJPYWS) $(OBJRBINS) $(OBJRHS) $(OBJRCLS)
 .depend: config.mak
 	@rm -f .depend
 	@echo 'generate .depend...'
-	@$(foreach SRC, $(SRCS:%=$(SRCDIR)/%), $(CXX) $(SRC) $(CXXFLAGS) -g0 -MT $(SRC:$(SRCDIR)/%.cpp=%.o) -MM >> .depend;)
+	@$(foreach SRC, $(SRCS:%=$(SRCDIR)/%), $(CXX) $(SRC) $(CXXFLAGS) -g0 -MT $(SRC:$(SRCDIR)/%.cpp=%.cpp.o) -MM >> .depend;)
 	
 ifneq ($(wildcard .depend),)
 include .depend
