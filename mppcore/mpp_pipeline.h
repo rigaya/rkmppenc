@@ -730,7 +730,6 @@ protected:
     MPPContext *m_dec;
     RGYInput *m_input;
     RGYBitstream m_decInputBitstream;
-    MppPacket m_packet;
     MppBufferGroup m_frameGrp;
     RGYQueueMPMP<RGYFrameDataMetadata*> m_queueHDR10plusMetadata;
     RGYQueueMPMP<FrameFlags> m_dataFlag;
@@ -741,18 +740,13 @@ protected:
 public:
     PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
-        m_decInputBitstream(RGYBitstreamInit()), m_packet(nullptr), m_frameGrp(),
+        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(),
         m_queueHDR10plusMetadata(), m_dataFlag(),
         m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
         m_dataFlag.init();
-        mpp_packet_init(&m_packet, nullptr, 0);
     };
     virtual ~PipelineTaskMPPDecode() {
-        if (m_packet) {
-            mpp_packet_deinit(&m_packet);
-            m_packet = nullptr;
-        }
         if (m_frameGrp) {
             mpp_buffer_group_put(m_frameGrp);
             m_frameGrp = nullptr;
@@ -771,14 +765,15 @@ public:
     virtual RGY_ERR getOutputFrame(int& trycount) {
         MppFrame mppframe = nullptr;
         auto ret = err_to_rgy(m_dec->mpi->decode_get_frame(m_dec->ctx, &mppframe));
-        if (ret == RGY_ERR_MPP_ERR_TIMEOUT || !mppframe) {
+        if (ret == RGY_ERR_MPP_ERR_TIMEOUT) { // デコード待ち
             ret = RGY_ERR_MPP_ERR_TIMEOUT;
             if (trycount >= 10000) {
                 PrintMes(RGY_LOG_ERROR, _T("decode_get_frame timeout too much time\n"));
-                return ret;
+                return RGY_ERR_UNKNOWN;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             return ret;
+        } else if (!mppframe) {
+            return RGY_ERR_MORE_DATA; // 次のbitstreamが必要
         }
         trycount = 0;
 
@@ -838,7 +833,7 @@ public:
             //copy
             ret = setOutputSurf(mppframe);
             if (mpp_frame_get_eos(mppframe)) {
-                PrintMes(RGY_LOG_ERROR, _T("Received a eos frame.\n"));
+                PrintMes(RGY_LOG_DEBUG, _T("Received a eos frame.\n"));
                 m_decOutFrameEOS = true;
                 ret = RGY_ERR_MORE_BITSTREAM; // EOS
             }
@@ -857,7 +852,7 @@ public:
         ret = m_input->GetNextBitstream(&m_decInputBitstream); 
         if (ret == RGY_ERR_MORE_BITSTREAM) { //入力ビットストリームは終了
             if (m_decInBitStreamEOS) { // すでにeosを送信していた場合
-                PrintMes(RGY_LOG_ERROR, _T("Already sent null packet.\n"));
+                PrintMes(RGY_LOG_DEBUG, _T("Already sent null packet.\n"));
                 return ret;
             }
         } else if (ret != RGY_ERR_NONE) {
@@ -880,36 +875,20 @@ public:
             const auto flags = FrameFlags(m_decInputBitstream.pts(), (RGY_FRAME_FLAGS)m_decInputBitstream.dataflag());
             m_dataFlag.push(flags);
         }
-#define USE_LOCAL_PACKET 1
         MppPacket packet;
         if (m_decInputBitstream.size() > 0) {
-#if USE_LOCAL_PACKET
             mpp_packet_init(&packet, m_decInputBitstream.data(), m_decInputBitstream.size());
-#else
-            mpp_packet_set_data(m_packet, m_decInputBitstream.data());
-            mpp_packet_set_size(m_packet, m_decInputBitstream.size());
-            mpp_packet_set_pos(m_packet, m_decInputBitstream.data());
-            mpp_packet_set_length(m_packet, m_decInputBitstream.size());
-#endif
-            //const auto duration = rgy_change_scale(m_decInputBitstream.duration(), to_rgy(inTimebase), VCE_TIMEBASE);
-            //const auto pts = rgy_change_scale(m_decInputBitstream.pts(), to_rgy(inTimebase), VCE_TIMEBASE);
-            auto meta = mpp_packet_get_meta(m_packet);
+            mpp_packet_set_pts(packet, m_decInputBitstream.pts());
+            auto meta = mpp_packet_get_meta(packet);
             mpp_meta_set_s64(meta, KEY_USER_DATA, m_decInputBitstream.duration());
-            mpp_packet_set_pts(m_packet, m_decInputBitstream.pts());
-            PrintMes(RGY_LOG_INFO, _T("Send input bitstream: %lld.\n"), m_decInputBitstream.pts());
+            PrintMes(RGY_LOG_TRACE, _T("Send input bitstream: %lld.\n"), m_decInputBitstream.pts());
         } else if (ret == RGY_ERR_MORE_BITSTREAM) {
-#if USE_LOCAL_PACKET
             mpp_packet_init(&packet, nullptr, 0);
-#else
-            mpp_packet_set_data(m_packet, nullptr);
-            mpp_packet_set_pos(m_packet, nullptr);
-            mpp_packet_set_size(m_packet, 0);
-            mpp_packet_set_pts(m_packet, 0);
-#endif
-            mpp_packet_set_flag(m_packet, 0);
-            mpp_packet_set_eos(m_packet);
+            mpp_packet_set_pts(packet, 0);
+            mpp_packet_set_flag(packet, 0);
+            mpp_packet_set_eos(packet);
             m_decInBitStreamEOS = true;
-            PrintMes(RGY_LOG_ERROR, _T("Send null packet.\n"));
+            PrintMes(RGY_LOG_DEBUG, _T("Send null packet.\n"));
             ret = RGY_ERR_NONE;
         } else {
             PrintMes(RGY_LOG_ERROR, _T("ERROR: Failed to get input bitstream: %s.\n"), get_err_mes(ret));
@@ -917,32 +896,41 @@ public:
         }
 
         bool pkt_send = false;
-        for (int trycount = 0; !(pkt_send && ret != RGY_ERR_NONE); trycount++) {
+        for (int trycount = 0; !pkt_send || ret == RGY_ERR_NONE; trycount++) {
             if (!pkt_send) {
-                PrintMes(RGY_LOG_INFO, _T("decode_put_packet: %s\n"), get_err_mes(ret));
-#if USE_LOCAL_PACKET
                 ret = err_to_rgy(m_dec->mpi->decode_put_packet(m_dec->ctx, packet));
+                PrintMes(RGY_LOG_TRACE, _T("decode_put_packet: %s\n"), get_err_mes(ret));
                 if (ret == RGY_ERR_NONE) {
                     pkt_send = true;
                     mpp_packet_deinit(&packet);
                 }
-#else
-                ret = err_to_rgy(m_dec->mpi->decode_put_packet(m_dec->ctx, m_packet));
-                if (ret == RGY_ERR_NONE) {
-                    pkt_send = true;
-                }
-#endif
             }
             ret = getOutputFrame(trycount);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if (!pkt_send && (ret == RGY_ERR_MPP_ERR_TIMEOUT || ret == RGY_ERR_MORE_DATA)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
-        if (pkt_send) {
+        if (pkt_send) { // パケットを送り終わったらbitstreamをクリア
             m_decInputBitstream.setSize(0);
             m_decInputBitstream.setOffset(0);
         }
+        if (m_decInBitStreamEOS) { // bitstreamのEOSを送った場合は、最後までフレームを回収する
+            ret = RGY_ERR_NONE;
+            PrintMes(RGY_LOG_DEBUG, _T("dec loop fin: %s\n"), get_err_mes(ret));
+            for (int trycount = 0; !m_decOutFrameEOS; trycount++) {
+                ret = getOutputFrame(trycount);
+                PrintMes(RGY_LOG_TRACE, _T("getOutputFrameEOS: %s\n"), get_err_mes(ret));
+                if (ret != RGY_ERR_NONE
+                 && ret != RGY_ERR_MPP_ERR_TIMEOUT
+                 && ret != RGY_ERR_MORE_DATA
+                 && ret != RGY_ERR_MORE_BITSTREAM) {
+                    break; //エラー
+                }
+            }
+        }
         if (ret == RGY_ERR_MORE_BITSTREAM) {
-            return ret;
-        } else if (ret != RGY_ERR_NONE && ret != RGY_ERR_MPP_ERR_TIMEOUT && ret != RGY_ERR_MPP_ERR_BUFFER_FULL) {
+            return ret; // EOS
+        } else if (ret != RGY_ERR_NONE && ret != RGY_ERR_MPP_ERR_TIMEOUT && ret != RGY_ERR_MPP_ERR_BUFFER_FULL && ret != RGY_ERR_MORE_DATA) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to load input frame: %s.\n"), get_err_mes(ret));
             return ret;
         }
@@ -951,6 +939,9 @@ public:
 protected:
     RGY_ERR setOutputSurf(MppFrame mppframe) {
         const auto mppinfo = infoMPP(mppframe);
+        if (mppinfo.ptr[0] == nullptr) { // eosの場合はフレームがないこともある
+            return (mpp_frame_get_eos(mppframe)) ? RGY_ERR_NONE : RGY_ERR_NULL_PTR;
+        }
         auto workFrame = getWorkSurf();
         auto surfDecOut = workFrame.frame();
         if (surfDecOut == nullptr) {
@@ -988,7 +979,7 @@ protected:
             surfDecOut->dataList().push_back(data);
         }
         m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(workFrame));
-        PrintMes(RGY_LOG_WARN, _T("setOutputSurf: %d: %lld.\n"), m_decOutFrames, mppinfo.timestamp);
+        PrintMes(RGY_LOG_TRACE, _T("setOutputSurf: %d: %lld.\n"), m_decOutFrames, mppinfo.timestamp);
         return RGY_ERR_NONE;
     }
     RGY_FRAME_FLAGS getDataFlag(const int64_t timestamp) {

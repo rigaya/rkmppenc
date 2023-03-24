@@ -707,14 +707,51 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
     }
 
     // デコーダの設定
-    // 設定項目は、https://github.com/Lockzhiner/MPP/blob/main/mpp/codec/mpp_dec.cpp等を参照
-    if (false) {
+    // 設定項目は、下記を参照
+    // https://github.com/Lockzhiner/MPP/blob/main/mpp/inc/mpp_dec_cfg.h
+    // https://github.com/Lockzhiner/MPP/blob/main/mpp/codec/mpp_dec.cpp
+
+    // typedef struct MppDecBaseCfg_t {
+    //     RK_U64              change;
+    //
+    //     MppCtxType          type;
+    //     MppCodingType       coding;
+    //     RK_S32              hw_type;
+    //     RK_U32              batch_mode;
+    // 
+    //     MppFrameFormat      out_fmt;
+    //     RK_U32              fast_out;
+    //     RK_U32              fast_parse;
+    //     RK_U32              split_parse;
+    //     RK_U32              internal_pts;
+    //     RK_U32              sort_pts;
+    //     RK_U32              disable_error;
+    //     RK_U32              enable_vproc;   /* MppVprocMode */
+    //     RK_U32              enable_fast_play;
+    //     RK_U32              enable_hdr_meta;
+    //     RK_U32              enable_thumbnail;
+    //     RK_U32              enable_mvc;
+    //     RK_U32              disable_thread;
+    // } MppDecBaseCfg;
+
+    if (inputCodec == RGY_CODEC_MPEG2) {
         // split_parse is to enable mpp internal frame spliter when the input
         // packet is not splited into frames.
+        // これを有効にするとtimestampがおかしくなる場合が増えるが、
+        // 一方でMPEG2の場合、これを有効にしないと途中のヘッダ変更のようなケースで正常にデコードできなくなる
+        // H.264では問題あるケースはなさそうだったので有効にしない (timstampが悪影響を受けないように)
         ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:split_parse", true));
         if (ret != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to set split_parse ret %d\n"), get_err_mes(ret));
             return ret;
+        }
+        if (true) {
+            // fast_parse を有効に 特に変化はなさそうなので有効にしておく
+            ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:fast_parse", true));
+            if (ret != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Failed to set fast_parse to true ret %d\n"), get_err_mes(ret));
+                return ret;
+            }
         }
     }
     if (true) {
@@ -724,7 +761,25 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to set enable_vproc to false ret %d\n"), get_err_mes(ret));
             return ret;
         }
-        // pts順に並び替え
+    }
+    if (false) {
+        // enable_hdr_meta を有効に (特に必要ない)
+        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:enable_hdr_meta", true));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set enable_hdr_meta to true ret %d\n"), get_err_mes(ret));
+            return ret;
+        }
+    }
+    if (true) {
+        // error を無効に
+        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:disable_error", true));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set disable_error to true ret %d\n"), get_err_mes(ret));
+            return ret;
+        }
+    }
+    if (false) {
+        // pts順に並び替え ... 効果なくね?
         ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:sort_pts", 0));
         if (ret != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to set sort_pts to true ret %d\n"), get_err_mes(ret));
@@ -737,44 +792,10 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
         PrintMes(RGY_LOG_ERROR, _T("Failed to set cfg %p ret %d\n"), get_err_mes(ret));
         return ret;
     }
-#if 0
 
-    //RGY_CODEC_VC1のときはAMF_TS_SORTを選択する必要がある
-    const AMF_TIMESTAMP_MODE_ENUM timestamp_mode = (inputCodec == RGY_CODEC_VC1) ? AMF_TS_SORT : AMF_TS_PRESENTATION;
-    if (AMF_OK != (res = m_pDecoder->SetProperty(AMF_TIMESTAMP_MODE, amf_int64(timestamp_mode)))) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to set deocder: %s\n"), AMFRetString(res));
-        return err_to_rgy(res);
-    }
-    RGYBitstream header = RGYBitstreamInit();
-    auto ret = m_pFileReader->GetHeader(&header);
-    if (ret != RGY_ERR_NONE) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to get video header: %s\n"), get_err_mes(ret));
-        return ret;
-    }
-    PrintMes(RGY_LOG_DEBUG, _T("set codec header to decoder: %d bytes.\n"), header.size());
-
-    if (header.size() > 0) {
-        amf::AMFBufferPtr buffer;
-        m_dev->context()->AllocBuffer(amf::AMF_MEMORY_HOST, header.size(), &buffer);
-
-        memcpy(buffer->GetNative(), header.data(), header.size());
-        m_pDecoder->SetProperty(AMF_VIDEO_DECODER_EXTRADATA, amf::AMFVariant(buffer));
-    }
-
-    PrintMes(RGY_LOG_DEBUG, _T("initialize %s decoder: %dx%d, %s.\n"),
-        CodecToStr(inputCodec).c_str(), prm->input.srcWidth, prm->input.srcHeight,
-        wstring_to_tstring(m_pTrace->SurfaceGetFormatName(csp_rgy_to_enc(prm->input.csp))).c_str());
-    if (AMF_OK != (res = m_pDecoder->Init(csp_rgy_to_enc(prm->input.csp), prm->input.srcWidth, prm->input.srcHeight))) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to init %s decoder (%s %dx%d): %s\n"), CodecToStr(inputCodec).c_str(),
-            wstring_to_tstring(m_pTrace->SurfaceGetFormatName(csp_rgy_to_enc(prm->input.csp))).c_str(), prm->input.srcWidth, prm->input.srcHeight,
-            AMFRetString(res));
-        return err_to_rgy(res);
-    }
-    PrintMes(RGY_LOG_DEBUG, _T("Initialized decoder.\n"));
+    PrintMes(RGY_LOG_DEBUG, _T("initialize %s decoder: %dx%d.\n"),
+        CodecToStr(inputCodec).c_str(), prm->input.srcWidth, prm->input.srcHeight);
     return RGY_ERR_NONE;
-#else
-    return RGY_ERR_NONE;
-#endif
 }
 #pragma warning(pop)
 
@@ -2311,9 +2332,9 @@ RGY_ERR MPPCore::run2() {
                     auto& task = m_pipelineTasks[d.task];
                     PipelineTaskOutputSurf *taskSurf = dynamic_cast<PipelineTaskOutputSurf *>(d.data.get());
                     if (taskSurf) {
-                        PrintMes(RGY_LOG_ERROR, _T("Send task %s: %lld.\n"), task->print().c_str(), taskSurf->surf().frame()->timestamp());
+                        PrintMes(RGY_LOG_TRACE, _T("Send task %s: %lld.\n"), task->print().c_str(), taskSurf->surf().frame()->timestamp());
                     } else {
-                        PrintMes(RGY_LOG_ERROR, _T("Send task %s: %d.\n"), task->print().c_str());
+                        PrintMes(RGY_LOG_TRACE, _T("Send task %s: %d.\n"), task->print().c_str());
                     }
                     err = task->sendFrame(d.data);
                     if (!checkContinue(err)) {
@@ -2323,7 +2344,7 @@ RGY_ERR MPPCore::run2() {
                     if (err == RGY_ERR_NONE) {
                         auto output = task->getOutput(requireSync(d.task));
                         if (output.size() == 0) break;
-                        PrintMes(RGY_LOG_INFO, _T("Get task output %s: %d.\n"), task->print().c_str(), output.size());
+                        PrintMes(RGY_LOG_TRACE, _T("Get task output %s: %d.\n"), task->print().c_str(), output.size());
                         //出てきたものは先頭に追加していく
                         std::for_each(output.rbegin(), output.rend(), [itask = d.task, &dataqueue](auto&& o) {
                             dataqueue.push_front(PipelineTaskData(itask + 1, o));
