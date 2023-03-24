@@ -220,12 +220,25 @@ struct VCECodecParam {
     int level;
 };
 
+struct MPPParamDec {
+    std::optional<bool> sort_pts;
+    std::optional<bool> split_parse;
+    bool fast_parse;
+    std::optional<bool> enable_hdr_meta;
+    bool disable_error;
+    bool enable_vproc;
+
+    MPPParamDec();
+};
+
 struct MPPParam {
     VideoInfo input;              //入力する動画の情報
     RGYParamInput inprm;
     RGYParamCommon common;
     RGYParamControl ctrl;
     RGYParamVpp vpp;
+
+    MPPParamDec hwdec;
 
     RGY_CODEC codec;
     VCECodecParam codecParam[RGY_CODEC_NUM];

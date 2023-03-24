@@ -30,12 +30,23 @@
 #include "mpp_param.h"
 #include "rk_venc_cmd.h"
 
+MPPParamDec::MPPParamDec() :
+    sort_pts(),
+    split_parse(),
+    fast_parse(true),
+    enable_hdr_meta(),
+    disable_error(true),
+    enable_vproc(false) {
+
+}
+
 MPPParam::MPPParam() :
     input(),
     inprm(),
     common(),
     ctrl(),
     vpp(),
+    hwdec(),
     codec(RGY_CODEC_H264),
     codecParam(),
     outputDepth(8),

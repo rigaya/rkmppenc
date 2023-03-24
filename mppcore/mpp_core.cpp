@@ -734,7 +734,9 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
     //     RK_U32              disable_thread;
     // } MppDecBaseCfg;
 
-    if (inputCodec == RGY_CODEC_MPEG2) {
+    auto bool_to_str =[](bool b) { return b ? _T("true") : _T("false"); };
+
+    if (prm->hwdec.split_parse.value_or(inputCodec == RGY_CODEC_MPEG2)) {
         // split_parse is to enable mpp internal frame spliter when the input
         // packet is not splited into frames.
         // これを有効にするとtimestampがおかしくなる場合が増えるが、
@@ -745,46 +747,53 @@ RGY_ERR MPPCore::initDecoder(MPPParam *prm) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to set split_parse ret %d\n"), get_err_mes(ret));
             return ret;
         }
-        if (true) {
+        PrintMes(RGY_LOG_DEBUG, _T("Set split_parse to true.\n"));
+
+        if (prm->hwdec.fast_parse) {
             // fast_parse を有効に 特に変化はなさそうなので有効にしておく
-            ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:fast_parse", true));
+            ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:fast_parse", prm->hwdec.fast_parse));
             if (ret != RGY_ERR_NONE) {
-                PrintMes(RGY_LOG_ERROR, _T("Failed to set fast_parse to true ret %d\n"), get_err_mes(ret));
+                PrintMes(RGY_LOG_ERROR, _T("Failed to set fast_parse to %s ret %d\n"), bool_to_str(prm->hwdec.fast_parse), get_err_mes(ret));
                 return ret;
             }
+            PrintMes(RGY_LOG_DEBUG, _T("Set fast_parse to %s.\n"), bool_to_str(prm->hwdec.fast_parse));
         }
     }
-    if (true) {
-        // disable deinterlacer、有効にするとbob化のような処理になる、デフォルトで有効
-        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:enable_vproc", false));
-        if (ret != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("Failed to set enable_vproc to false ret %d\n"), get_err_mes(ret));
-            return ret;
-        }
-    }
-    if (false) {
+    if (prm->hwdec.enable_hdr_meta.has_value()) {
         // enable_hdr_meta を有効に (特に必要ない)
         ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:enable_hdr_meta", true));
         if (ret != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("Failed to set enable_hdr_meta to true ret %d\n"), get_err_mes(ret));
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set enable_hdr_meta to %s ret %d\n"), bool_to_str(prm->hwdec.enable_hdr_meta.value()), get_err_mes(ret));
             return ret;
         }
+        PrintMes(RGY_LOG_DEBUG, _T("Set enable_hdr_meta to %s.\n"), bool_to_str(prm->hwdec.enable_hdr_meta.value()));
+    }
+    if (true) {
+        // disable deinterlacer、有効にするとbob化のような処理になる、デフォルトで有効
+        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:enable_vproc", prm->hwdec.enable_vproc));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set enable_vproc to %s ret %d\n"), bool_to_str(prm->hwdec.enable_vproc), get_err_mes(ret));
+            return ret;
+        }
+        PrintMes(RGY_LOG_DEBUG, _T("Set enable_vproc to %s.\n"), bool_to_str(prm->hwdec.enable_vproc));
     }
     if (true) {
         // error を無効に
-        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:disable_error", true));
+        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:disable_error", prm->hwdec.disable_error));
         if (ret != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("Failed to set disable_error to true ret %d\n"), get_err_mes(ret));
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set disable_error to %s ret %d\n"), bool_to_str(prm->hwdec.disable_error), get_err_mes(ret));
             return ret;
         }
+        PrintMes(RGY_LOG_DEBUG, _T("Set disable_error to %s.\n"), bool_to_str(prm->hwdec.disable_error));
     }
-    if (false) {
+    if (prm->hwdec.sort_pts.has_value()) {
         // pts順に並び替え ... 効果なくね?
-        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:sort_pts", 0));
+        ret = err_to_rgy(mpp_dec_cfg_set_u32(cfg, "base:sort_pts", prm->hwdec.sort_pts.value()));
         if (ret != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("Failed to set sort_pts to true ret %d\n"), get_err_mes(ret));
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set sort_pts to %s ret %d\n"), bool_to_str(prm->hwdec.sort_pts.value()), get_err_mes(ret));
             return ret;
         }
+        PrintMes(RGY_LOG_DEBUG, _T("Set sort_pts to %s.\n"), bool_to_str(prm->hwdec.sort_pts.value()));
     }
 
     ret = err_to_rgy(m_decoder->mpi->control(m_decoder->ctx, MPP_DEC_SET_CFG, cfg));
