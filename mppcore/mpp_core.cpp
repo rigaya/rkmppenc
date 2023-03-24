@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     VCEEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -1762,7 +1762,11 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
                 m_enccfg.rc.bps_max     = m_enccfg.rc.bps_target * 17 / 16;
                 m_enccfg.rc.bps_min     = m_enccfg.rc.bps_target * 15 / 16;
             } else {
-                m_enccfg.rc.bps_max     = prm->maxBitrate * 1000;
+                if (prm->maxBitrate == 0) { // 自動で適当な値を入れておかないとエラーになる
+                    m_enccfg.rc.bps_max = m_enccfg.rc.bps_target * 3 / 2;
+                } else {
+                    m_enccfg.rc.bps_max = std::max(prm->maxBitrate * 1000, m_enccfg.rc.bps_target);
+                }
                 m_enccfg.rc.bps_min     = m_enccfg.rc.bps_target * 1 / 16;
             }
             m_enccfg.rc.qp_init     = -1;
