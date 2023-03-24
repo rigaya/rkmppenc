@@ -1990,7 +1990,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
 
     if (m_decoder) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskMPPDecode>(m_decoder.get(), 1, m_pFileReader.get(),
-            prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), m_pLog));
+            m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), m_pLog));
     } else {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(0, m_pFileReader.get(), m_cl, m_pLog));
     }

@@ -731,17 +731,22 @@ protected:
     RGYInput *m_input;
     RGYBitstream m_decInputBitstream;
     MppBufferGroup m_frameGrp;
+    bool m_adjustTimestamp;
+    int64_t m_firstBitstreamTimestamp; // bitstreamの最初のtimestamp
+    int64_t m_firstFrameTimestamp; // frameの最初のtimestamp
+    std::deque<int64_t> m_queueTimestamp; // timestampへのキュー
+    std::vector<int64_t> m_queueTimestampWrap; // wrapした場合のtimestamp
     RGYQueueMPMP<RGYFrameDataMetadata*> m_queueHDR10plusMetadata;
     RGYQueueMPMP<FrameFlags> m_dataFlag;
     std::unique_ptr<RGYConvertCSP> m_convert;
-    bool m_decInBitStreamEOS;
-    bool m_decOutFrameEOS;
+    bool m_decInBitStreamEOS; // デコーダへの入力Bitstream側でEOSを検知
+    bool m_decOutFrameEOS;    // デコーダからの出力Frame側でEOSを検知
     int m_decOutFrames;
 public:
-    PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
+    PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, bool adjustTimestamp, int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
-        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(),
-        m_queueHDR10plusMetadata(), m_dataFlag(),
+        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_adjustTimestamp(adjustTimestamp),
+        m_firstBitstreamTimestamp(-1), m_firstFrameTimestamp(-1), m_queueTimestamp(), m_queueTimestampWrap(), m_queueHDR10plusMetadata(), m_dataFlag(),
         m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
         m_dataFlag.init();
@@ -761,6 +766,64 @@ public:
         RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
         return std::make_pair(info, m_outMaxQueueSize + 16);
     };
+
+    // あとで取得すために入力したフレームを設定しておく
+    void addBitstreamTimestamp(const int64_t pts) {
+        if (!m_adjustTimestamp) {
+            return;
+        }
+        if (m_firstBitstreamTimestamp < 0) {
+            m_firstBitstreamTimestamp = pts;
+        }
+        if (m_queueTimestamp.empty() && m_queueTimestampWrap.size() > 0) {
+            std::sort(m_queueTimestampWrap.begin(), m_queueTimestampWrap.end());
+            m_queueTimestamp.insert(m_queueTimestamp.end(), m_queueTimestampWrap.begin(), m_queueTimestampWrap.end());
+            m_queueTimestampWrap.clear();
+        }
+        if (m_queueTimestamp.empty()) {
+            m_queueTimestamp.push_back(pts);
+            return;
+        }
+        const auto inputFrameInfo = m_input->GetInputFrameInfo();
+        const auto fpsInv = av_make_q(inputFrameInfo.fpsD, inputFrameInfo.fpsN);
+        const auto inputTimebase = av_make_q(m_input->getInputTimebase());
+        const auto frameDurationx16 = av_rescale_q(16, fpsInv, inputTimebase);
+        auto lastPts = m_queueTimestamp.back();
+        if (std::abs(pts - lastPts) > frameDurationx16) { // 大きく離れている場合は別のキューに入れる
+            m_queueTimestampWrap.push_back(pts);
+            return;
+        }
+        m_queueTimestamp.push_back(pts);
+        std::sort(m_queueTimestamp.begin(), m_queueTimestamp.end());
+        return;
+    }
+
+    void cleanTimestampQueue(const int64_t pts) {
+        while (!m_queueTimestamp.empty() && m_queueTimestamp.front() <= pts) {
+            m_queueTimestamp.pop_front();
+        }
+    }
+
+    // MPEG2デコーダのようにまともなtimestampを返さないときに入力bitstreamの情報を使って修正する
+    int64_t adjustFrameTimestamp(int64_t pts) {
+        if (!m_adjustTimestamp || m_queueTimestamp.empty()) {
+            return pts;
+        }
+        if (m_adjustTimestamp) {
+            if (m_firstFrameTimestamp < 0) { // 最初のフレーム
+                m_firstFrameTimestamp = pts;
+                const auto pos = std::find(m_queueTimestamp.begin(), m_queueTimestamp.end(), pts);
+                if (pos == m_queueTimestamp.end()) { //知らないtimestamp
+                    pts = m_firstBitstreamTimestamp; // 入力bitstreamの最初のtimestampで代用
+                }
+            } else {
+                pts = m_queueTimestamp.front();
+                m_queueTimestamp.pop_front();
+            }
+        }
+        cleanTimestampQueue(pts);
+        return pts;
+    }
 
     virtual RGY_ERR getOutputFrame(int& trycount) {
         MppFrame mppframe = nullptr;
@@ -881,6 +944,7 @@ public:
             mpp_packet_set_pts(packet, m_decInputBitstream.pts());
             auto meta = mpp_packet_get_meta(packet);
             mpp_meta_set_s64(meta, KEY_USER_DATA, m_decInputBitstream.duration());
+            addBitstreamTimestamp(m_decInputBitstream.pts());
             PrintMes(RGY_LOG_TRACE, _T("Send input bitstream: %lld.\n"), m_decInputBitstream.pts());
         } else if (ret == RGY_ERR_MORE_BITSTREAM) {
             mpp_packet_init(&packet, nullptr, 0);
@@ -963,7 +1027,7 @@ protected:
             mppinfo.height, surfDecOutInfo.height, crop.c);
 
         surfDecOut->setInputFrameId(m_decOutFrames++);
-        surfDecOut->setTimestamp(mppinfo.timestamp);
+        surfDecOut->setTimestamp(adjustFrameTimestamp(mppinfo.timestamp));
         surfDecOut->setDuration(mppinfo.duration);
         auto flags = mppinfo.flags;
         if (getDataFlag(surfDecOut->timestamp()) & RGY_FRAME_FLAG_RFF) {
