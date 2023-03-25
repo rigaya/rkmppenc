@@ -1,5 +1,5 @@
 ﻿
-# mppenc option list <!-- omit in toc -->
+# rkmppenc option list <!-- omit in toc -->
 
 **[日本語版はこちら＞＞](./mppenc_Options.ja.md)**  
 
@@ -17,8 +17,6 @@
   - [-h, -? --help](#-h-----help)
   - [-v, --version](#-v---version)
   - [--option-list](#--option-list)
-  - [--check-hw \[\<int\>\]](#--check-hw-int)
-  - [--check-features \[\<int\>\]](#--check-features-int)
   - [--check-clinfo](#--check-clinfo)
   - [--check-codecs, --check-decoders, --check-encoders](#--check-codecs---check-decoders---check-encoders)
   - [--check-profiles \<string\>](#--check-profiles-string)
@@ -27,7 +25,6 @@
   - [--check-filters](#--check-filters)
   - [--check-avversion](#--check-avversion)
 - [Basic encoding options](#basic-encoding-options)
-  - [-d, --device \<int\>](#-d---device-int)
   - [-c, --codec \<string\>](#-c---codec-string)
   - [-o, --output \<string\>](#-o---output-string)
   - [-i, --input \<string\>](#-i---input-string)
@@ -60,29 +57,7 @@
   - [--vbv-bufsize \<int\>](#--vbv-bufsize-int)
   - [--qp-min \<int\> or \<int\>:\<int\>:\<int\>](#--qp-min-int-or-intintint)
   - [--qp-max \<int\> or \<int\>:\<int\>:\<int\>](#--qp-max-int-or-intintint)
-  - [--qvbr-quality \<int\>](#--qvbr-quality-int)
   - [--gop-len \<int\>](#--gop-len-int)
-  - [-b, --bframes \<int\>](#-b---bframes-int)
-  - [--b-pyramid](#--b-pyramid)
-  - [--b-deltaqp \<int\>](#--b-deltaqp-int)
-  - [--bref-deltaqp \<int\>](#--bref-deltaqp-int)
-  - [--ref \<int\>](#--ref-int)
-  - [--ltr \<int\> \[H.264/HEVC\]](#--ltr-int-h264hevc)
-  - [--vbaq \[H.264/HEVC\]](#--vbaq-h264hevc)
-  - [--skip-frame \[H.264/HEVC\]](#--skip-frame-h264hevc)
-  - [--enforce-hrd](#--enforce-hrd)
-  - [--filler](#--filler)
-  - [--motion-est \<string\> \[H.264/HEVC\]](#--motion-est-string-h264hevc)
-  - [--tiles \<int\> \[AV1\]](#--tiles-int-av1)
-  - [--cdef-mode \<string\> \[AV1\]](#--cdef-mode-string-av1)
-  - [--screen-content-tools  \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--screen-content-tools--param1value1param2value2)
-  - [--cdf-update \[AV1\]](#--cdf-update-av1)
-  - [--cdf-frame-end-update \[AV1\]](#--cdf-frame-end-update-av1)
-  - [--temporal-layers \<int\> \[AV1\]](#--temporal-layers-int-av1)
-  - [--aq-mode \<int\> \[AV1\]](#--aq-mode-int-av1)
-  - [--pe](#--pe)
-  - [--pa  \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--pa--param1value1param2value2)
-  - [--slices \<int\> \[H.264/HEVC\]](#--slices-int-h264hevc)
   - [--level \<string\>](#--level-string)
   - [--profile \<string\>](#--profile-string)
   - [--tier \<string\>  \[HEVC only\]](#--tier-string--hevc-only)
@@ -94,16 +69,15 @@
   - [--colorprim \<string\>](#--colorprim-string)
   - [--transfer \<string\>](#--transfer-string)
   - [--chromaloc \<int\> or "auto"](#--chromaloc-int-or-auto)
-  - [--max-cll \<int\>,\<int\> or "copy" \[HEVC, AV1\]](#--max-cll-intint-or-copy-hevc-av1)
-  - [--master-display \<string\> or "copy" \[HEVC, AV1\]](#--master-display-string-or-copy-hevc-av1)
+  - [--max-cll \<int\>,\<int\> or "copy" \[HEVC\]](#--max-cll-intint-or-copy-hevc)
+  - [--master-display \<string\> or "copy" \[HEVC\]](#--master-display-string-or-copy-hevc)
   - [--atc-sei \<string\> or \<int\> \[HEVC only\]](#--atc-sei-string-or-int-hevc-only)
-  - [--dhdr10-info \<string\> \[HEVC, AV1\]](#--dhdr10-info-string-hevc-av1)
-  - [--dhdr10-info copy \[HEVC, AV1\]](#--dhdr10-info-copy-hevc-av1)
+  - [--dhdr10-info \<string\> \[HEVC\]](#--dhdr10-info-string-hevc)
+  - [--dhdr10-info copy \[HEVC\]](#--dhdr10-info-copy-hevc)
   - [--dolby-vision-profile \<float\>](#--dolby-vision-profile-float)
   - [--dolby-vision-rpu \<string\>](#--dolby-vision-rpu-string)
   - [--ssim](#--ssim)
   - [--psnr](#--psnr)
-  - [--smart-access-video](#--smart-access-video)
 - [IO / Audio / Subtitle Options](#io--audio--subtitle-options)
   - [--input-analyze \<float\>](#--input-analyze-float)
   - [--input-probesize \<int\>](#--input-probesize-int)
@@ -153,6 +127,7 @@
   - [--tcfile-in \<string\>](#--tcfile-in-string)
   - [--timebase \<int\>/\<int\>](#--timebase-intint)
   - [--input-hevc-bsf \<string\>](#--input-hevc-bsf-string)
+  - [--allow-other-negative-pts](#--allow-other-negative-pts)
 - [Vpp Options](#vpp-options)
   - [Vpp Filtering order](#vpp-filtering-order)
   - [--vpp-colorspace \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--vpp-colorspace-param1value1param2value2)
@@ -204,40 +179,40 @@
 
 ### Basic commands
 ```Batchfile
-mppenc.exe [Options] -i <filename> -o <filename>
+rkmppenc.exe [Options] -i <filename> -o <filename>
 ```
 
 ### More practical commands
 #### example of using hw decoder
 ```Batchfile
-mppenc --avhw -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
+rkmppenc --avhw -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
 ```
 
 #### example of using hw decoder (interlaced)
 ```Batchfile
-mppenc --avhw --interlace tff -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
+rkmppenc --avhw --interlace tff -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
 ```
 
 #### avs (Avisynth) example (avs and vpy can also be read via vfw)
 ```Batchfile
-mppenc -i "<avsfile>" -o "<outfilename.264>"
+rkmppenc -i "<avsfile>" -o "<outfilename.264>"
 ```
 
 #### example of pipe usage
 ```Batchfile
-avs2pipemod -y4mp "<avsfile>" | mppenc --y4m -i - -o "<outfilename.264>"
+avs2pipemod -y4mp "<avsfile>" | rkmppenc --y4m -i - -o "<outfilename.264>"
 ```
 
 #### pipe usage from ffmpeg
 
 ```Batchfile
-ffmpeg -y -i "<inputfile>" -an -pix_fmt yuv420p -f yuv4mpegpipe - | mppenc --y4m -i - -o "<outfilename.264>"
+ffmpeg -y -i "<inputfile>" -an -pix_fmt yuv420p -f yuv4mpegpipe - | rkmppenc --y4m -i - -o "<outfilename.264>"
 ```
 
 #### Passing video & audio from ffmpeg
 --> use "nut" to pass both video & audio thorough pipe.
 ```Batchfile
-ffmpeg -y -i "<input>" <options for ffmpeg> -codec:a copy -codec:v rawvideo -pix_fmt yuv420p -f nut - | mppenc --avsw -i - --audio-codec aac -o "<outfilename.mp4>"
+ffmpeg -y -i "<input>" <options for ffmpeg> -codec:a copy -codec:v rawvideo -pix_fmt yuv420p -f nut - | rkmppenc --avsw -i - --audio-codec aac -o "<outfilename.mp4>"
 ```
 
 ## Option format
@@ -266,7 +241,7 @@ Example 2: --xxx: disable xxx → --no-xxx: enable xxx
 Show help
 
 ### -v, --version
-Show version of mppenc
+Show version of rkmppenc
 
 ### --option-list
 Show option list.
@@ -294,14 +269,10 @@ Show version of ffmpeg dll
 
 ## Basic encoding options
 
-### -d, --device &lt;int&gt;
-Specify the deviceId to be used with VCEEnc. 
-
 ### -c, --codec &lt;string&gt;
 Specify the output codec
  - h264 (default)
  - hevc
- - av1
 
 ### -o, --output &lt;string&gt;
 Set output file name, pipe output with "-"
@@ -353,9 +324,9 @@ Read avi file using avi reader.
 ### --avs
 Read Avisynth script file using avs reader.
 
-mppenc works on UTF-8 mode as default, so the Avisynth script is required to be also in UTF-8 when using non ASCII characters.
+rkmppenc works on UTF-8 mode as default, so the Avisynth script is required to be also in UTF-8 when using non ASCII characters.
 When using scripts in the default codepage of the OS, such as ANSI,
-you will need to add "[--process-codepage](#--process-codepage-string-windows-os-only) os" option to change mppenc also work on the default codepage of the OS.
+you will need to add "[--process-codepage](#--process-codepage-string-windows-os-only) os" option to change rkmppenc also work on the default codepage of the OS.
 
 ### --vpy
 ### --vpy-mt
@@ -461,15 +432,15 @@ Set bitrate in kbps.
 
 ### -u, --preset
 Encode qulaity preset.
-- balanced
-- fast
-- slow
-- slower (for AV1 only)
+- worst
+- worse
+- medium
+- better
+- best
 
 ### --output-depth &lt;int&gt;
 Set output bit depth.
 - 8  ... 8 bits (default)
-- 10 ... 10 bits
 
 ### --max-bitrate &lt;int&gt;
 Maximum bitrate (in kbps).
@@ -487,169 +458,21 @@ Set the maximum QP value to &lt;I frame&gt;:&lt;P frame&gt;:&lt;B frame&gt;. Thi
 
 It could be used to maintain certain degree of image quality in any part of the video, even if doing so may exceed the specified bitrate.
 
-### --qvbr-quality &lt;int&gt;
-Set quality level (0-51) for QVBR mode (Quality based VBR).
-
 ### --gop-len &lt;int&gt;
 Set maximum GOP length. When lookahead is off, this value will always be used. (Not variable, fixed GOP)
-
-### -b, --bframes &lt;int&gt;
-Set the number of consecutive B frames.
-
-### --b-pyramid
-Enable b-pyramid feature.
-
-### --b-deltaqp &lt;int&gt;
-Set qp offset for non-ref b frames.
-
-### --bref-deltaqp &lt;int&gt;
-Set qp offset for ref b frames.
-
-### --ref &lt;int&gt;
-Set the reference distance. In hw encoding, incresing ref frames will have minor effect on image quality or compression rate.
-
-### --ltr &lt;int&gt; [H.264/HEVC]
-Set the long term reference mode.
-
-### --vbaq [H.264/HEVC]
-Enable adaptive quantization in frame. (Default: off)
-
-### --skip-frame [H.264/HEVC]
-Enable skip frame feature. (Default: off)
-
-### --enforce-hrd
-Enforce hrd compatibility of bitstream.
-
-### --filler
-Output filler data to adjust nominal bitrate.
-
-### --motion-est &lt;string&gt; [H.264/HEVC]
-Motion vector accuracy / default: auto
-- auto ... automatic
-- q-pel ... 1/4 pixel accuracy (high precision)
-- half-pel ... 1/2 pixel precision
-- full-pel ... 1 pixel accuracy (low accuracy)
-
-### --tiles &lt;int&gt; [AV1]
-Set number of tiles per frame.
-
-### --cdef-mode &lt;string&gt; [AV1]
-Cdef mode.
-- **params**
-  - on
-  - off 
-
-### --screen-content-tools  [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]  
-Set screen content tools.
-
-- **params**
-  - palette-mode=&lt;bool&gt;  
-    enable palette mode
-
-  - force-integer-mv=&lt;bool&gt;  
-    enable force integer MV
-
-- example
-  ```
-  --screen-content-tools palette-mode=on,force-integer-mv=on
-  ```
-
-### --cdf-update [AV1]
-Enable CDF update.
-
-### --cdf-frame-end-update [AV1]
-Enable CDF frame end update.
-
-### --temporal-layers &lt;int&gt; [AV1]
-Number of temporal layers.
-
-### --aq-mode &lt;int&gt; [AV1]
-- **params**
-  - none
-  - caq 
-
-### --pe
-Enable pre-encode assisted rate control. (default: off)  
-
-### --pa  [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]  
-Enable pre analysis to enahance quality, supports VBR mode only. (default: off)  
-
-- **params**
-  - sc=&lt;string&gt;  
-    Sensitivity of scene change detection
-    - none
-    - low
-    - medium (default)
-    - high
-
-  - ss=&lt;string&gt;  
-    Sensitivity of static scene detection
-    - none
-    - low
-    - medium
-    - high (default)
-
-  - activity-type=&lt;string&gt;  
-    Block activity calcualtion mode
-    - y (default)
-    - yuv
-
-  - caq-strength=&lt;string&gt;  
-    Content Adaptive Quantization (CAQ) strength
-    - low
-    - medium (default)
-    - high
-
-  - initqpsc=&lt;int&gt;  
-    Initial qp after scene change (default: -1 = auto)
-
-  - fskip-maxqp=&lt;int&gt;  
-    Threshold to insert skip frame on static scene. (default: 35)
-
-  - lookahead=&lt;int&gt;  
-    Lookahead buffer size.
-
-  - ltr=&lt;bool&gt;  
-    enable automatic LTR frame management
-
-  - paq=&lt;string&gt;  
-    Perceptual AQ mode
-    - none
-    - caq
-
-  - taq=&lt;int&gt;  
-    Temporal AQ mode
-    - 0
-    - 1
-    - 2
-
-  - motion-quality=&lt;string&gt;  
-    High motion quality boost mode
-    - none
-    - auto
-    
-- example
-  ```
-  --pa sc=high,ss=high,activity-type=yuv,paq=caq,taq=on,lookahead=32
-  ```
-
-### --slices &lt;int&gt; [H.264/HEVC]
-Set number of slices.
 
 ### --level &lt;string&gt;
 Specify the Level of the codec to be encoded. If not specified, it will be automatically set.
 ```
 h264: auto, 1, 1 b, 1.1, 1.2, 1.3, 2, 2.1, 2.2, 3, 3.1, 3.2, 4, 4.1, 4.2, 5, 5.1, 5.2
 hevc: auto, 1, 2, 2.1, 3, 3.1, 4, 4.1, 5, 5.1, 5.2, 6, 6.1, 6.2
-av1 :  auto, 2, 2.1, 2.2, 2.3, 3, 3.1, 3.2, 3.3, 4, 4.1, 4.2, 4.3, 5, 5.1, 5.2, 5.3, 6, 6.1, 6.2, 6.3, 7, 7.1, 7.2, 7.3
 ```
 
 ### --profile &lt;string&gt;
 Specify the profile of the codec to be encoded. If not specified, it will be automatically set.
 ```
-h264:  auto, baseline, main, high, high444
-hevc:  auto, main, main10, main444
-av1 :  auto, main
+h264:  auto, baseline, main, high
+hevc:  auto, main
 ```
 
 ### --tier &lt;string&gt;  [HEVC only]
@@ -697,7 +520,7 @@ Set chroma location flag of the output bitstream from values 0 ... 5.
 "auto" will copy from input file (available when using [avhw](#--avhw)/[avsw](#--avsw) reader)
 default: 0 = unspecified
 
-### --max-cll &lt;int&gt;,&lt;int&gt; or "copy" [HEVC, AV1]
+### --max-cll &lt;int&gt;,&lt;int&gt; or "copy" [HEVC]
 Set MaxCLL and MaxFall in nits.  "copy" will copy values from the input file. (available when using [avhw](#--avhw)/[avsw](#--avsw) reader)  
 
 Please note that this option will implicitly activate [--repeat-headers](#--repeat-headers).  
@@ -706,7 +529,7 @@ Example1: --max-cll 1000,300
 Example2: --max-cll copy  # copy values from source
 ```
 
-### --master-display &lt;string&gt; or "copy" [HEVC, AV1]
+### --master-display &lt;string&gt; or "copy" [HEVC]
 Set Mastering display data. "copy" will copy values from the input file. (available when using [avhw](#--avhw)/[avsw](#--avsw) reader)  
 
 Please note that this option will implicitly activate [--repeat-headers](#--repeat-headers).  
@@ -723,10 +546,10 @@ Set alternative transfer characteristics SEI from below or by integer, Required 
   bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67
 ```  
 
-### --dhdr10-info &lt;string&gt; [HEVC, AV1]
+### --dhdr10-info &lt;string&gt; [HEVC]
 Apply HDR10+ dynamic metadata from specified json file. Requires [hdr10plus_gen.exe](https://github.com/rigaya/hdr10plus_gen) module  additionally.
 
-### --dhdr10-info copy [HEVC, AV1]
+### --dhdr10-info copy [HEVC]
 Copy HDR10+ dynamic metadata from input file.  
 Limitations for avhw reader: this option uses timestamps to reorder frames to decoded order to presentation order.
 Therefore, input files without timestamps (such as raw ES), are not supported. Please try for avsw reader for that case.
@@ -748,9 +571,6 @@ Calculate ssim of the encoded video.
 
 ### --psnr
 Calculate psnr of the encoded video.
-
-### --smart-access-video  
-Enables smart access video feature.
 
 ## IO / Audio / Subtitle Options
 

@@ -1,5 +1,5 @@
 ﻿
-# mppenc オプションリスト <!-- omit in toc -->
+# rkmppenc オプションリスト <!-- omit in toc -->
 
 - [コマンドラインの例](#コマンドラインの例)
   - [基本的なコマンドの表記](#基本的なコマンドの表記)
@@ -16,8 +16,6 @@
   - [-h,-? --help](#-h----help)
   - [-v, --version](#-v---version)
   - [--option-list](#--option-list)
-  - [--check-hw \[\<int\>\]](#--check-hw-int)
-  - [--check-features \[\<int\>\]](#--check-features-int)
   - [--check-clinfo](#--check-clinfo)
   - [--check-codecs, --check-decoders, --check-encoders](#--check-codecs---check-decoders---check-encoders)
   - [--check-profiles \<string\>](#--check-profiles-string)
@@ -26,7 +24,6 @@
   - [--check-filters](#--check-filters)
   - [--check-avversion](#--check-avversion)
 - [エンコードの基本的なオプション](#エンコードの基本的なオプション)
-  - [-d, --device \<int\>](#-d---device-int)
   - [-c, --codec \<string\>](#-c---codec-string)
   - [-o, --output \<string\>](#-o---output-string)
   - [-i, --input \<string\>](#-i---input-string)
@@ -58,29 +55,7 @@
   - [--vbv-bufsize \<int\>](#--vbv-bufsize-int)
   - [--qp-min \<int\> or \<int\>:\<int\>:\<int\>](#--qp-min-int-or-intintint)
   - [--qp-max \<int\> or \<int\>:\<int\>:\<int\>](#--qp-max-int-or-intintint)
-  - [--qvbr-quality \<int\>](#--qvbr-quality-int)
   - [--gop-len \<int\>](#--gop-len-int)
-  - [-b, --bframes \<int\>](#-b---bframes-int)
-  - [--b-pyramid](#--b-pyramid)
-  - [--b-deltaqp \<int\>](#--b-deltaqp-int)
-  - [--bref-deltaqp \<int\>](#--bref-deltaqp-int)
-  - [--ref \<int\>](#--ref-int)
-  - [--ltr \<int\> \[H.264/HEVC\]](#--ltr-int-h264hevc)
-  - [--vbaq \[H.264/HEVC\]](#--vbaq-h264hevc)
-  - [--skip-frame \[H.264/HEVC\]](#--skip-frame-h264hevc)
-  - [--enforce-hrd](#--enforce-hrd)
-  - [--filler](#--filler)
-  - [--motion-est \<string\> \[H.264/HEVC\]](#--motion-est-string-h264hevc)
-  - [--tiles \<int\> \[AV1\]](#--tiles-int-av1)
-  - [--cdef-mode \<string\> \[AV1\]](#--cdef-mode-string-av1)
-  - [--screen-content-tools  \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--screen-content-tools--param1value1param2value2)
-  - [--cdf-update \[AV1\]](#--cdf-update-av1)
-  - [--cdf-frame-end-update \[AV1\]](#--cdf-frame-end-update-av1)
-  - [--temporal-layers \<int\> \[AV1\]](#--temporal-layers-int-av1)
-  - [--aq-mode \<int\> \[AV1\]](#--aq-mode-int-av1)
-  - [--pe](#--pe)
-  - [--pa  \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--pa--param1value1param2value2)
-  - [--slices \<int\> \[H.264/HEVC\]](#--slices-int-h264hevc)
   - [--level \<string\>](#--level-string)
   - [--profile \<string\>](#--profile-string)
   - [--tier \<string\>](#--tier-string)
@@ -92,16 +67,15 @@
   - [--colorprim \<string\>](#--colorprim-string)
   - [--transfer \<string\>](#--transfer-string)
   - [--chromaloc \<int\> or "auto"](#--chromaloc-int-or-auto)
-  - [--max-cll \<int\>,\<int\> or "copy" \[HEVC, AV1\]](#--max-cll-intint-or-copy-hevc-av1)
-  - [--master-display \<string\> or "copy" \[HEVC, AV1\]](#--master-display-string-or-copy-hevc-av1)
+  - [--max-cll \<int\>,\<int\> or "copy" \[HEVC\]](#--max-cll-intint-or-copy-hevc)
+  - [--master-display \<string\> or "copy" \[HEVC\]](#--master-display-string-or-copy-hevc)
   - [--atc-sei \<string\> or \<int\> \[HEVCのみ\]](#--atc-sei-string-or-int-hevcのみ)
-  - [--dhdr10-info \<string\> \[HEVC, AV1\]](#--dhdr10-info-string-hevc-av1)
-  - [--dhdr10-info copy \[HEVC, AV1\]](#--dhdr10-info-copy-hevc-av1)
+  - [--dhdr10-info \<string\> \[HEVC\]](#--dhdr10-info-string-hevc)
+  - [--dhdr10-info copy \[HEVC\]](#--dhdr10-info-copy-hevc)
   - [--dolby-vision-profile \<float\> \[HEVC\]](#--dolby-vision-profile-float-hevc)
   - [--dolby-vision-rpu \<string\> \[HEVC\]](#--dolby-vision-rpu-string-hevc)
   - [--ssim](#--ssim)
   - [--psnr](#--psnr)
-  - [--smart-access-video](#--smart-access-video)
 - [入出力 / 音声 / 字幕などのオプション](#入出力--音声--字幕などのオプション)
   - [--input-analyze \<float\>](#--input-analyze-float)
   - [--input-probesize \<int\>](#--input-probesize-int)
@@ -150,40 +124,40 @@
 
 ### 基本的なコマンドの表記
 ```Batchfile
-mppenc.exe [Options] -i <filename> -o <filename>
+rkmppenc.exe [Options] -i <filename> -o <filename>
 ```
 
 ### もっと実用的なコマンド
 #### hwデコードを使用する例
 ```Batchfile
-mppenc --avhw -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
+rkmppenc --avhw -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
 ```
 
 #### hwデコードを使用する例 (インタレ保持)
 ```Batchfile
-mppenc --avhw --interlace tff -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
+rkmppenc --avhw --interlace tff -i "<mp4(H.264/AVC) file>" -o "<outfilename.264>"
 ```
 
 #### avs(Avisynth)の例 (avsやvpyはvfw経由でも読み込み可能です)
 ```Batchfile
-mppenc -i "<avsfile>" -o "<outfilename.264>"
+rkmppenc -i "<avsfile>" -o "<outfilename.264>"
 ```
 
 #### パイプ利用の例
 ```Batchfile
-avs2pipemod -y4mp "<avsfile>" | mppenc --y4m -i - -o "<outfilename.264>"
+avs2pipemod -y4mp "<avsfile>" | rkmppenc --y4m -i - -o "<outfilename.264>"
 ```
 
 #### ffmpegからパイプ渡し
 
 ```Batchfile
-ffmpeg -y -i "<ソース動画>" -an -pix_fmt yuv420p -f yuv4mpegpipe - | mppenc --y4m -i - -o "<outfilename.264>"
+ffmpeg -y -i "<ソース動画>" -an -pix_fmt yuv420p -f yuv4mpegpipe - | rkmppenc --y4m -i - -o "<outfilename.264>"
 ```
 
 #### ffmpegから映像と音声を両方パイプ渡したい
 --> "nut"フォーマットでくるんで受け渡しするとよいでしょう
 ```Batchfile
-ffmpeg -y -i "<input>" <options for ffmpeg> -codec:a copy -codec:v rawvideo -pix_fmt yuv420p -f nut - | mppenc --avsw -i - --audio-codec aac -o "<outfilename.mp4>"
+ffmpeg -y -i "<input>" <options for ffmpeg> -codec:a copy -codec:v rawvideo -pix_fmt yuv420p -f nut - | rkmppenc --avsw -i - --audio-codec aac -o "<outfilename.mp4>"
 ```
 
 #### raw H.264/ESのmux
@@ -260,14 +234,10 @@ dllのバージョンを表示
 
 ## エンコードの基本的なオプション
 
-### -d, --device &lt;int&gt;
-VCEEncで使用するDeviceIdを指定する。
-
 ### -c, --codec &lt;string&gt;
 エンコードするコーデックの指定
  - h264 (デフォルト)
  - hevc
- - av1
 
 ### -o, --output &lt;string&gt;
 出力ファイル名の表示、"-"でパイプ出力
@@ -411,16 +381,15 @@ CQP(固定量子化量)でエンコードを行う。&lt;Iフレーム&gt;:&lt;P
 
 ### -u, --preset
 エンコーダの品質プリセット。
-- balanced
-- fast
-- slow
-- slower (AV1 のみ)
+- worst
+- worse
+- medium
+- better
+- best
 
 ### --output-depth &lt;int&gt;
 出力ビット深度を設定。
 - 8 ... 8bit (デフォルト)
-- 10 ... 10bit
-
 
 ### --max-bitrate &lt;int&gt;
 最大ビットレート(kbps単位)。
@@ -440,170 +409,21 @@ VBVバッファサイズ(kbps単位)。
 
 指定したビットレートを超えてでも、動画のどんな部分でもある程度の品質を維持したい場合に使用する。
 
-### --qvbr-quality &lt;int&gt;
-QVBRの品質レベルの指定。0-51の間で指定する。
-
 ### --gop-len &lt;int&gt;
 最大GOP長。lookaheadオフでは、この値が常に使用される。(可変ではない)
-
-### -b, --bframes &lt;int&gt;
-連続Bフレーム数。
-
-### --b-pyramid
-Bフレームのピラミッド参照を有効にする。
-
-### --b-deltaqp &lt;int&gt;
-BフレームのQPオフセット値の指定。
-
-### --bref-deltaqp &lt;int&gt;
-参照BフレームのQPオフセット値の指定。
-
-### --ref &lt;int&gt;
-参照距離を設定する。VCEEncではあまり増やしても品質は向上しない。
-
-### --ltr &lt;int&gt; [H.264/HEVC]
-LTRモードの指定。
-
-### --vbaq [H.264/HEVC]
-適応的量子化を有効にする。(デフォルト:オフ)
-
-### --skip-frame [H.264/HEVC]
-スキップフレームを有効にする。(デフォルト:オフ)
-
-### --enforce-hrd
-HRD互換の出力を行う。
-
-### --filler
-fillerデータを出力し、(名目上の)ビットレートを調整する。
-
-### --motion-est &lt;string&gt; [H.264/HEVC]
-動きベクトル精度 / デフォルト: auto
-- auto     ... 自動
-- q-pel    ... 1/4画素精度 (高精度)
-- half-pel ... 1/2画素精度
-- full-pel ... 1 画素精度 (低精度)
-
-### --tiles &lt;int&gt; [AV1]
-1フレームあたりのタイル数の指定。
-
-### --cdef-mode &lt;string&gt; [AV1]
-Cdefモード。
-- **パラメータ**
-  - on
-  - off 
-
-### --screen-content-tools  [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]  
-Screen content toolsを有効にする。
-
-- **パラメータ**
-  - palette-mode=&lt;bool&gt;  
-    palette modeを有効にする。
-
-  - force-integer-mv=&lt;bool&gt;  
-    force integer MVを有効にする。
-
-- 使用例
-  ```
-  --screen-content-tools palette-mode=on,force-integer-mv=on
-  ```
-
-### --cdf-update [AV1]
-Enable CDF update.
-
-### --cdf-frame-end-update [AV1]
-Enable CDF frame end update.
-
-### --temporal-layers &lt;int&gt; [AV1]
-Temporal layersの数。
-
-### --aq-mode &lt;int&gt; [AV1]
-AQモード。
-- **パラメータ**
-  - none
-  - caq 
-
-### --pe
-pre-encodeによるレート制御を使用する。
-
-### --pa  [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]  
-Pre-Analysisを有効にして、品質向上を図る。VBR時のみ使用可能。 (デフォルト:オフ)  
-
-- **パラメータ**
-  - sc=&lt;string&gt;
-    シーンチェンジ検出の感度。
-    - none
-    - low
-    - medium (default)
-    - high
-
-  - ss=&lt;string&gt;  
-    静止したシーンの検出感度。
-    - none
-    - low
-    - medium
-    - high (default)
-
-  - activity-type=&lt;string&gt;  
-    ブロックの動きの検出モード。
-    - y (default)
-    - yuv
-
-  - caq-strength=&lt;string&gt;  
-    Content Adaptive Quantization (CAQ) の強さ。
-    - low
-    - medium (default)
-    - high
-
-  - initqpsc=&lt;int&gt;  
-    シーンチェンジ検出検出後に適用する初期QP。 (デフォルト: -1 ( = 自動))
-
-  - fskip-maxqp=&lt;int&gt;  
-    静止したシーンでスキップフレームを挿入するQPの閾値。 (デフォルト: 35)
-
-  - lookahead=&lt;int&gt;  
-    先行探索に使用するバッファサイズを指定する。
-
-  - ltr=&lt;bool&gt;  
-    LTRフレームの自動管理を有効/無効にする。
-
-  - paq=&lt;string&gt;  
-    視覚適応的QP調整モードを指定する。
-    - none
-    - caq
-
-  - taq=&lt;int&gt;  
-    時間適応的QP調整モードを指定する。
-    - 0
-    - 1
-    - 2
-
-  - motion-quality=&lt;string&gt;  
-    動き品質の向上モードを指定する。
-    - none
-    - auto
-    
-- 使用例
-  ```
-  --pa sc=high,ss=high,activity-type=yuv,paq=caq,taq=on,lookahead=32
-  ```
-
-### --slices &lt;int&gt; [H.264/HEVC]
-スライス数。指定なし、あるいは0で自動。
 
 ### --level &lt;string&gt;
 エンコードするコーデックのLevelを指定する。指定しない場合は自動的に決定される。
 ```
 h264:  auto, 1, 1b, 1.1, 1.2, 1.3, 2, 2.1, 2.2, 3, 3.1, 3.2, 4, 4.1, 4.2, 5, 5.1, 5.2
 hevc:  auto, 1, 2, 2.1, 3, 3.1, 4, 4.1, 5, 5.1, 5.2, 6, 6.1, 6.2
-av1 :  auto, 2, 2.1, 2.2, 2.3, 3, 3.1, 3.2, 3.3, 4, 4.1, 4.2, 4.3, 5, 5.1, 5.2, 5.3, 6, 6.1, 6.2, 6.3, 7, 7.1, 7.2, 7.3
 ```
 
 ### --profile &lt;string&gt;
 エンコードするコーデックのプロファイルを指定する。指定しない場合は自動的に決定される。
 ```
-h264:  auto, baseline, main, high, high444
-hevc:  auto, main, main10, main444
-av1 :  auto, main
+h264:  auto, baseline, main, high
+hevc:  auto, main
 ```
 
 ### --tier &lt;string&gt;
@@ -650,7 +470,7 @@ DAR比 (画面アスペクト比) の指定。
 出力データのchroma location flagを 0 ～ 5 の範囲で指定する。  
 デフォルト = 0 (unspecified)
 
-### --max-cll &lt;int&gt;,&lt;int&gt; or "copy" [HEVC, AV1]
+### --max-cll &lt;int&gt;,&lt;int&gt; or "copy" [HEVC]
 MaxCLL and MaxFall を nits で指定する。"copy"とすると入力ファイルの値を出力ファイルにそのまま設定します。([avhw](#--avhw)/[avsw](#--avsw)読み込みのみ)  
 
 [--repeat-headers](#--repeat-headers)が自動的に有効になる点に注意してください。  
@@ -659,7 +479,7 @@ MaxCLL and MaxFall を nits で指定する。"copy"とすると入力ファイ�
 例2: --max-cll copy  # 入力ファイルから値をコピー
 ```
 
-### --master-display &lt;string&gt; or "copy" [HEVC, AV1]
+### --master-display &lt;string&gt; or "copy" [HEVC]
 Mastering display data の設定。"copy"とすると入力ファイルの値を出力ファイルにそのまま設定します。([avhw](#--avhw)/[avsw](#--avsw)読み込みのみ)  
 
 [--repeat-headers](#--repeat-headers)が自動的に有効になる点に注意してください。  
@@ -676,10 +496,10 @@ Alternative transfer characteristics SEI の設定。下記文字列または整
   bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67
 ```  
 
-### --dhdr10-info &lt;string&gt; [HEVC, AV1]
+### --dhdr10-info &lt;string&gt; [HEVC]
 指定したjsonファイルから、HDR10+のメタデータを読み込んで反映する。実行には追加で[hdr10plus_gen.exe](https://github.com/rigaya/hdr10plus_gen)が必要。
 
-### --dhdr10-info copy [HEVC, AV1]
+### --dhdr10-info copy [HEVC]
 HDR10+のメタデータを入力ファイルからそのままコピーします。
 avhw読み込みでは、フレームの並び替えにタイムスタンプを使用するため、タイムスタンプの取得できないraw ESのような入力ファイルでは使用できません。
 こうした場合には、avsw読み込みを使用してください。 
@@ -702,9 +522,6 @@ MediaInfoによるDolby Vision情報の検出を可能とするには、[tsMuxeR
 
 ### --psnr
 エンコード結果のPSNRを計算。
-
-### --smart-access-video  
-Smart Access Videoを使用する。
 
 ## 入出力 / 音声 / 字幕などのオプション
 

@@ -1,3 +1,4 @@
+# まだ建設中です
 
 # rkmppenc  
 by rigaya
@@ -45,9 +46,7 @@ Debian/Ubuntu系
   - H.264
   - HEVC
   - MPEG2
-  - VP9
-  - VC-1
-- HWリサイズ
+- OpenCLフィルタ
 - ソースファイルからの音声抽出や音声エンコード
 - mp4,mkv,tsなどの多彩なコンテナに映像・音声をmuxしながら出力
 

@@ -1,3 +1,5 @@
+# まだ建設中です
+
 
 # rkmppenc  
 by rigaya
@@ -34,16 +36,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 ## Main usable functions
 
 ### rkmppenc
+- Encoding using mpp
+   - H.264/AVC
+   - HEVC
 - Supports hw decoding
   - H.264 / AVC
   - HEVC
   - MPEG2
-- Encoding using mpp
-   - H.264/AVC
 - Each encode mode of mpp
    - CQP       (fixed quantization)
    - VBR       (Variable bitrate)
    - CBR       (Constant bitrate)
+- OpenCL filters
 - Supports various formats such as avs, vpy, y4m, and raw
 - Supports demux/muxing using libavformat
 - Supports decode using libavcodec
