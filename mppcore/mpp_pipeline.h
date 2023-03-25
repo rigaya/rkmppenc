@@ -720,12 +720,13 @@ public:
 
 class PipelineTaskMPPDecode : public PipelineTask {
 protected:
-    struct FrameFlags {
+    struct FrameData {
         int64_t timestamp;
+        int64_t duration;
         RGY_FRAME_FLAGS flags;
 
-        FrameFlags() : timestamp(AV_NOPTS_VALUE), flags(RGY_FRAME_FLAG_NONE) {};
-        FrameFlags(int64_t pts, RGY_FRAME_FLAGS f) : timestamp(pts), flags(f) {};
+        FrameData() : timestamp(AV_NOPTS_VALUE), duration(0), flags(RGY_FRAME_FLAG_NONE) {};
+        FrameData(int64_t pts, int64_t duration_, RGY_FRAME_FLAGS f) : timestamp(pts), duration(duration_), flags(f) {};
     };
     MPPContext *m_dec;
     RGYInput *m_input;
@@ -737,7 +738,7 @@ protected:
     std::deque<int64_t> m_queueTimestamp; // timestampへのキュー
     std::vector<int64_t> m_queueTimestampWrap; // wrapした場合のtimestamp
     RGYQueueMPMP<RGYFrameDataMetadata*> m_queueHDR10plusMetadata;
-    RGYQueueMPMP<FrameFlags> m_dataFlag;
+    RGYQueueMPMP<FrameData> m_dataFlag;
     std::unique_ptr<RGYConvertCSP> m_convert;
     bool m_decInBitStreamEOS; // デコーダへの入力Bitstream側でEOSを検知
     bool m_decOutFrameEOS;    // デコーダからの出力Frame側でEOSを検知
@@ -935,8 +936,8 @@ public:
                     }
                 }
             }
-            const auto flags = FrameFlags(m_decInputBitstream.pts(), (RGY_FRAME_FLAGS)m_decInputBitstream.dataflag());
-            m_dataFlag.push(flags);
+            const auto data = FrameData(m_decInputBitstream.pts(), m_decInputBitstream.duration(), (RGY_FRAME_FLAGS)m_decInputBitstream.dataflag());
+            m_dataFlag.push(data);
         }
         MppPacket packet;
         if (m_decInputBitstream.size() > 0) {
@@ -1030,8 +1031,11 @@ protected:
         surfDecOut->setTimestamp(adjustFrameTimestamp(mppinfo.timestamp));
         surfDecOut->setDuration(mppinfo.duration);
         auto flags = mppinfo.flags;
-        if (getDataFlag(surfDecOut->timestamp()) & RGY_FRAME_FLAG_RFF) {
-            flags |= RGY_FRAME_FLAG_RFF;
+        if (auto frameData = getDataFlag(surfDecOut->timestamp()); frameData.timestamp != AV_NOPTS_VALUE) {
+            if (frameData.flags & RGY_FRAME_FLAG_RFF) {
+                flags |= RGY_FRAME_FLAG_RFF;
+            }
+            surfDecOut->setDuration(frameData.duration);
         }
         surfDecOut->setFlags(flags);
 
@@ -1043,11 +1047,11 @@ protected:
             surfDecOut->dataList().push_back(data);
         }
         m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(workFrame));
-        PrintMes(RGY_LOG_TRACE, _T("setOutputSurf: %d: %lld.\n"), m_decOutFrames, mppinfo.timestamp);
+        PrintMes(RGY_LOG_TRACE, _T("setOutputSurf: %d: %lld: %lld.\n"), m_decOutFrames, surfDecOut->timestamp(), surfDecOut->duration());
         return RGY_ERR_NONE;
     }
-    RGY_FRAME_FLAGS getDataFlag(const int64_t timestamp) {
-        FrameFlags pts_flag;
+    FrameData getDataFlag(const int64_t timestamp) {
+        FrameData pts_flag;
         while (m_dataFlag.front_copy_no_lock(&pts_flag)) {
             if (pts_flag.timestamp < timestamp || pts_flag.timestamp == AV_NOPTS_VALUE) {
                 m_dataFlag.pop();
@@ -1059,11 +1063,11 @@ protected:
         for (uint32_t i = 0; i < queueSize; i++) {
             if (m_dataFlag.copy(&pts_flag, i, &queueSize)) {
                 if (pts_flag.timestamp == timestamp) {
-                    return pts_flag.flags;
+                    return pts_flag;
                 }
             }
         }
-        return RGY_FRAME_FLAG_NONE;
+        return FrameData();
     }
     std::shared_ptr<RGYFrameData> getMetadata(const RGYFrameDataType datatype, const int64_t timestamp) {
         std::shared_ptr<RGYFrameData> frameData;
