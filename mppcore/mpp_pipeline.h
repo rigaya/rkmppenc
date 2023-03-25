@@ -1015,10 +1015,13 @@ protected:
         const auto surfDecOutInfo = surfDecOut->getInfo();
 
         if (m_convert->getFunc() == nullptr) {
-            if (m_convert->getFunc(mppinfo.csp, mppinfo.csp, false, RGY_SIMD::SIMD_ALL) == nullptr) {
+            if (auto func = m_convert->getFunc(mppinfo.csp, surfDecOutInfo.csp, false, RGY_SIMD::SIMD_ALL); func == nullptr) {
                 PrintMes(RGY_LOG_ERROR, _T("Failed to find conversion for %s -> %s.\n"),
-                    RGY_CSP_NAMES[mppinfo.csp], RGY_CSP_NAMES[mppinfo.csp]);
+                    RGY_CSP_NAMES[mppinfo.csp], RGY_CSP_NAMES[surfDecOutInfo.csp]);
                 return RGY_ERR_UNSUPPORTED;
+            } else {
+                PrintMes(RGY_LOG_DEBUG, _T("Selected conversion for %s -> %s [%s].\n"),
+                    RGY_CSP_NAMES[func->csp_from], RGY_CSP_NAMES[func->csp_to], get_simd_str(func->simd));
             }
         }
         auto crop = initCrop();
@@ -1753,10 +1756,13 @@ public:
             auto mppinfo = infoMPP(mppframe);
             const auto surfEncInInfo = surfEncodeIn->getInfo();
             if (m_convert->getFunc() == nullptr) {
-                if (m_convert->getFunc(surfEncInInfo.csp, mppinfo.csp, false, RGY_SIMD::SIMD_ALL) == nullptr) {
+                if (auto func = m_convert->getFunc(surfEncInInfo.csp, mppinfo.csp, false, RGY_SIMD::SIMD_ALL); func == nullptr) {
                     PrintMes(RGY_LOG_ERROR, _T("Failed to find conversion for %s -> %s.\n"),
-                        RGY_CSP_NAMES[mppinfo.csp], RGY_CSP_NAMES[mppinfo.csp]);
+                        RGY_CSP_NAMES[surfEncInInfo.csp], RGY_CSP_NAMES[mppinfo.csp]);
                     return RGY_ERR_UNSUPPORTED;
+                } else {
+                    PrintMes(RGY_LOG_DEBUG, _T("Selected conversion for %s -> %s [%s].\n"),
+                        RGY_CSP_NAMES[func->csp_from], RGY_CSP_NAMES[func->csp_to], get_simd_str(func->simd));
                 }
             }
             auto crop = initCrop();
