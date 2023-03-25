@@ -1971,12 +1971,16 @@ protected:
     std::vector<std::unique_ptr<RGYFilter>>& m_vpFilters;
     std::deque<std::unique_ptr<PipelineTaskOutput>> m_prevInputFrame; //前回投入されたフレーム、完了通知を待ってから解放するため、参照を保持する
     RGYFilterSsim *m_videoMetric;
+    std::unique_ptr<RGYCLFrame> m_clFrameInput;
+    std::unique_ptr<RGYCLFrame> m_clFrameOutput;
 public:
     PipelineTaskOpenCL(std::vector<std::unique_ptr<RGYFilter>>& vppfilters, RGYFilterSsim *videoMetric, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
-        PipelineTask(PipelineTaskType::OPENCL, outMaxQueueSize, log), m_cl(cl), m_vpFilters(vppfilters), m_prevInputFrame(), m_videoMetric(videoMetric) {
+        PipelineTask(PipelineTaskType::OPENCL, outMaxQueueSize, log), m_cl(cl), m_vpFilters(vppfilters), m_prevInputFrame(), m_videoMetric(videoMetric), m_clFrameInput(), m_clFrameOutput() {
 
     };
     virtual ~PipelineTaskOpenCL() {
+        m_clFrameInput.reset();
+        m_clFrameOutput.reset();
         m_prevInputFrame.clear();
         m_cl.reset();
     };
@@ -1988,7 +1992,6 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
-#if 0
         if (m_prevInputFrame.size() > 0) {
             //前回投入したフレームの処理が完了していることを確認したうえで参照を破棄することでロックを解放する
             auto prevframe = std::move(m_prevInputFrame.front());
@@ -2006,26 +2009,19 @@ public:
                 PrintMes(RGY_LOG_ERROR, _T("Invalid task surface.\n"));
                 return RGY_ERR_NULL_PTR;
             }
-            if (auto surfVppInAMF = taskSurf->surf().mppsurf(); surfVppInAMF != nullptr) {
-                if (taskSurf->surf().frame()->getInfo().mem_type != RGY_MEM_TYPE_CPU
-                    && surfVppInAMF->GetMemoryType() != mpp::AMF_MEMORY_OPENCL) {
-#if 0
-                    auto ar = inAmf->Interop(mpp::AMF_MEMORY_OPENCL);
-#else
-#if 0
-                    //dummyのCPUへのメモリコピーを行う
-                    //こうしないとデコーダからの出力をOpenCLに渡したときに、フレームが壊れる(フレーム順序が入れ替わってガクガクする)
-                    mpp::AMFDataPtr data;
-                    surfVppInAMF->Duplicate(mpp::AMF_MEMORY_HOST, &data);
-#endif
-                    auto ar = surfVppInAMF->Convert(mpp::AMF_MEMORY_OPENCL);
-#endif
-                    if (ar != AMF_OK) {
-                        PrintMes(RGY_LOG_ERROR, _T("Failed to convert plane: %s.\n"), get_err_mes(err_to_rgy(ar)));
-                        return err_to_rgy(ar);
+            if (auto surfVppInSys = taskSurf->surf().syssurf(); surfVppInSys != nullptr) {
+                if (!m_clFrameInput) {
+                    m_clFrameInput = m_cl->createFrameBuffer(surfVppInSys->frame);
+                    if (!m_clFrameInput) {
+                        PrintMes(RGY_LOG_ERROR, _T("Failed to allocate OpenCL input buffer.\n"));
+                        return RGY_ERR_NULL_PTR;
                     }
                 }
-                filterframes.push_back(std::make_pair(taskSurf->surf().frame()->getInfo(), 0u));
+                if (auto err = m_cl->copyFrame(&m_clFrameInput->frame, &surfVppInSys->frame); err != RGY_ERR_NONE) {
+                    PrintMes(RGY_LOG_ERROR, _T("Failed to copy frame to OpenCL input buffer.\n"));
+                    return RGY_ERR_NULL_PTR;
+                }
+                filterframes.push_back(std::make_pair(m_clFrameInput->frameInfo(), 0u));
             } else if (auto surfVppInCL = taskSurf->surf().clframe(); surfVppInCL != nullptr) {
                 filterframes.push_back(std::make_pair(taskSurf->surf().frame()->getInfo(), 0u));
             } else {
@@ -2079,53 +2075,26 @@ public:
             if (drain) {
                 return RGY_ERR_MORE_DATA; //最後までdrain = trueなら、drain完了
             }
-            PipelineTaskSurface surfVppOut;
-            if (workSurfaceType() == PipelineTaskSurfaceType::CL) {
-                surfVppOut = getWorkSurf();
-                if (surfVppOut == nullptr) {
-                    PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
-                    return RGY_ERR_NOT_ENOUGH_BUFFER;
-                }
-            } else {
-                //エンコードバッファにコピー
-                auto &lastFilter = m_vpFilters[m_vpFilters.size() - 1];
-                const auto lastFilterOut = lastFilter->GetFilterParam()->frameOut;
-                mpp::AMFSurfacePtr pSurface;
-                if (m_dx11interlop) {
-                    auto ar = m_context->AllocSurface(mpp::AMF_MEMORY_DX11, csp_rgy_to_enc(lastFilterOut.csp),
-                        lastFilterOut.width, lastFilterOut.height, &pSurface);
-                    if (ar != AMF_OK) {
-                        PrintMes(RGY_LOG_ERROR, _T("Failed to allocate surface: %s.\n"), get_err_mes(err_to_rgy(ar)));
-                        return err_to_rgy(ar);
-                    }
-                    ar = pSurface->Interop(mpp::AMF_MEMORY_OPENCL);
-                    if (ar != AMF_OK) {
-                        PrintMes(RGY_LOG_ERROR, _T("Failed to get interop of surface: %s.\n"), get_err_mes(err_to_rgy(ar)));
-                        return err_to_rgy(ar);
-                    }
-                } else {
-                    auto ar = m_context->AllocSurface(mpp::AMF_MEMORY_OPENCL, csp_rgy_to_enc(lastFilterOut.csp),
-                        lastFilterOut.width, lastFilterOut.height, &pSurface);
-                    if (ar != AMF_OK) {
-                        PrintMes(RGY_LOG_ERROR, _T("Failed to allocate surface: %s.\n"), get_err_mes(err_to_rgy(ar)));
-                        return err_to_rgy(ar);
-                    }
-                }
-                auto surfVppOutAMF = std::make_unique<RGYFrame>(pSurface);
-                surfVppOut = m_workSurfs.addSurface(surfVppOutAMF);
-            }
-            //エンコードバッファにコピー
+            
+            //最後のフィルタ
             auto &lastFilter = m_vpFilters[m_vpFilters.size() - 1];
             //最後のフィルタはRGYFilterCspCropでなければならない
             if (typeid(*lastFilter.get()) != typeid(RGYFilterCspCrop)) {
                 PrintMes(RGY_LOG_ERROR, _T("Last filter setting invalid.\n"));
                 return RGY_ERR_INVALID_PARAM;
             }
+            if (!m_clFrameOutput) {
+                m_clFrameOutput = m_cl->createFrameBuffer(lastFilter->GetFilterParam()->frameOut);
+                if (!m_clFrameOutput) {
+                    PrintMes(RGY_LOG_ERROR, _T("Failed to allocate OpenCL input buffer.\n"));
+                    return RGY_ERR_NULL_PTR;
+                }
+            }
             //エンコードバッファのポインタを渡す
             int nOutFrames = 0;
-            auto surfVppOutInfo = surfVppOut.frame()->getInfo();
+            auto clFrameOutputInfo = m_clFrameOutput->frameInfo();
             RGYFrameInfo *outInfo[1];
-            outInfo[0] = &surfVppOutInfo;
+            outInfo[0] = &clFrameOutputInfo;
             RGYOpenCLEvent clevent; // 最終フィルタの処理完了を伝えるevent
             auto sts_filter = lastFilter->filter(&filterframes.front().first, (RGYFrameInfo **)&outInfo, &nOutFrames, m_cl->queue(), &clevent);
             if (sts_filter != RGY_ERR_NONE) {
@@ -2143,12 +2112,23 @@ public:
             }
             filterframes.pop_front();
 
-            surfVppOut.frame()->setDuration(surfVppOutInfo.duration);
-            surfVppOut.frame()->setTimestamp(surfVppOutInfo.timestamp);
-            surfVppOut.frame()->setInputFrameId(surfVppOutInfo.inputFrameId);
-            surfVppOut.frame()->setPicstruct(surfVppOutInfo.picstruct);
-            surfVppOut.frame()->setFlags(surfVppOutInfo.flags);
-            surfVppOut.frame()->setDataList(surfVppOutInfo.dataList);
+            auto surfVppOut = getWorkSurf();
+            if (surfVppOut == nullptr) {
+                PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
+                return RGY_ERR_NOT_ENOUGH_BUFFER;
+            }
+            auto surfVppOutInfo = surfVppOut.frame()->getInfo();
+            if (auto err = m_cl->copyFrame(&surfVppOutInfo, &clFrameOutputInfo, nullptr, m_cl->queue(), &clevent); err != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Failed to copy frame to OpenCL input buffer.\n"));
+                return RGY_ERR_NULL_PTR;
+            }
+
+            surfVppOut.frame()->setDuration(clFrameOutputInfo.duration);
+            surfVppOut.frame()->setTimestamp(clFrameOutputInfo.timestamp);
+            surfVppOut.frame()->setInputFrameId(clFrameOutputInfo.inputFrameId);
+            surfVppOut.frame()->setPicstruct(clFrameOutputInfo.picstruct);
+            surfVppOut.frame()->setFlags(clFrameOutputInfo.flags);
+            surfVppOut.frame()->setDataList(clFrameOutputInfo.dataList);
 
             outputSurfs.push_back(std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame, clevent));
 
@@ -2190,7 +2170,6 @@ public:
         }
         clFrameOutInterop->release(&clevent);
         m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_mfxSession, surfVppOut, frame, clevent));
-#endif
 #endif
         return RGY_ERR_NONE;
     }

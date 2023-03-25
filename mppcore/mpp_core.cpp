@@ -951,37 +951,61 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
 #endif
         } else if (ftype1 == VppFilterType::FILTER_OPENCL) {
             if (ftype0 != VppFilterType::FILTER_OPENCL || filterPipeline[i] == VppType::CL_CROP) { // 前のfilterがOpenCLでない場合、変換が必要
-                auto filterCrop = std::make_unique<RGYFilterCspCrop>(m_cl);
-                shared_ptr<RGYFilterParamCrop> param(new RGYFilterParamCrop());
-                param->frameIn = inputFrame;
-                param->frameOut = inputFrame;
-                param->frameOut.csp = GetEncoderCSP(inputParam);
-                switch (param->frameOut.csp) { // OpenCLフィルタの内部形式への変換
-                case RGY_CSP_NV12: param->frameOut.csp = RGY_CSP_YV12; break;
-                case RGY_CSP_P010: param->frameOut.csp = RGY_CSP_YV12_16; break;
-                case RGY_CSP_AYUV: param->frameOut.csp = RGY_CSP_YUV444; break;
-                case RGY_CSP_Y410: param->frameOut.csp = RGY_CSP_YUV444_16; break;
-                case RGY_CSP_Y416: param->frameOut.csp = RGY_CSP_YUV444_16; break;
+                if (false) { // CPU -> GPU
+                    auto filterCrop = std::make_unique<RGYFilterCspCrop>(m_cl);
+                    shared_ptr<RGYFilterParamCrop> param(new RGYFilterParamCrop());
+                    param->frameIn = inputFrame;
+                    param->frameOut = inputFrame;
+                    param->frameOut.bitdepth = RGY_CSP_BIT_DEPTH[param->frameOut.csp];
+                    param->baseFps = m_encFps;
+                    param->frameIn.mem_type = RGY_MEM_TYPE_CPU;
+                    param->frameOut.mem_type = RGY_MEM_TYPE_GPU;
+                    param->bOutOverwrite = false;
+                    auto sts = filterCrop->init(param, m_pLog);
+                    if (sts != RGY_ERR_NONE) {
+                        return sts;
+                    }
+                    //入力フレーム情報を更新
+                    inputFrame = param->frameOut;
+                    m_encFps = param->baseFps;
+                    vppOpenCLFilters.push_back(std::move(filterCrop));
+                }
+                // OpenCLフィルタの内部形式への変換が必要か?
+                auto openclCsp = inputFrame.csp;
+                switch (openclCsp) { // OpenCLフィルタの内部形式への変換
+                case RGY_CSP_NV12: openclCsp = RGY_CSP_YV12; break;
+                case RGY_CSP_P010: openclCsp = RGY_CSP_YV12_16; break;
+                case RGY_CSP_AYUV: openclCsp = RGY_CSP_YUV444; break;
+                case RGY_CSP_Y410: openclCsp = RGY_CSP_YUV444_16; break;
+                case RGY_CSP_Y416: openclCsp = RGY_CSP_YUV444_16; break;
                 default:
                     break;
                 }
-                param->frameOut.bitdepth = RGY_CSP_BIT_DEPTH[param->frameOut.csp];
-                if (inputCrop) {
-                    param->crop = *inputCrop;
-                    inputCrop = nullptr;
+                // cropおよび色空間変換はGPUで
+                if (inputCrop || openclCsp != inputFrame.csp) {
+                    auto filterCrop = std::make_unique<RGYFilterCspCrop>(m_cl);
+                    shared_ptr<RGYFilterParamCrop> param(new RGYFilterParamCrop());
+                    param->frameIn = inputFrame;
+                    param->frameOut = inputFrame;
+                    param->frameOut.csp = openclCsp;
+                    param->frameOut.bitdepth = RGY_CSP_BIT_DEPTH[param->frameOut.csp];
+                    if (inputCrop) {
+                        param->crop = *inputCrop;
+                        inputCrop = nullptr;
+                    }
+                    param->baseFps = m_encFps;
+                    param->frameIn.mem_type = RGY_MEM_TYPE_GPU;
+                    param->frameOut.mem_type = RGY_MEM_TYPE_GPU;
+                    param->bOutOverwrite = false;
+                    auto sts = filterCrop->init(param, m_pLog);
+                    if (sts != RGY_ERR_NONE) {
+                        return sts;
+                    }
+                    //入力フレーム情報を更新
+                    inputFrame = param->frameOut;
+                    m_encFps = param->baseFps;
+                    vppOpenCLFilters.push_back(std::move(filterCrop));
                 }
-                param->baseFps = m_encFps;
-                param->frameIn.mem_type = VCE_AMF_GPU_IMAGE;
-                param->frameOut.mem_type = RGY_MEM_TYPE_GPU;
-                param->bOutOverwrite = false;
-                auto sts = filterCrop->init(param, m_pLog);
-                if (sts != RGY_ERR_NONE) {
-                    return sts;
-                }
-                //入力フレーム情報を更新
-                inputFrame = param->frameOut;
-                m_encFps = param->baseFps;
-                vppOpenCLFilters.push_back(std::move(filterCrop));
             }
             if (filterPipeline[i] != VppType::CL_CROP) {
                 auto err = AddFilterOpenCL(vppOpenCLFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
@@ -990,28 +1014,52 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
                 }
             }
             if (ftype2 != VppFilterType::FILTER_OPENCL) { // 次のfilterがOpenCLでない場合、変換が必要
-                std::unique_ptr<RGYFilter> filterCrop(new RGYFilterCspCrop(m_cl));
-                std::shared_ptr<RGYFilterParamCrop> param(new RGYFilterParamCrop());
-                param->frameIn = inputFrame;
-                param->frameOut = inputFrame;
-                param->frameOut.csp = GetEncoderCSP(inputParam);
-                param->frameOut.bitdepth = GetEncoderBitdepth(inputParam);
-                param->frameIn.mem_type = RGY_MEM_TYPE_GPU;
-                param->frameOut.mem_type = VCE_AMF_GPU_IMAGE;
-                param->baseFps = m_encFps;
-                param->bOutOverwrite = false;
-                auto sts = filterCrop->init(param, m_pLog);
-                if (sts != RGY_ERR_NONE) {
-                    return sts;
+                if (GetEncoderCSP(inputParam) != inputFrame.csp) {
+                    std::unique_ptr<RGYFilter> filterCrop(new RGYFilterCspCrop(m_cl));
+                    std::shared_ptr<RGYFilterParamCrop> param(new RGYFilterParamCrop());
+                    param->frameIn = inputFrame;
+                    param->frameOut = inputFrame;
+                    param->frameOut.csp = GetEncoderCSP(inputParam);
+                    param->frameOut.bitdepth = GetEncoderBitdepth(inputParam);
+                    param->frameIn.mem_type = RGY_MEM_TYPE_GPU;
+                    param->frameOut.mem_type = RGY_MEM_TYPE_GPU;
+                    param->baseFps = m_encFps;
+                    param->bOutOverwrite = false;
+                    auto sts = filterCrop->init(param, m_pLog);
+                    if (sts != RGY_ERR_NONE) {
+                        return sts;
+                    }
+                    //入力フレーム情報を更新
+                    inputFrame = param->frameOut;
+                    m_encFps = param->baseFps;
+                    //登録
+                    vppOpenCLFilters.push_back(std::move(filterCrop));
+                    // ブロックに追加する
+                    m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
+                    vppOpenCLFilters.clear();
                 }
-                //入力フレーム情報を更新
-                inputFrame = param->frameOut;
-                m_encFps = param->baseFps;
-                //登録
-                vppOpenCLFilters.push_back(std::move(filterCrop));
-                // ブロックに追加する
-                m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
-                vppOpenCLFilters.clear();
+                if (false) { // GPU->CPU
+                    std::unique_ptr<RGYFilter> filterCrop(new RGYFilterCspCrop(m_cl));
+                    std::shared_ptr<RGYFilterParamCrop> param(new RGYFilterParamCrop());
+                    param->frameIn = inputFrame;
+                    param->frameOut = inputFrame;
+                    param->frameIn.mem_type = RGY_MEM_TYPE_GPU;
+                    param->frameOut.mem_type = RGY_MEM_TYPE_CPU;
+                    param->baseFps = m_encFps;
+                    param->bOutOverwrite = false;
+                    auto sts = filterCrop->init(param, m_pLog);
+                    if (sts != RGY_ERR_NONE) {
+                        return sts;
+                    }
+                    //入力フレーム情報を更新
+                    inputFrame = param->frameOut;
+                    m_encFps = param->baseFps;
+                    //登録
+                    vppOpenCLFilters.push_back(std::move(filterCrop));
+                    // ブロックに追加する
+                    m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
+                    vppOpenCLFilters.clear();
+                }
             }
         } else {
             PrintMes(RGY_LOG_ERROR, _T("Unsupported vpp filter type.\n"));
@@ -1075,8 +1123,12 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.knn.enable)           filterPipeline.push_back(VppType::CL_DENOISE_KNN);
     if (inputParam->vpp.pmd.enable)           filterPipeline.push_back(VppType::CL_DENOISE_PMD);
     if (inputParam->vpp.subburn.size()>0)     filterPipeline.push_back(VppType::CL_SUBBURN);
+#if ENABLE_VPPRGA
     if (     resizeRequired == RGY_VPP_RESIZE_TYPE_OPENCL) filterPipeline.push_back(VppType::CL_RESIZE);
     else if (resizeRequired != RGY_VPP_RESIZE_TYPE_NONE)   filterPipeline.push_back(VppType::RGA_RESIZE);
+#else
+    if (resizeRequired != RGY_VPP_RESIZE_TYPE_NONE) filterPipeline.push_back(VppType::CL_RESIZE);
+#endif
     if (inputParam->vpp.unsharp.enable)    filterPipeline.push_back(VppType::CL_UNSHARP);
     if (inputParam->vpp.edgelevel.enable)  filterPipeline.push_back(VppType::CL_EDGELEVEL);
     if (inputParam->vpp.warpsharp.enable)  filterPipeline.push_back(VppType::CL_WARPSHARP);
@@ -2067,7 +2119,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
                 PrintMes(RGY_LOG_ERROR, _T("m_vpFilters.size() != 1.\n"));
                 return RGY_ERR_UNDEFINED_BEHAVIOR;
             }
-            m_pipelineTasks.push_back(std::make_unique<PipelineTaskOpenCL>(m_vpFilters.front().vppcl, m_videoQualityMetric.get(), m_cl, 1, m_pLog));
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskOpenCL>(m_vpFilters.front().vppcl, m_videoQualityMetric.get(), m_cl, 3, m_pLog));
         } else if (m_pipelineTasks[prevtask]->taskType() == PipelineTaskType::OPENCL) {
             auto taskOpenCL = dynamic_cast<PipelineTaskOpenCL*>(m_pipelineTasks[prevtask].get());
             if (taskOpenCL == nullptr) {
