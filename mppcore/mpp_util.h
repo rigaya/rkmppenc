@@ -434,7 +434,7 @@ static RGYFrameInfo infoMPP(MppFrame mppframe) {
     
     info.timestamp = mpp_frame_get_pts(mppframe);
     info.duration = duration;
-    info.picstruct = picstruct_enc_to_rgy(mpp_frame_get_mode(mppframe));
+    info.picstruct = picstruct_enc_to_rgy(mpp_frame_get_mode(mppframe) & MPP_FRAME_FLAG_FIELD_ORDER_MASK);
     info.flags = RGY_FRAME_FLAG_NONE;
     info.mem_type = RGY_MEM_TYPE_MPP;
     info.inputFrameId = -1;
