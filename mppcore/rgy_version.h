@@ -72,7 +72,7 @@ const char *get_encoder_version();
 #define ENABLE_KEYFRAME_INSERT 0
 #define ENABLE_AUTO_PICSTRUCT 0
 
-#define GPU_VENDOR "AMD"
+#define GPU_VENDOR ""
 #define DECODER_NAME  "vce"
 #define HW_TIMEBASE 10000000L //AMF_SECOND
 

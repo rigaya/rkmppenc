@@ -1915,7 +1915,7 @@ RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const bool checkVppPerforma
         PrintMes(RGY_LOG_WARN, _T("Skip OpenCL init as OpenCL is not supported on this platform.\n"));
         return RGY_ERR_NONE;
     }
-    auto platforms = cl.getPlatforms("Intel");
+    auto platforms = cl.getPlatforms();
     if (platforms.size() == 0) {
         PrintMes(RGY_LOG_ERROR, _T("Failed to find OpenCL platforms.\n"));
         return RGY_ERR_DEVICE_LOST;
@@ -2228,7 +2228,7 @@ RGY_ERR MPPCore::init(MPPParam *prm) {
         return ret;
     }
 
-    if (RGY_ERR_NONE != (ret = initDevice(!prm->ctrl.enableOpenCL, prm->vpp.checkPerformance))) {
+    if (RGY_ERR_NONE != (ret = initDevice(prm->ctrl.enableOpenCL, prm->vpp.checkPerformance))) {
         return ret;
     }
 
