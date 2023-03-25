@@ -43,17 +43,17 @@ static const int MPP_DEFAULT_MAX_BITRATE = 25000;
 static const int MPP_DEFAULT_GOP_LEN = 300;
 
 const CX_DESC list_codec[] = {
-    { _T("h264"), MPP_VIDEO_CodingAVC },
-    { _T("hevc"), MPP_VIDEO_CodingHEVC },
-    { _T("av1"),  MPP_VIDEO_CodingAV1  },
+    { _T("h264"), RGY_CODEC_H264 },
+    { _T("hevc"), RGY_CODEC_HEVC },
+    //{ _T("av1"),  MPP_VIDEO_CodingAV1  },
     { NULL, 0 }
 };
 const CX_DESC list_codec_all[] = {
-    { _T("h264"), MPP_VIDEO_CodingAVC },
-    { _T("avc"),  MPP_VIDEO_CodingAVC },
-    { _T("h265"), MPP_VIDEO_CodingHEVC },
-    { _T("hevc"), MPP_VIDEO_CodingHEVC },
-    { _T("av1"),  MPP_VIDEO_CodingAV1  },
+    { _T("h264"), RGY_CODEC_H264 },
+    { _T("avc"),  RGY_CODEC_H264 },
+    { _T("h265"), RGY_CODEC_HEVC },
+    { _T("hevc"), RGY_CODEC_HEVC },
+    //{ _T("av1"),  MPP_VIDEO_CodingAV1  },
     { NULL, 0 }
 };
 
@@ -86,37 +86,38 @@ const CX_DESC list_avc_level[] = {
     { NULL, 0 }
 };
 
-#if 0
-
 const CX_DESC list_hevc_profile[] = {
-    { _T("main"),     AMF_VIDEO_ENCODER_HEVC_PROFILE_MAIN },
-    { _T("main10"),   AMF_VIDEO_ENCODER_HEVC_PROFILE_MAIN_10 },
+    { _T("main"),     1 },
+    //{ _T("main10"),   2 },
     { NULL, 0 }
 };
 
 const CX_DESC list_hevc_tier[] = {
-    { _T("main"),     AMF_VIDEO_ENCODER_HEVC_TIER_MAIN },
-    { _T("high"),     AMF_VIDEO_ENCODER_HEVC_TIER_HIGH },
+    { _T("main"),     0 },
+    { _T("high"),     1 },
     { NULL, 0 }
 };
 
 const CX_DESC list_hevc_level[] = {
-    { _T("auto"), 0 },
-    { _T("1"),    AMF_LEVEL_1 },
-    { _T("2"),    AMF_LEVEL_2 },
-    { _T("2.1"),  AMF_LEVEL_2_1 },
-    { _T("3"),    AMF_LEVEL_3 },
-    { _T("3.1"),  AMF_LEVEL_3_1 },
-    { _T("4"),    AMF_LEVEL_4 },
-    { _T("4.1"),  AMF_LEVEL_4_1 },
-    { _T("5"),    AMF_LEVEL_5 },
-    { _T("5.1"),  AMF_LEVEL_5_1 },
-    { _T("5.2"),  AMF_LEVEL_5_2 },
-    { _T("6"),    AMF_LEVEL_6 },
-    { _T("6.1"),  AMF_LEVEL_6_1 },
-    { _T("6.2"),  AMF_LEVEL_6_2 },
+    { _T("auto"),   0 },
+    { _T("1"),     30 },
+    { _T("2"),     60 },
+    { _T("2.1"),   63 },
+    { _T("3"),     90 },
+    { _T("3.1"),   93 },
+    { _T("4"),    120 },
+    { _T("4.1"),  123 },
+    { _T("5"),    150 },
+    { _T("5.1"),  153 },
+    { _T("5.2"),  156 },
+    { _T("6"),    180 },
+    { _T("6.1"),  183 },
+    { _T("6.2"),  186 },
     { NULL, 0 }
 };
+
+#if 0
+
 const CX_DESC list_hevc_bitdepth[] = {
     { _T("8bit"),   8   },
     { _T("10bit"), 10  },
@@ -191,7 +192,7 @@ const CX_DESC list_mpp_quality_preset[] = {
 static inline const CX_DESC *get_level_list(RGY_CODEC codec) {
     switch (codec) {
     case RGY_CODEC_H264:    return list_avc_level;
-    case RGY_CODEC_HEVC:    return list_empty;
+    case RGY_CODEC_HEVC:    return list_hevc_level;
     case RGY_CODEC_AV1:     return list_empty;
     default:                return list_empty;
     }
@@ -203,7 +204,7 @@ static int get_level_auto(RGY_CODEC codec) {
 static inline const CX_DESC *get_profile_list(RGY_CODEC codec) {
     switch (codec) {
     case RGY_CODEC_H264:    return list_avc_profile;
-    case RGY_CODEC_HEVC:    return list_empty;
+    case RGY_CODEC_HEVC:    return list_hevc_profile;
     case RGY_CODEC_AV1:     return list_empty;
     default:                return list_empty;
     }
@@ -211,7 +212,7 @@ static inline const CX_DESC *get_profile_list(RGY_CODEC codec) {
 
 static inline const CX_DESC *get_tier_list(RGY_CODEC codec) {
     switch (codec) {
-    case RGY_CODEC_HEVC:    return list_empty;
+    case RGY_CODEC_HEVC:    return list_hevc_tier;
     default:                return list_empty;
     }
 }

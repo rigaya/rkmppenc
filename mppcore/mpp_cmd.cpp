@@ -609,7 +609,7 @@ int parse_cmd(MPPParam *pParams, int nArgNum, const TCHAR **strInput, bool ignor
         if (!bParsed) {
             print_cmd_error_invalid_value(_T("level"), argsData.cachedlevel.c_str(), std::vector<std::pair<RGY_CODEC, const CX_DESC *>>{
                 { RGY_CODEC_H264, list_avc_level  },
-                //{ RGY_CODEC_HEVC, list_hevc_level  },
+                { RGY_CODEC_HEVC, list_hevc_level  },
                 //{ RGY_CODEC_AV1,  list_av1_level  },
             });
             return 1;
@@ -627,13 +627,12 @@ int parse_cmd(MPPParam *pParams, int nArgNum, const TCHAR **strInput, bool ignor
         } else {
             print_cmd_error_invalid_value(_T("profile"), argsData.cachedprofile.c_str(), std::vector<std::pair<RGY_CODEC, const CX_DESC *>>{
                 { RGY_CODEC_H264, list_avc_profile  },
-                //{ RGY_CODEC_HEVC, list_hevc_profile },
+                { RGY_CODEC_HEVC, list_hevc_profile },
                 //{ RGY_CODEC_AV1,  list_av1_profile  }
             });
             return 1;
         }
     }
-#if 0
     if (argsData.cachedtier.length() > 0) {
         const auto desc = get_tier_list(pParams->codec);
         if (is_list_empty(desc)) {
@@ -642,7 +641,7 @@ int parse_cmd(MPPParam *pParams, int nArgNum, const TCHAR **strInput, bool ignor
         }
         int value = 0;
         if (desc != nullptr && PARSE_ERROR_FLAG != (value = get_value_from_chr(desc, argsData.cachedtier.c_str()))) {
-            pParams->codecParam[pParams->codec].nTier = value;
+            pParams->codecParam[pParams->codec].tier = value;
         } else {
             print_cmd_error_invalid_value(_T("tier"), argsData.cachedtier.c_str(), std::vector<std::pair<RGY_CODEC, const CX_DESC *>>{
                 { RGY_CODEC_HEVC, list_hevc_tier }
@@ -650,7 +649,6 @@ int parse_cmd(MPPParam *pParams, int nArgNum, const TCHAR **strInput, bool ignor
             return 1;
         }
     }
-#endif
     return 0;
 }
 

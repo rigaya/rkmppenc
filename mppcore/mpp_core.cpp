@@ -1870,6 +1870,12 @@ RGY_ERR MPPCore::initEncoderCodec(const MPPParam *prm) {
         m_enccfg.codec.h264.cabac_init_idc      = 0;
         m_enccfg.codec.h264.transform8x8_mode   = 1;
     } break;
+    case RGY_CODEC_HEVC: {
+        m_enccfg.codec.h265.change = MPP_ENC_H265_CFG_PROFILE_LEVEL_TILER_CHANGE;
+        m_enccfg.codec.h265.profile = prm->codecParam[RGY_CODEC_HEVC].profile;
+        m_enccfg.codec.h265.level   = prm->codecParam[RGY_CODEC_HEVC].level;
+        m_enccfg.codec.h265.tier    = prm->codecParam[RGY_CODEC_HEVC].tier;
+    } break;
     default:
         PrintMes(RGY_LOG_DEBUG, _T("Unknown codec %s.\n"), CodecToStr(prm->codec).c_str());
         return RGY_ERR_UNSUPPORTED;
