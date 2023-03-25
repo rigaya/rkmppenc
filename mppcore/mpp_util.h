@@ -452,7 +452,7 @@ public:
     RGYFrame() : sysbuf(), clbuf() {};
     RGYFrame(std::unique_ptr<RGYSysFrame> sys) : sysbuf(std::move(sys)), clbuf() {
     }
-    RGYFrame(unique_ptr<RGYCLFrame> clframe) : sysbuf(), clbuf() {
+    RGYFrame(unique_ptr<RGYCLFrame> clframe) : sysbuf(), clbuf(std::move(clframe)) {
     }
     virtual ~RGYFrame() {
         clbuf.reset();
