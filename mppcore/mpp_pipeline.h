@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 //     VCEEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -1014,6 +1014,10 @@ protected:
         }
         const auto surfDecOutInfo = surfDecOut->getInfo();
 
+        const auto inputFrameInfo = m_input->GetInputFrameInfo();
+        //mppframeのインタレはちゃんと設定されてない場合があるので、auto以外の時は入力設定で上書きする
+        surfDecOut->setPicstruct(inputFrameInfo.picstruct != RGY_PICSTRUCT_AUTO ? mppinfo.picstruct : inputFrameInfo.picstruct);
+
         if (m_convert->getFunc() == nullptr) {
             if (auto func = m_convert->getFunc(mppinfo.csp, surfDecOutInfo.csp, false, RGY_SIMD::SIMD_ALL); func == nullptr) {
                 PrintMes(RGY_LOG_ERROR, _T("Failed to find conversion for %s -> %s.\n"),
@@ -1025,7 +1029,7 @@ protected:
             }
         }
         auto crop = initCrop();
-        m_convert->run((mppinfo.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
+        m_convert->run((surfDecOut->picstruct() & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
             (void **)surfDecOutInfo.ptr, (const void **)mppinfo.ptr,
             mppinfo.width, mppinfo.pitch[0], mppinfo.pitch[1], surfDecOutInfo.pitch[0],
             mppinfo.height, surfDecOutInfo.height, crop.c);
@@ -2017,7 +2021,7 @@ public:
                         return RGY_ERR_NULL_PTR;
                     }
                 }
-                if (auto err = m_cl->copyFrame(&m_clFrameInput->frame, &surfVppInSys->frame); err != RGY_ERR_NONE) {
+                if (auto err = m_cl->copyFrame(&m_clFrameInput->frame, &surfVppInSys->frame, nullptr, m_cl->queue()); err != RGY_ERR_NONE) {
                     PrintMes(RGY_LOG_ERROR, _T("Failed to copy frame to OpenCL input buffer.\n"));
                     return RGY_ERR_NULL_PTR;
                 }
