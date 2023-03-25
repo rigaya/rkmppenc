@@ -1730,6 +1730,11 @@ RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
     m_enccfg.prep.format        = csp_rgy_to_enc(RGY_CSP_NV12);
     m_enccfg.prep.rotation      = MPP_ENC_ROT_0;
 
+    m_enccfg.prep.color         = (MppFrameColorSpace)m_encVUI.matrix;
+    m_enccfg.prep.colorprim     = (MppFrameColorPrimaries)m_encVUI.colorprim;
+    m_enccfg.prep.colortrc      = (MppFrameColorTransferCharacteristic)m_encVUI.transfer;
+    m_enccfg.prep.range         = (MppFrameColorRange)m_encVUI.colorrange;
+
     auto ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_PREP_CFG, &m_enccfg.prep));
     if (ret != RGY_ERR_NONE) {
         PrintMes(RGY_LOG_ERROR, _T("Failed to set prep cfg to encoder: %s.\n"), get_err_mes(ret));

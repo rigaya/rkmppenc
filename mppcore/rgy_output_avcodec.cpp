@@ -849,7 +849,7 @@ RGY_ERR RGYOutputAvcodec::InitVideo(const VideoInfo *videoOutputInfo, const Avco
             }
             AVDictionary *bsfPrm = nullptr;
             std::unique_ptr<AVDictionary*, decltype(&av_dict_free)> bsfPrmDictDeleter(&bsfPrm, av_dict_free);
-            if (ENCODER_NVENC || ENCODER_MPP) {
+            if ((ENCODER_NVENC || ENCODER_MPP) && videoOutputInfo->sar[0] * videoOutputInfo->sar[1] > 0) {
                 char sar[128];
                 sprintf_s(sar, "%d/%d", videoOutputInfo->sar[0], videoOutputInfo->sar[1]);
                 av_dict_set(&bsfPrm, "sample_aspect_ratio", sar, 0);
