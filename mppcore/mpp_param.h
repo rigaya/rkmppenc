@@ -36,7 +36,9 @@
 #include "rk_venc_cmd.h"
 #include "rk_venc_cfg.h"
 
-static const int MPP_DEFAULT_QP = 23;
+static const int MPP_DEFAULT_QP_I = 23;
+static const int MPP_DEFAULT_QP_P = 26;
+static const int MPP_DEFAULT_QP_B = 29;
 static const int MPP_DEFAULT_MAX_BITRATE = 25000;
 static const int MPP_DEFAULT_GOP_LEN = 300;
 
@@ -250,7 +252,9 @@ struct MPPParam {
     int     bitrate;
     int     maxBitrate;
     int     VBVBufferSize;
-    int     qp;
+    int     qpI;
+    int     qpP;
+    int     qpB;
     int     qpMax;
     int     qpMin;
     int     gopLen;

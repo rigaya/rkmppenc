@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 //     VCEEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -611,7 +611,9 @@ RGY_ERR MPPCore::checkParam(MPPParam *prm) {
         }
     }
     const int maxQP = (prm->codec == RGY_CODEC_AV1) ? 255 : (prm->outputDepth > 8 ? 63 : 51);
-    prm->qp        = clamp(prm->qp,        0, maxQP);
+    prm->qpI       = clamp(prm->qpI,       0, maxQP);
+    prm->qpP       = clamp(prm->qpP,       0, maxQP);
+    prm->qpB       = clamp(prm->qpB,       0, maxQP);
     prm->qpMax     = clamp(prm->qpMax,     0, maxQP);
     prm->qpMin     = clamp(prm->qpMin,     0, maxQP);
 
@@ -1745,12 +1747,13 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
     m_enccfg.rc.bps_target  = prm->bitrate * 1000;
 
     if (prm->rateControl == MPP_ENC_RC_MODE_FIXQP) {
-        m_enccfg.rc.qp_init     = prm->qp;
-        m_enccfg.rc.qp_max      = m_enccfg.rc.qp_init;
-        m_enccfg.rc.qp_min      = m_enccfg.rc.qp_init;
-        m_enccfg.rc.qp_max_i    = m_enccfg.rc.qp_init;
-        m_enccfg.rc.qp_min_i    = m_enccfg.rc.qp_init;
-        m_enccfg.rc.qp_delta_ip = 0;
+        m_enccfg.rc.qp_init     = prm->qpI;
+        m_enccfg.rc.qp_max      = std::max(prm->qpI, prm->qpP);
+        m_enccfg.rc.qp_min      = std::min(prm->qpI, prm->qpP);
+        m_enccfg.rc.qp_max_i    = std::max(prm->qpI, prm->qpP);
+        m_enccfg.rc.qp_min_i    = std::min(prm->qpI, prm->qpP);
+        m_enccfg.rc.qp_delta_ip = prm->qpP - prm->qpI;
+        m_enccfg.rc.qp_delta_vi = prm->qpP - prm->qpI;
         m_enccfg.rc.quality     = MPP_ENC_RC_QUALITY_CQP;
     } else {
         if (prm->rateControl == MPP_ENC_RC_MODE_VBR && m_enccfg.rc.quality == MPP_ENC_RC_QUALITY_CQP) {
@@ -1774,7 +1777,7 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
             m_enccfg.rc.qp_min      = prm->qpMin;
             m_enccfg.rc.qp_max_i    = prm->qpMax;
             m_enccfg.rc.qp_min_i    = prm->qpMin;
-            m_enccfg.rc.qp_delta_ip = 2;
+            m_enccfg.rc.qp_delta_ip = 3;
         }
     }
 
@@ -2601,10 +2604,10 @@ tstring MPPCore::GetEncoderParam() {
             }
         }
     }
-    mes += strsprintf(_T("Quality:       %s\n"), get_cx_desc(list_mpp_quality_preset, m_enccfg.rc.quality));
     if (m_enccfg.rc.rc_mode == MPP_ENC_RC_MODE_FIXQP) {
-        mes += strsprintf(_T("CQP:           %d\n"), m_enccfg.rc.qp_init);
+        mes += strsprintf(_T("CQP:           %d:%d\n"), m_enccfg.rc.qp_init, m_enccfg.rc.qp_init + m_enccfg.rc.qp_delta_ip);
     } else {
+        mes += strsprintf(_T("Quality:       %s\n"), get_cx_desc(list_mpp_quality_preset, m_enccfg.rc.quality));
         {
             mes += strsprintf(_T("%s:           %d kbps\n"),
                 get_cx_desc(list_mpp_rc_method, m_enccfg.rc.rc_mode), m_enccfg.rc.bps_target / 1000);
