@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     VCEEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -2093,7 +2093,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
                 PrintMes(RGY_LOG_ERROR, _T("OpenCL not enabled, OpenCL filters cannot be used.\n"));
                 return RGY_ERR_UNSUPPORTED;
             }
-            m_pipelineTasks.push_back(std::make_unique<PipelineTaskOpenCL>(filterBlock.vppcl, nullptr, m_cl, 1, m_pLog));
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskOpenCL>(filterBlock.vppcl, nullptr, m_cl, 4, m_pLog));
         } else {
             PrintMes(RGY_LOG_ERROR, _T("Unknown filter type.\n"));
             return RGY_ERR_UNSUPPORTED;
