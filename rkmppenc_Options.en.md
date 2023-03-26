@@ -46,10 +46,7 @@
 - [Encode Mode Options](#encode-mode-options)
   - [--cqp \<int\> or \<int\>:\<int\>:\<int\>](#--cqp-int-or-intintint)
   - [--cbr \<int\>](#--cbr-int)
-  - [--cbrhq \<int\> \[H.264/AV1\]](#--cbrhq-int-h264av1)
   - [--vbr \<int\>](#--vbr-int)
-  - [--vbrhq \<int\> \[H.264/AV1\]](#--vbrhq-int-h264av1)
-  - [--qvbr \<int\> \[H.264/AV1\]](#--qvbr-int-h264av1)
 - [Other Options for Encoder](#other-options-for-encoder)
   - [-u, --preset](#-u---preset)
   - [--output-depth \<int\>](#--output-depth-int)
@@ -422,10 +419,7 @@ Set the QP value of &lt;I frame&gt;:&lt;P frame&gt;:&lt;B frame&gt;
 Generally, it is recommended to set the QP value to be I &lt; P &lt; B.
 
 ### --cbr &lt;int&gt;
-### --cbrhq &lt;int&gt; [H.264/AV1]
-### --vbr &lt;int&gt;
-### --vbrhq &lt;int&gt; [H.264/AV1]
-### --qvbr &lt;int&gt; [H.264/AV1]
+### --vbr &lt;int&gt;  
 Set bitrate in kbps.
 
 ## Other Options for Encoder
@@ -459,7 +453,7 @@ Set the maximum QP value to &lt;I frame&gt;:&lt;P frame&gt;:&lt;B frame&gt;. Thi
 It could be used to maintain certain degree of image quality in any part of the video, even if doing so may exceed the specified bitrate.
 
 ### --gop-len &lt;int&gt;
-Set maximum GOP length. When lookahead is off, this value will always be used. (Not variable, fixed GOP)
+Set maximum GOP length. 
 
 ### --level &lt;string&gt;
 Specify the Level of the codec to be encoded. If not specified, it will be automatically set.

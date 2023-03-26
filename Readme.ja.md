@@ -34,6 +34,7 @@ Debian/Ubuntu系
 #### rkmppenc
 - mppを使用したエンコード
    - H.264/AVC
+   - HEVC
 - mppの各エンコードモード
    - CQP       固定量子化量
    - VBR       可変ビットレート
