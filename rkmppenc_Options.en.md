@@ -1785,18 +1785,14 @@ Specify the resizing algorithm.
   | option name | description |
   |:---|:---|
   | auto     | auto select |
-  | advanced | use high quality scaling |
-  | bilinear | linear interpolation |
+  | bilinear | linear interpolation  |
+  | bicubic  | bicubic interpolation |
   | spline16 | 4x4 spline curve interpolation |
   | spline36 | 6x6 spline curve interpolation |
   | spline64 | 8x8 spline curve interpolation |
   | lanczos2 | 4x4 Lanczos resampling |
   | lanczos3 | 6x6 Lanczos resampling |
   | lanczos4 | 8x8 Lanczos resampling |
-  | amf_bilinear | amf bilinear interpolation  |
-  | amf_bicubic  | amf bicubic interpolation   |
-  | amf_fsr      | amf fsr resampling          |
-  | amf_point    | amf point scaling           |
 
 ### --vpp-unsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 unsharp filter, for edge and detail enhancement.

@@ -1772,18 +1772,13 @@ yadifによるインタレ解除を行う。
   |:---|:---|
   | auto     | 自動的に適切なものを選択 |
   | bilinear | 線形補間 |
-  | simple   | Nearest Neighbor法による高速なリサイズ |
-  | advanced | 高品質なリサイズ |
+  | bicubic  | 双三次補間 |
   | spline16 | 4x4 Spline補間 |
   | spline36 | 6x6 Spline補間 |
   | spline64 | 8x8 Spline補間 |
   | lanczos2 | 4x4 lanczos補間 |
   | lanczos3 | 6x6 lanczos補間 |
   | lanczos4 | 8x8 lanczos補間 |
-  | amf_bilinear | amf 線形補間  |
-  | amf_bicubic  | amf 3次補間   |
-  | amf_fsr      | amf fsr 補間  |
-  | amf_point    | amf point scaling |
 
 ### --vpp-unsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 unsharpフィルタ。輪郭・ディテール強調用のフィルタ。

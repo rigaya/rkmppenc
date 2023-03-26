@@ -5,6 +5,8 @@
 // block_x
 // block_y
 // algo
+// WEIGHT_BILINEAR
+// WEIGHT_BICUBIC
 // WEIGHT_SPLINE
 // WEIGHT_LANCZOS
 // shared_weightXdim
@@ -52,6 +54,28 @@ float factor_lanczos(const float x) {
     return sinc(x) * sinc(x * (1.0f / radius));
 }
 
+float factor_bilinear(const float x) {
+    if (fabs(x) >= (float)radius) return 0.0f;
+    return 1.0f - x * (1.0f / radius);
+}
+
+float factor_bicubic(float x, float B, float C) {
+    x = fabs(x);
+    if (x >= (float)radius) return 0.0f;
+    const float x2 = x*x;
+    const float x3 = x2*x;
+    if (x <= 1.0f) {
+        return ( 2.0f -  1.5f * B - 1.0f * C) * x3 +
+               (-3.0f +  2.0f * B + 1.0f * C) * x2 +
+               ( 1.0f -  (2.0f/6.0f) * B);
+    } else {
+        return (-(1.0f/6.0f) * B - 1.0f * C) * x3 +
+               (        1.0f * B + 5.0f * C) * x2 +
+               (       -2.0f * B - 8.0f * C) * x  +
+               ( (8.0f/6.0f) * B + 4.0f * C);
+    }
+}
+
 
 #if USE_LOCAL
 #define SPLINE_FACTOR_MEM_TYPE __local
@@ -72,37 +96,30 @@ float factor_spline(const float x_raw, SPLINE_FACTOR_MEM_TYPE const float *restr
     return w;
 }
 
-#if USE_LOCAL
-void calc_weight(
-    __local float *pWeight, const float srcPos, const int srcFirst, const int srcEnd,
-    const float ratioClamped, __local const float *psCopyFactor) {
-    __local float *pW = pWeight;
-    for (int i = srcFirst; i <= srcEnd; i++, pW++) {
-        const float delta = ((i + 0.5f) - srcPos) * ratioClamped;
-        float weight = 0.0f;
-        switch (algo) {
-        case WEIGHT_LANCZOS: weight = factor_lanczos(delta); break;
-        case WEIGHT_SPLINE:  weight = factor_spline(delta, psCopyFactor);
-        default:
-            break;
-        }
-        pW[0] = weight;
-    }
-}
-#else
 float calc_weight(
-    const int targetPos,
-    const float srcPos, const int srcFirst, const int srcEnd,
+    const int targetPos, const float srcPos,
     const float ratioClamped, SPLINE_FACTOR_MEM_TYPE const float *psCopyFactor) {
     const float delta = ((targetPos + 0.5f) - srcPos) * ratioClamped;
     float weight = 0.0f;
     switch (algo) {
-    case WEIGHT_LANCZOS: weight = factor_lanczos(delta); break;
-    case WEIGHT_SPLINE:  weight = factor_spline(delta, psCopyFactor);
+    case WEIGHT_LANCZOS:  weight = factor_lanczos(delta); break;
+    case WEIGHT_SPLINE:   weight = factor_spline(delta, psCopyFactor); break;
+    case WEIGHT_BICUBIC:  weight = factor_bicubic(delta, 0.0f, 0.6f); break;
+    case WEIGHT_BILINEAR: weight = factor_bilinear(delta); break;
     default:
         break;
     }
     return weight;
+}
+
+#if USE_LOCAL
+void calc_weight_to_local(
+    __local float *pWeight, const float srcPos, const int srcFirst, const int srcEnd,
+    const float ratioClamped, __local const float *psCopyFactor) {
+    __local float *pW = pWeight;
+    for (int i = srcFirst; i <= srcEnd; i++, pW++) {
+        pW[0] = calc_weight(i, srcPos, ratioClamped, psCopyFactor);
+    }
 }
 #endif
 
@@ -143,7 +160,7 @@ __kernel void kernel_resize(
         const float srcX = ((float)(dstX + 0.5f)) * ratioInvX;
         const int srcFirstX = max(0, (int)floor(srcX - srcWindowX));
         const int srcEndX = min(srcWidth - 1, (int)ceil(srcX + srcWindowX));
-        calc_weight(weightXshared + threadIdX * shared_weightXdim, srcX, srcFirstX, srcEndX, ratioClampedX, psCopyFactor);
+        calc_weight_to_local(weightXshared + threadIdX * shared_weightXdim, srcX, srcFirstX, srcEndX, ratioClampedX, psCopyFactor);
 
         if (threadIdX < block_y) {
             // threadIdY==0のスレッドが、y方向の重みをそれぞれ計算してsharedメモリに書き込み
@@ -152,7 +169,7 @@ __kernel void kernel_resize(
             const float srcY = ((float)(dstY + 0.5f)) * ratioInvY;
             const int srcFirstY = max(0, (int)floor(srcY - srcWindowY));
             const int srcEndY = min(srcHeight - 1, (int)ceil(srcY + srcWindowY));
-            calc_weight(weightYshared + thready * shared_weightYdim, srcY, srcFirstY, srcEndY, ratioClampedY, psCopyFactor);
+            calc_weight_to_local(weightYshared + thready * shared_weightYdim, srcY, srcFirstY, srcEndY, ratioClampedY, psCopyFactor);
         }
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -190,7 +207,7 @@ __kernel void kernel_resize(
             const float wy = weightY[0];
             __local const float *pwx = weightX;
 #else
-            const float wy = calc_weight(j, srcY, srcFirstY, srcEndY, ratioClampedY, pgFactor);
+            const float wy = calc_weight(j, srcY, ratioClampedY, pgFactor);
 #endif
             __global const Type *srcPtr = (__global const Type*)srcLine;
             for (int i = srcFirstX; i <= srcEndX; i++, srcPtr++
@@ -201,7 +218,7 @@ __kernel void kernel_resize(
 #if USE_LOCAL
                 const float wx = pwx[0];
 #else
-                const float wx = calc_weight(i, srcX, srcFirstX, srcEndX, ratioClampedX, pgFactor);
+                const float wx = calc_weight(i, srcX, ratioClampedX, pgFactor);
 #endif
                 clr += srcPtr[0] * wx * wy;
                 sumWeight += wx * wy;
