@@ -9,6 +9,7 @@
 // WEIGHT_LANCZOS
 // shared_weightXdim
 // shared_weightYdim
+// USE_LOCAL
 
 #ifndef MIN3
 #define MIN3(a,b,c) (min((a), min((b), (c))))
@@ -51,10 +52,17 @@ float factor_lanczos(const float x) {
     return sinc(x) * sinc(x * (1.0f / radius));
 }
 
-float factor_spline(const float x_raw, __local const float *psCopyFactor) {
+
+#if USE_LOCAL
+#define SPLINE_FACTOR_MEM_TYPE __local
+#else
+#define SPLINE_FACTOR_MEM_TYPE __global
+#endif
+
+float factor_spline(const float x_raw, SPLINE_FACTOR_MEM_TYPE const float *restrict psFactor) {
     const float x = fabs(x_raw);
     if (x >= (float)radius) return 0.0f;
-    __local const float *psWeight = psCopyFactor + min((int)x, radius - 1) * 4;
+    SPLINE_FACTOR_MEM_TYPE const float *psWeight = psFactor + min((int)x, radius - 1) * 4;
     //重みを計算
     float w = psWeight[3];
     w += x * psWeight[2];
@@ -64,6 +72,7 @@ float factor_spline(const float x_raw, __local const float *psCopyFactor) {
     return w;
 }
 
+#if USE_LOCAL
 void calc_weight(
     __local float *pWeight, const float srcPos, const int srcFirst, const int srcEnd,
     const float ratioClamped, __local const float *psCopyFactor) {
@@ -80,16 +89,33 @@ void calc_weight(
         pW[0] = weight;
     }
 }
+#else
+float calc_weight(
+    const int targetPos,
+    const float srcPos, const int srcFirst, const int srcEnd,
+    const float ratioClamped, SPLINE_FACTOR_MEM_TYPE const float *psCopyFactor) {
+    const float delta = ((targetPos + 0.5f) - srcPos) * ratioClamped;
+    float weight = 0.0f;
+    switch (algo) {
+    case WEIGHT_LANCZOS: weight = factor_lanczos(delta); break;
+    case WEIGHT_SPLINE:  weight = factor_spline(delta, psCopyFactor);
+    default:
+        break;
+    }
+    return weight;
+}
+#endif
 
 __kernel void kernel_resize(
     __global uchar *restrict pDst, const int dstPitch, const int dstWidth, const int dstHeight,
     __global const uchar *restrict pSrc, const int srcPitch, const int srcWidth, const int srcHeight,
     const float ratioX, const float ratioY, __global const float *restrict pgFactor
 ) {
+#if USE_LOCAL
     __local float weightXshared[shared_weightXdim * block_x];
     __local float weightYshared[shared_weightYdim * block_y];
     __local float psCopyFactor[radius * 4];
-    
+#endif
     const int threadIdX = get_local_id(0);
     const int threadIdY = get_local_id(1);
 
@@ -101,6 +127,7 @@ __kernel void kernel_resize(
     const float ratioClampedY = min(ratioY, 1.0f);
     const float srcWindowY = radius / ratioClampedY;
 
+#if USE_LOCAL
     if (algo == WEIGHT_SPLINE) {
         if (threadIdY == 0) {
             if (threadIdX < radius * 4) {
@@ -129,6 +156,7 @@ __kernel void kernel_resize(
         }
     }
     barrier(CLK_LOCAL_MEM_FENCE);
+#endif
 
     const int ix = get_group_id(0) * block_x + threadIdX;
     const int iy = get_group_id(1) * block_y + threadIdY;
@@ -141,22 +169,40 @@ __kernel void kernel_resize(
         const float srcX = ((float)(ix + 0.5f)) * ratioInvX;
         const int srcFirstX = max(0, (int)floor(srcX - srcWindowX));
         const int srcEndX = min(srcWidth - 1, (int)ceil(srcX + srcWindowX));
-        __local const float *weightX = weightXshared + threadIdX * shared_weightXdim;
 
         const float srcY = ((float)(iy + 0.5f)) * ratioInvY;
         const int srcFirstY = max(0, (int)floor(srcY - srcWindowY));
         const int srcEndY = min(srcHeight - 1, (int)ceil(srcY + srcWindowY));
+#if USE_LOCAL
+        __local const float *weightX = weightXshared + threadIdX * shared_weightXdim;
         __local const float *weightY = weightYshared + threadIdY * shared_weightYdim;
+#endif
 
         const __global uchar *srcLine = pSrc + srcFirstY * srcPitch + srcFirstX * sizeof(Type);
         float clr = 0.0f;
         float sumWeight = 0.0f;
-        for (int j = srcFirstY; j <= srcEndY; j++, weightY++, srcLine += srcPitch) {
+        for (int j = srcFirstY; j <= srcEndY; j++, srcLine += srcPitch
+#if USE_LOCAL
+            , weightY++
+#endif
+        ) {
+#if USE_LOCAL
             const float wy = weightY[0];
             __local const float *pwx = weightX;
+#else
+            const float wy = calc_weight(j, srcY, srcFirstY, srcEndY, ratioClampedY, pgFactor);
+#endif
             __global const Type *srcPtr = (__global const Type*)srcLine;
-            for (int i = srcFirstX; i <= srcEndX; i++, pwx++, srcPtr++) {
+            for (int i = srcFirstX; i <= srcEndX; i++, srcPtr++
+#if USE_LOCAL
+                , pwx++
+#endif
+            ) {
+#if USE_LOCAL
                 const float wx = pwx[0];
+#else
+                const float wx = calc_weight(i, srcX, srcFirstX, srcEndX, ratioClampedX, pgFactor);
+#endif
                 clr += srcPtr[0] * wx * wy;
                 sumWeight += wx * wy;
             }

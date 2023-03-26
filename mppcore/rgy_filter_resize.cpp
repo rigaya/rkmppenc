@@ -223,14 +223,16 @@ RGY_ERR RGYFilterResize::init(shared_ptr<RGYFilterParam> pParam, shared_ptr<RGYL
         const float srcWindowY = getSrcWindow(radius, pParam->frameOut.height, pParam->frameIn.height);
         const int shared_weightYdim = (((int)ceil(srcWindowY) + 1) * 2);
 
+        const int use_local = (ENCODER_MPP) ? 0 : 1;
+
         const auto options = strsprintf("-D Type=%s -D bit_depth=%d -D radius=%d -D algo=%d"
             " -D block_x=%d -D block_y=%d -D shared_weightXdim=%d -D shared_weightYdim=%d"
-            " -D WEIGHT_SPLINE=%d -D WEIGHT_LANCZOS=%d",
+            " -D WEIGHT_SPLINE=%d -D WEIGHT_LANCZOS=%d -D USE_LOCAL=%d",
             RGY_CSP_BIT_DEPTH[pResizeParam->frameOut.csp] > 8 ? "ushort" : "uchar",
             RGY_CSP_BIT_DEPTH[pResizeParam->frameOut.csp],
             radius, algo,
             RESIZE_BLOCK_X, RESIZE_BLOCK_Y, shared_weightXdim, shared_weightYdim,
-            WEIGHT_SPLINE, WEIGHT_LANCZOS);
+            WEIGHT_SPLINE, WEIGHT_LANCZOS, use_local);
         m_resize.set(std::move(m_cl->buildResourceAsync(_T("RGY_FILTER_RESIZE_CL"), _T("EXE_DATA"), options.c_str())));
         if (!m_weightSpline
             && algo == WEIGHT_SPLINE) {
