@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     VCEEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -520,7 +520,7 @@ public:
     }
     // mfx関連とそうでないtaskのやり取りでロックが必要
     bool requireSync(const PipelineTaskType nextTaskType) const {
-        true;
+        return true;
     }
     int workSurfacesAllocPriority() const {
         return getPipelineTaskAllocPriority(m_type);
