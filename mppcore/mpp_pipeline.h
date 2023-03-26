@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 //     VCEEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -343,6 +343,10 @@ public:
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutputDataCustom>& customData) :
         PipelineTaskOutput(PipelineTaskOutputType::SURFACE, customData), m_surf(surf), m_dependencyFrame(), m_clevents() {
+    };
+    PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutput>& dependencyFrame) :
+        PipelineTaskOutput(PipelineTaskOutputType::SURFACE),
+        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents() {
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutput>& dependencyFrame, RGYOpenCLEvent& clevent) :
         PipelineTaskOutput(PipelineTaskOutputType::SURFACE),
@@ -1758,7 +1762,15 @@ public:
             m_queueFrameList.pop_front();
             mpp_frame_set_buffer(mppframe, framebuf);
             auto mppinfo = infoMPP(mppframe);
-            const auto surfEncInInfo = surfEncodeIn->getInfo();
+            RGYFrameInfo surfEncInInfo = surfEncodeIn->getInfo();
+            // 入力がOpenCLのフレームの場合、mapされているはずのhost側のバッファを読み取る
+            if (auto& clframe = surfEncodeIn->cl(); clframe != nullptr) {
+                if (!clframe->isMapped()) {
+                    PrintMes(RGY_LOG_ERROR, _T("Failed to get mapped buffer: %s.\n"), get_err_mes(err));
+                    return err;
+                }
+                surfEncInInfo = clframe->mappedHost();
+            }
             if (m_convert->getFunc() == nullptr) {
                 if (auto func = m_convert->getFunc(surfEncInInfo.csp, mppinfo.csp, false, RGY_SIMD::SIMD_ALL); func == nullptr) {
                     PrintMes(RGY_LOG_ERROR, _T("Failed to find conversion for %s -> %s.\n"),
@@ -1774,6 +1786,11 @@ public:
                 (void **)mppinfo.ptr, (const void **)surfEncInInfo.ptr,
                 surfEncInInfo.width, surfEncInInfo.pitch[0], surfEncInInfo.pitch[1], mppinfo.pitch[0],
                 surfEncInInfo.height, mppinfo.height, crop.c);
+                
+            if (auto& clframe = surfEncodeIn->cl(); clframe != nullptr) {
+                clframe->unmapBuffer();
+                clframe->resetMappedFrame();
+            }
 
             const auto pts = surfEncInInfo.timestamp;
             mpp_frame_set_pts(mppframe, pts);
@@ -2081,26 +2098,23 @@ public:
             }
             
             //最後のフィルタ
+            auto surfVppOut = getWorkSurf();
+            if (surfVppOut == nullptr) {
+                PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
+                return RGY_ERR_NOT_ENOUGH_BUFFER;
+            }
+            auto surfVppOutInfo = surfVppOut.frame()->getInfo();
             auto &lastFilter = m_vpFilters[m_vpFilters.size() - 1];
             //最後のフィルタはRGYFilterCspCropでなければならない
             if (typeid(*lastFilter.get()) != typeid(RGYFilterCspCrop)) {
                 PrintMes(RGY_LOG_ERROR, _T("Last filter setting invalid.\n"));
                 return RGY_ERR_INVALID_PARAM;
             }
-            if (!m_clFrameOutput) {
-                m_clFrameOutput = m_cl->createFrameBuffer(lastFilter->GetFilterParam()->frameOut);
-                if (!m_clFrameOutput) {
-                    PrintMes(RGY_LOG_ERROR, _T("Failed to allocate OpenCL input buffer.\n"));
-                    return RGY_ERR_NULL_PTR;
-                }
-            }
             //エンコードバッファのポインタを渡す
             int nOutFrames = 0;
-            auto clFrameOutputInfo = m_clFrameOutput->frameInfo();
             RGYFrameInfo *outInfo[1];
-            outInfo[0] = &clFrameOutputInfo;
-            RGYOpenCLEvent clevent; // 最終フィルタの処理完了を伝えるevent
-            auto sts_filter = lastFilter->filter(&filterframes.front().first, (RGYFrameInfo **)&outInfo, &nOutFrames, m_cl->queue(), &clevent);
+            outInfo[0] = &surfVppOutInfo;
+            auto sts_filter = lastFilter->filter(&filterframes.front().first, (RGYFrameInfo **)&outInfo, &nOutFrames, m_cl->queue());
             if (sts_filter != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("Error while running filter \"%s\".\n"), lastFilter->name().c_str());
                 return sts_filter;
@@ -2108,7 +2122,7 @@ public:
             if (m_videoMetric) {
                 //フレームを転送
                 int dummy = 0;
-                auto err = m_videoMetric->filter(&filterframes.front().first, nullptr, &dummy, m_cl->queue(), &clevent);
+                auto err = m_videoMetric->filter(&filterframes.front().first, nullptr, &dummy, m_cl->queue());
                 if (err != RGY_ERR_NONE) {
                     PrintMes(RGY_LOG_ERROR, _T("Failed to send frame for video metric calcualtion: %s.\n"), get_err_mes(err));
                     return err;
@@ -2116,25 +2130,25 @@ public:
             }
             filterframes.pop_front();
 
-            auto surfVppOut = getWorkSurf();
-            if (surfVppOut == nullptr) {
-                PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
-                return RGY_ERR_NOT_ENOUGH_BUFFER;
+            auto err = surfVppOut.frame()->clframe()->queueMapBuffer(m_cl->queue(), CL_MAP_READ); // CPUが読み込むためにMapする
+            if (err != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Failed to map buffer: %s.\n"), get_err_mes(err));
+                return err;
             }
-            auto surfVppOutInfo = surfVppOut.frame()->getInfo();
-            if (auto err = m_cl->copyFrame(&surfVppOutInfo, &clFrameOutputInfo, nullptr, m_cl->queue(), &clevent); err != RGY_ERR_NONE) {
-                PrintMes(RGY_LOG_ERROR, _T("Failed to copy frame to OpenCL input buffer.\n"));
-                return RGY_ERR_NULL_PTR;
+            if (true) {
+                surfVppOut.frame()->setDuration(surfVppOutInfo.duration);
+                surfVppOut.frame()->setTimestamp(surfVppOutInfo.timestamp);
+                surfVppOut.frame()->setInputFrameId(surfVppOutInfo.inputFrameId);
+                surfVppOut.frame()->setPicstruct(surfVppOutInfo.picstruct);
+                surfVppOut.frame()->setFlags(surfVppOutInfo.flags);
+                surfVppOut.frame()->setDataList(surfVppOutInfo.dataList);
             }
 
-            surfVppOut.frame()->setDuration(clFrameOutputInfo.duration);
-            surfVppOut.frame()->setTimestamp(clFrameOutputInfo.timestamp);
-            surfVppOut.frame()->setInputFrameId(clFrameOutputInfo.inputFrameId);
-            surfVppOut.frame()->setPicstruct(clFrameOutputInfo.picstruct);
-            surfVppOut.frame()->setFlags(clFrameOutputInfo.flags);
-            surfVppOut.frame()->setDataList(clFrameOutputInfo.dataList);
-
-            outputSurfs.push_back(std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame, clevent));
+            auto outputSurf = std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame);
+            for (auto& event : surfVppOut.frame()->clframe()->mapEvents()) {
+                outputSurf->addClEvent(event);
+            }
+            outputSurfs.push_back(std::move(outputSurf));
 
             #undef clFrameOutInteropRelease
         }

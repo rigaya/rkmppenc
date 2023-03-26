@@ -2208,7 +2208,8 @@ RGY_ERR MPPCore::allocatePiplelineFrames() {
             return RGY_ERR_UNSUPPORTED;
         }
 
-        if (   (t0->taskType() == PipelineTaskType::OPENCL && !t1->isAMFTask()) // openclとraw出力がつながっているような場合
+        if (    t0->taskType() == PipelineTaskType::OPENCL // rkmppencでは、openclとencoderがつながっているケースも許可する
+            || (t0->taskType() == PipelineTaskType::OPENCL && !t1->isAMFTask()) // openclとraw出力がつながっているような場合
             || (t1->taskType() == PipelineTaskType::OPENCL && !t0->isAMFTask()) // inputとopenclがつながっているような場合
             ) {
             if (!m_cl) {
