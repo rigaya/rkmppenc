@@ -13,6 +13,7 @@
   - mpp 
   - ffmpeg 4.x/5.x libs (libavcodec58, libavformat58, libavfilter7, libavutil56, libswresample3)
   - libass9
+  - OpenCL
   - [Optional] VapourSynth
 
 ### 1. コンパイラ等のインストール
@@ -57,7 +58,8 @@ cd ../../../..
 ```Shell
 sudo apt install ffmpeg \
   libavcodec-extra libavcodec-dev libavutil-dev libavformat-dev libswresample-dev libavfilter-dev \
-  libass9 libass-dev
+  libass9 libass-dev \
+  opencl-headers
 ```
 
 
