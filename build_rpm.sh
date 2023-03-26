@@ -1,10 +1,10 @@
 #!/bin/sh
 
-PACKAGE_NAME=vceencc
-PACKAGE_BIN=vceencc
+PACKAGE_NAME=rkmppenc
+PACKAGE_BIN=rkmppenc
 PACKAGE_OS=
 PACKAGE_MAINTAINER=rigaya
-PACKAGE_DEPENDS="ffmpeg-libs,amf-amdgpu-pro"
+PACKAGE_DEPENDS="ffmpeg-libs"
 PACKAGE_DESCRIPTION=
 PACKAGE_ROOT=.rpmpkg
 PACKAGE_VERSION=`git describe --tags | cut -f 1 --delim="-"`

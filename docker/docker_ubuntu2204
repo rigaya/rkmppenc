@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM arm64v8/ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive \
     LOCAL_USER_ID=1000 \
@@ -9,8 +9,6 @@ RUN apt-get update \
       wget \
       git \
       opencl-headers \
-      libvulkan-dev \
-      libx11-dev \
       build-essential \
       libavcodec58 \
       libavcodec-dev \
