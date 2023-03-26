@@ -1792,6 +1792,8 @@ public:
                 clframe->resetMappedFrame();
             }
 
+            surfEncInInfo = surfEncodeIn->getInfo();
+
             const auto pts = surfEncInInfo.timestamp;
             mpp_frame_set_pts(mppframe, pts);
             mpp_frame_set_poc(mppframe, m_inFrames);
@@ -2038,10 +2040,13 @@ public:
                         return RGY_ERR_NULL_PTR;
                     }
                 }
-                if (auto err = m_cl->copyFrame(&m_clFrameInput->frame, &surfVppInSys->frame, nullptr, m_cl->queue()); err != RGY_ERR_NONE) {
+                RGYOpenCLEvent clevent;
+                if (auto err = m_cl->copyFrame(&m_clFrameInput->frame, &surfVppInSys->frame, nullptr, m_cl->queue(), &clevent); err != RGY_ERR_NONE) {
                     PrintMes(RGY_LOG_ERROR, _T("Failed to copy frame to OpenCL input buffer.\n"));
                     return RGY_ERR_NULL_PTR;
                 }
+                // taskSurfをm_prevInputFrameに登録するが、そのときに待機すべきイベントとして、ここのcopyFrameのイベントを登録する
+                taskSurf->addClEvent(clevent);
                 filterframes.push_back(std::make_pair(m_clFrameInput->frameInfo(), 0u));
             } else if (auto surfVppInCL = taskSurf->surf().clframe(); surfVppInCL != nullptr) {
                 filterframes.push_back(std::make_pair(taskSurf->surf().frame()->getInfo(), 0u));
@@ -2145,6 +2150,7 @@ public:
             }
 
             auto outputSurf = std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame);
+            // outputSurf が待機すべきeventとして、queueMapBufferのeventを登録する
             for (auto& event : surfVppOut.frame()->clframe()->mapEvents()) {
                 outputSurf->addClEvent(event);
             }
