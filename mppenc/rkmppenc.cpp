@@ -88,6 +88,18 @@ int parse_print_options(const TCHAR *option_name, const TCHAR *arg1, const RGYPa
         show_option_list();
         return 1;
     }
+    if (0 == _tcscmp(option_name, _T("check-hw"))) {
+        auto codecs = getMPPEncoderSupport();
+        if (codecs.size() == 0) {
+            _ftprintf(stdout, _T("Encode not supported!\n"));
+            return -1;
+        }
+        _ftprintf(stdout, _T("Supported Encode Codecs\n"));
+        for (auto codec : codecs) {
+            _ftprintf(stdout, _T("%s\n"), CodecToStr(codec).c_str());
+        }
+        return 1;
+    }
     if (IS_OPTION("check-environment")) {
         show_environment_info();
         return 1;

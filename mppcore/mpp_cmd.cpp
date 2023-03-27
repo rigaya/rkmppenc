@@ -125,11 +125,10 @@ tstring encoder_help() {
         _T("-h,-? --help                    show help\n")
         _T("-v,--version                    show version info\n")
         _T("\n")
-        _T("   --check-hw [<int>]           check for vce support for default device.\n")
-        _T("                                 as an option, you can specify device id to check.\n")
-        _T("   --check-device [<int>]       show list of devices which will support vce.\n")
-        _T("   --check-features [<int>]     check features of vce support for default device.\n")
-        _T("                                 as an option, you can specify device id to check.\n")
+        _T("   --check-hw                   check for encode support.\n")
+#if 0
+        _T("   --check-features             check features of support.\n")
+#endif
         _T("   --check-clinfo               check OpenCL info\n")
 #if ENABLE_AVSW_READER
         _T("   --check-avversion            show dll version\n")
@@ -164,14 +163,16 @@ tstring encoder_help() {
     );
 
     str += PrintMultipleListOptions(_T("--level <string>"), _T("set codec level"),
-        { { _T("H.264"), list_avc_level,   0 }
+        { { _T("H.264"), list_avc_level,   0 },
+          { _T("HEVC"),  list_hevc_level,  0 }
         });
     str += PrintMultipleListOptions(_T("--profile <string>"), _T("set codec profile"),
-        { { _T("H.264"), list_avc_profile,   0 }
+        { { _T("H.264"), list_avc_profile,   0 },
+          { _T("HEVC"),  list_hevc_profile,  0 }
         });
-    //str += PrintMultipleListOptions(_T("--tier <string>"), _T("set codec tier"),
-    //    { { _T("HEVC"),  list_hevc_tier, 0 },
-    //    });
+    str += PrintMultipleListOptions(_T("--tier <string>"), _T("set codec tier"),
+        { { _T("HEVC"),  list_hevc_tier, 0 },
+        });
 
     str += strsprintf(_T("\n")
         _T("   --sar <int>:<int>            set Sample Aspect Ratio\n")

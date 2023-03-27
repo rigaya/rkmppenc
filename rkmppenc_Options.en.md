@@ -17,6 +17,7 @@
   - [-h, -? --help](#-h-----help)
   - [-v, --version](#-v---version)
   - [--option-list](#--option-list)
+  - [--check-hw](#--check-hw)
   - [--check-clinfo](#--check-clinfo)
   - [--check-codecs, --check-decoders, --check-encoders](#--check-codecs---check-decoders---check-encoders)
   - [--check-profiles \<string\>](#--check-profiles-string)
@@ -242,6 +243,9 @@ Show version of rkmppenc
 
 ### --option-list
 Show option list.
+
+### --check-hw
+Check whether the specified device is able to run hw encode.
 
 ### --check-clinfo
 Show OpenCL information.

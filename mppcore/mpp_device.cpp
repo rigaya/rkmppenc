@@ -25,4 +25,30 @@
 //
 // ------------------------------------------------------------------------------------------
 
+#include "rgy_avutil.h"
+#include "rk_mpi.h"
+#include "mpp_util.h"
+#include "mpp_device.h"
 
+DeviceCodecCsp getMPPDecoderSupport() {
+    CodecCsp codecCsp;
+    for (size_t ic = 0; ic < _countof(HW_DECODE_LIST); ic++) {
+        const auto codec = HW_DECODE_LIST[ic].rgy_codec;
+        if (err_to_rgy(mpp_check_support_format(MPP_CTX_DEC, codec_rgy_to_dec(codec))) == RGY_ERR_NONE) {
+            codecCsp[codec] = { RGY_CSP_YV12 };
+        }
+    }
+    DeviceCodecCsp HWDecCodecCsp;
+    HWDecCodecCsp.push_back(std::make_pair(0, codecCsp));
+    return HWDecCodecCsp;
+}
+
+std::vector<RGY_CODEC> getMPPEncoderSupport() {
+    std::vector<RGY_CODEC> encCodec;
+    for (auto codec : { RGY_CODEC_H264, RGY_CODEC_HEVC }) {
+        if (err_to_rgy(mpp_check_support_format(MPP_CTX_ENC, codec_rgy_to_enc(codec))) == RGY_ERR_NONE) {
+            encCodec.push_back(codec);
+        }
+    }
+    return encCodec;
+}

@@ -389,12 +389,7 @@ int MPPCore::GetEncoderBitdepth(const MPPParam *inputParam) const {
 
 RGY_ERR MPPCore::initInput(MPPParam *inputParam) {
 #if ENABLE_RAW_READER
-    CodecCsp codecCsp;
-    for (size_t ic = 0; ic < _countof(HW_DECODE_LIST); ic++) {
-        codecCsp[HW_DECODE_LIST[ic].rgy_codec] = { RGY_CSP_YV12 };
-    }
-    DeviceCodecCsp HWDecCodecCsp;
-    HWDecCodecCsp.push_back(std::make_pair(0, codecCsp));
+    DeviceCodecCsp HWDecCodecCsp = getMPPDecoderSupport();
     m_pStatus.reset(new EncodeStatus());
 
     int subburnTrackId = 0;
