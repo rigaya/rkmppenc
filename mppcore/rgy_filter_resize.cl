@@ -86,13 +86,14 @@ float factor_bicubic(float x, float B, float C) {
 float factor_spline(const float x_raw, SPLINE_FACTOR_MEM_TYPE const float *restrict psFactor) {
     const float x = fabs(x_raw);
     if (x >= (float)radius) return 0.0f;
-    SPLINE_FACTOR_MEM_TYPE const float *psWeight = psFactor + min((int)x, radius - 1) * 4;
+
+    const float4 weight = (SPLINE_FACTOR_MEM_TYPE const float4 *)psFactor)[min((int)x, radius - 1)];
     //重みを計算
-    float w = psWeight[3];
-    w += x * psWeight[2];
+    float w = weight.w;
+    w += x * weight.z;
     const float x2 = x * x;
-    w += x2 * psWeight[1];
-    w += x2 * x * psWeight[0];
+    w += x2 * weight.y;
+    w += x2 * x * weight.x;
     return w;
 }
 
