@@ -39,14 +39,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 - Encoding using mpp
    - H.264/AVC
    - HEVC
-- Supports hw decoding
-  - H.264 / AVC
-  - HEVC
-  - MPEG2
 - Each encode mode of mpp
    - CQP       (fixed quantization)
    - VBR       (Variable bitrate)
    - CBR       (Constant bitrate)
+- Supports hw decoding (currently 8bit only)
+  - H.264 / AVC
+  - HEVC
+  - MPEG2
 - OpenCL filters
 - Supports various formats such as avs, vpy, y4m, and raw
 - Supports demux/muxing using libavformat

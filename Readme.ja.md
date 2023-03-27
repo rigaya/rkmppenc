@@ -43,7 +43,7 @@ Debian/Ubuntu系
 - 最大ビットレートの指定
 - 最大GOP長の指定
 - avs, vpy, y4m, rawなど各種形式に対応
-- HWデコード
+- HWデコード (8bitのみ対応)
   - H.264
   - HEVC
   - MPEG2
