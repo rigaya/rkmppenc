@@ -209,19 +209,21 @@ __kernel void kernel_resize(
 #else
             const float wy = calc_weight(j, srcY, ratioClampedY, pgFactor);
 #endif
-            __global const Type *srcPtr = (__global const Type*)srcLine;
-            for (int i = srcFirstX; i <= srcEndX; i++, srcPtr++
+            if (wy != 0.0f) {
+                __global const Type *srcPtr = (__global const Type*)srcLine;
+                for (int i = srcFirstX; i <= srcEndX; i++, srcPtr++
 #if USE_LOCAL
-                , pwx++
+                    , pwx++
 #endif
-            ) {
+                ) {
 #if USE_LOCAL
-                const float wx = pwx[0];
+                    const float wx = pwx[0];
 #else
-                const float wx = calc_weight(i, srcX, ratioClampedX, pgFactor);
+                    const float wx = calc_weight(i, srcX, ratioClampedX, pgFactor);
 #endif
-                clr += srcPtr[0] * wx * wy;
-                sumWeight += wx * wy;
+                    clr += srcPtr[0] * wx * wy;
+                    sumWeight += wx * wy;
+                }
             }
         }
         clr /= sumWeight;
