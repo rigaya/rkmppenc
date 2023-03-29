@@ -87,7 +87,7 @@ float factor_spline(const float x_raw, SPLINE_FACTOR_MEM_TYPE const float *restr
     const float x = fabs(x_raw);
     if (x >= (float)radius) return 0.0f;
 
-    const float4 weight = (SPLINE_FACTOR_MEM_TYPE const float4 *)psFactor)[min((int)x, radius - 1)];
+    const float4 weight = ((SPLINE_FACTOR_MEM_TYPE const float4 *)psFactor)[min((int)x, radius - 1)];
     //重みを計算
     float w = weight.w;
     w += x * weight.z;
