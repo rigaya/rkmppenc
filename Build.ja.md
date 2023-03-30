@@ -28,10 +28,11 @@ sudo apt install build-essential libtool git cmake
 
 ```Shell
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/lib/aarch64-linux-gnu/libmali-valhall-g610-g6p0-wayland-gbm.so
-sudo cp libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
+sudo mv libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
+sudo chmod 755 /usr/lib/libmali-valhall-g610-g6p0-wayland-gbm.so
 
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/firmware/g610/mali_csffw.bin
-sudo cp mali_csffw.bin /lib/firmware
+sudo mv mali_csffw.bin /lib/firmware
 
 sudo mkdir -p /etc/OpenCL/vendors
 sudo sh -c 'echo /usr/lib/libmali-valhall-g610-g6p0-wayland-gbm.so > /etc/OpenCL/vendors/mali.icd'
@@ -56,6 +57,8 @@ cd ../../../..
 ### 4. ビルドに必要なライブラリのインストール
 
 ```Shell
+sudo apt install libvdpau1 libva-x11-2 libvulkan-dev libx11-dev
+
 sudo apt install ffmpeg \
   libavcodec-extra libavcodec-dev libavutil-dev libavformat-dev libswresample-dev libavfilter-dev \
   libass9 libass-dev \
