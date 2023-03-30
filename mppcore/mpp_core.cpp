@@ -847,6 +847,14 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     if (m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN) {
         inputFrame.mem_type = RGY_MEM_TYPE_GPU_IMAGE;
     }
+
+    //出力解像度が設定されていない場合は、入力解像度と同じにする
+    if (inputParam->input.dstWidth == 0) {
+        inputParam->input.dstWidth = croppedWidth;
+    }
+    if (inputParam->input.dstHeight == 0) {
+        inputParam->input.dstHeight = croppedHeight;
+    }
     m_encFps = rgy_rational<int>(inputParam->input.fpsN, inputParam->input.fpsD);
 
     const bool cspConvRequired = inputFrame.csp != GetEncoderCSP(inputParam);
@@ -1899,6 +1907,16 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
         return ret;
     }
 
+    auto par = std::make_pair(prm->par[0], prm->par[1]);
+    if ((!prm->par[0] || !prm->par[1]) //SAR比の指定がない
+        && prm->input.sar[0] && prm->input.sar[1] //入力側からSAR比を取得ずみ
+        && (prm->input.dstWidth == prm->input.srcWidth && prm->input.dstHeight == prm->input.srcHeight)) {//リサイズは行われない
+        par = std::make_pair(prm->input.sar[0], prm->input.sar[1]);
+    }
+    adjust_sar(&par.first, &par.second, prm->input.dstWidth, prm->input.dstHeight);
+    m_sar = rgy_rational<int>(par.first, par.second);
+    PrintMes(RGY_LOG_DEBUG, _T("output res %dx%d, sar: %d:%d.\n"), prm->input.dstWidth, prm->input.dstHeight, m_sar.n(), m_sar.d());
+
     //MPP_POLL_NON_BLOCKを設定してから、initを呼ぶ必要があると思われる
     MppPollType timeout_in  = MPP_POLL_NON_BLOCK;
     MppPollType timeout_out = MPP_POLL_NON_BLOCK;
@@ -1935,8 +1953,6 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
     if (ret != RGY_ERR_NONE) {
         return ret;
     }
-
-    m_sar = rgy_rational<int>(prm->par[0], prm->par[1]);
 
     auto sei_mode = MPP_ENC_SEI_MODE_ONE_FRAME;
     ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_SEI_CFG, &sei_mode));
