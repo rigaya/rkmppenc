@@ -494,6 +494,7 @@ public:
         m_type(type), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(outMaxQueueSize), m_log(log) {
     };
     virtual ~PipelineTask() {
+        m_outQeueue.clear();
         m_workSurfs.clear();
     }
     virtual bool isPassThrough() const { return false; }
@@ -762,6 +763,7 @@ public:
             m_frameGrp = nullptr;
         }
         m_queueHDR10plusMetadata.close([](RGYFrameDataMetadata **ptr) { if (*ptr) { delete *ptr; *ptr = nullptr; }; });
+        m_decInputBitstream.clear();
     };
     void setDec(MPPContext *dec) { m_dec = dec; };
 
