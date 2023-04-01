@@ -37,10 +37,10 @@ class RGAFilter : public RGYFilter {
 public:
     RGAFilter();
     virtual ~RGAFilter();
-    virtual RGY_ERR filter(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) override;
+    RGY_ERR filter_rga(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync);
 protected:
-    virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event = nullptr) override final;
-    virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) = 0;
+    virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event) override;
+    virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) = 0;
     virtual RGY_ERR AllocFrameBuf(const RGYFrameInfo &frame, int frames) override;
     virtual RGY_ERR AllocFrameBufRGA(const RGYFrameInfo &frame, int frames);
 
@@ -53,8 +53,8 @@ public:
     virtual ~RGAFilterResize();
     virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
 protected:
+    virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) override;
     RGY_ERR checkParams(const RGYFilterParam *param);  
-    virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) override;
     virtual void close() override;
 
     rga_buffer_handle_t getRGABufferHandle(const RGYFrameInfo *frame);

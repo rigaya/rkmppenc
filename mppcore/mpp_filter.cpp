@@ -42,12 +42,43 @@ RGAFilter::RGAFilter() :
 RGAFilter::~RGAFilter() {
 }
 
-RGY_ERR RGAFilter::filter(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) {
-    RGYOpenCLQueue dummy;
-    return RGYFilter::filter(pInputFrame, ppOutputFrames, pOutputFrameNum, dummy, {}, nullptr);
-}
 RGY_ERR RGAFilter::run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event) {
-    return run_filter_rga(pInputFrame, ppOutputFrames, pOutputFrameNum);
+    return RGY_ERR_UNSUPPORTED;
+}
+    
+
+RGY_ERR RGAFilter::filter_rga(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) {
+    if (pInputFrame == nullptr) {
+        *pOutputFrameNum = 0;
+        ppOutputFrames[0] = nullptr;
+    }
+    if (m_param
+        && m_param->bOutOverwrite //上書きか?
+        && pInputFrame != nullptr && pInputFrame->ptr[0] != nullptr //入力が存在するか?
+        && ppOutputFrames != nullptr && ppOutputFrames[0] == nullptr) { //出力先がセット可能か?
+        ppOutputFrames[0] = pInputFrame;
+        *pOutputFrameNum = 1;
+    }
+    const auto ret = run_filter_rga(pInputFrame, ppOutputFrames, pOutputFrameNum, sync);
+    const int nOutFrame = *pOutputFrameNum;
+    if (!m_param->bOutOverwrite && nOutFrame > 0) {
+        if (m_pathThrough & FILTER_PATHTHROUGH_TIMESTAMP) {
+            if (nOutFrame != 1) {
+                AddMessage(RGY_LOG_ERROR, _T("timestamp path through can only be applied to 1-in/1-out filter.\n"));
+                return RGY_ERR_INVALID_CALL;
+            } else {
+                ppOutputFrames[0]->timestamp = pInputFrame->timestamp;
+                ppOutputFrames[0]->duration = pInputFrame->duration;
+                ppOutputFrames[0]->inputFrameId = pInputFrame->inputFrameId;
+            }
+        }
+        for (int i = 0; i < nOutFrame; i++) {
+            if (m_pathThrough & FILTER_PATHTHROUGH_FLAGS)     ppOutputFrames[i]->flags = pInputFrame->flags;
+            if (m_pathThrough & FILTER_PATHTHROUGH_PICSTRUCT) ppOutputFrames[i]->picstruct = pInputFrame->picstruct;
+            if (m_pathThrough & FILTER_PATHTHROUGH_DATA)      ppOutputFrames[i]->dataList  = pInputFrame->dataList;
+        }
+    }
+    return ret;
 }
 
 RGY_ERR RGAFilter::AllocFrameBuf(const RGYFrameInfo &frame, int frames) {
@@ -155,7 +186,7 @@ rga_buffer_handle_t RGAFilterResize::getRGABufferHandle(const RGYFrameInfo *fram
     return importbuffer_virtualaddr((void *)frame->ptr[0], frame->pitch[0] * frame->height * RGY_CSP_PLANES[frame->csp]);
 }
 
-RGY_ERR RGAFilterResize::run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) {
+RGY_ERR RGAFilterResize::run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) {
     RGY_ERR sts = RGY_ERR_NONE;
     if (pInputFrame->ptr[0] == nullptr) {
         return sts;
@@ -210,17 +241,19 @@ RGY_ERR RGAFilterResize::run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFram
         return sts;
     }
 
+    const int acquire_fence_fd = *sync;
+    *sync = -1;
     const auto im2dinterp = interp_rgy_to_rga(prm->interp);
-    sts = err_to_rgy(imresize_t(src, dst, 0.0, 0.0, im2dinterp, 1));
+    sts = err_to_rgy(imresize(src, dst, 0.0, 0.0, im2dinterp, acquire_fence_fd, sync));
     if (sts != RGY_ERR_NONE) {
         AddMessage(RGY_LOG_ERROR, _T("Failed to run imresize: %s"), get_err_mes(sts));
         return sts;
     }
-    if (src_handle) {
-        releasebuffer_handle(src_handle);
-    }
-    if (dst_handle) {
-        releasebuffer_handle(dst_handle);
-    }
+    //if (src_handle) {
+    //    releasebuffer_handle(src_handle);
+    //}
+    //if (dst_handle) {
+    //    releasebuffer_handle(dst_handle);
+    //}
     return sts;
 }

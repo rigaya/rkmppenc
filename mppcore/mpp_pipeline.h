@@ -340,20 +340,21 @@ protected:
     PipelineTaskSurface m_surf;
     std::unique_ptr<PipelineTaskOutput> m_dependencyFrame;
     std::vector<RGYOpenCLEvent> m_clevents;
+    int m_release_fence_rga;
 public:
     PipelineTaskOutputSurf(PipelineTaskSurface surf) :
-        PipelineTaskOutput(PipelineTaskOutputType::SURFACE), m_surf(surf), m_dependencyFrame(), m_clevents() {
+        PipelineTaskOutput(PipelineTaskOutputType::SURFACE), m_surf(surf), m_dependencyFrame(), m_clevents(), m_release_fence_rga(0) {
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutputDataCustom>& customData) :
-        PipelineTaskOutput(PipelineTaskOutputType::SURFACE, customData), m_surf(surf), m_dependencyFrame(), m_clevents() {
+        PipelineTaskOutput(PipelineTaskOutputType::SURFACE, customData), m_surf(surf), m_dependencyFrame(), m_clevents(), m_release_fence_rga(0) {
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutput>& dependencyFrame) :
         PipelineTaskOutput(PipelineTaskOutputType::SURFACE),
-        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents() {
+        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents(), m_release_fence_rga(0) {
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutput>& dependencyFrame, RGYOpenCLEvent& clevent) :
         PipelineTaskOutput(PipelineTaskOutputType::SURFACE),
-        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents() {
+        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents(), m_release_fence_rga(0) {
         m_clevents.push_back(clevent);
     };
     virtual ~PipelineTaskOutputSurf() {
@@ -367,10 +368,18 @@ public:
         m_clevents.push_back(clevent);
     }
 
+    void setRGASync(int sync) {
+        m_release_fence_rga = sync;
+    }
+
     virtual void depend_clear() override {
         RGYOpenCLEvent::wait(m_clevents);
         m_clevents.clear();
         m_dependencyFrame.reset();
+        if (m_release_fence_rga) {
+            imsync(m_release_fence_rga);
+            m_release_fence_rga = 0;
+        }
     }
 
     RGY_ERR writeSys(RGYOutput *writer) {
@@ -1943,13 +1952,14 @@ public:
             //これを行わないとこのフレームが再度使われてしまうことになる
             m_prevInputFrame.push_back(std::move(frame));
         }
+        int rga_sync = 0;
         std::vector<std::unique_ptr<PipelineTaskOutputSurf>> outputSurfs;
         while (filterframes.size() > 0 || drain) {
             //フィルタリングするならここ
             for (uint32_t ifilter = filterframes.front().second; ifilter < m_vpFilters.size() - 1; ifilter++) {
                 int nOutFrames = 0;
                 RGYFrameInfo *outInfo[16] = { 0 };
-                auto sts_filter = m_vpFilters[ifilter]->filter(&filterframes.front().first, (RGYFrameInfo **)&outInfo, &nOutFrames);
+                auto sts_filter = m_vpFilters[ifilter]->filter_rga(&filterframes.front().first, (RGYFrameInfo **)&outInfo, &nOutFrames, &rga_sync);
                 if (sts_filter != RGY_ERR_NONE) {
                     PrintMes(RGY_LOG_ERROR, _T("Error while running filter \"%s\".\n"), m_vpFilters[ifilter]->name().c_str());
                     return sts_filter;
@@ -1997,7 +2007,7 @@ public:
             int nOutFrames = 0;
             RGYFrameInfo *outInfo[1];
             outInfo[0] = &surfVppOutInfo;
-            auto sts_filter = lastFilter->filter(&filterframes.front().first, (RGYFrameInfo **)&outInfo, &nOutFrames);
+            auto sts_filter = lastFilter->filter_rga(&filterframes.front().first, (RGYFrameInfo **)&outInfo, &nOutFrames, &rga_sync);
             if (sts_filter != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("Error while running filter \"%s\".\n"), lastFilter->name().c_str());
                 return sts_filter;
@@ -2013,6 +2023,7 @@ public:
             }
 
             auto outputSurf = std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame);
+            outputSurf->setRGASync(rga_sync);
             outputSurfs.push_back(std::move(outputSurf));
         }
         m_outQeueue.insert(m_outQeueue.end(),
