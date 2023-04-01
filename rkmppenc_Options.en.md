@@ -1797,6 +1797,9 @@ Specify the resizing algorithm.
   | lanczos2 | 4x4 Lanczos resampling |
   | lanczos3 | 6x6 Lanczos resampling |
   | lanczos4 | 8x8 Lanczos resampling |
+  | rga_nearest  | set nearest pixel  |
+  | rga_bilinear | linear interpolation  |
+  | rga_bicubic  | bicubic interpolation |
 
 ### --vpp-unsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 unsharp filter, for edge and detail enhancement.

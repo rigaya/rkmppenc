@@ -1783,6 +1783,10 @@ yadifによるインタレ解除を行う。
   | lanczos2 | 4x4 lanczos補間 |
   | lanczos3 | 6x6 lanczos補間 |
   | lanczos4 | 8x8 lanczos補間 |
+  | rga_nearest  | 最近傍点を選択  |
+  | rga_bilinear | 線形補間  |
+  | rga_bicubic  | 双三次補間 |
+
 
 ### --vpp-unsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 unsharpフィルタ。輪郭・ディテール強調用のフィルタ。

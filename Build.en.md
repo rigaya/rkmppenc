@@ -53,7 +53,17 @@ make -j8 && sudo make install
 cd ../../../..
 ```
 
-### 4. Install required libraries
+### 4. Install librga
+```Shell
+git clone https://github.com/airockchip/librga
+cd librga
+sudo mkdir /usr/local/include/rga
+sudo mkdir /usr/local/lib/rga
+sudo cp ./include/* /usr/local/include/rga/
+sudo install ./libs/Linux/gcc-aarch64/* /usr/local/lib/rga/
+```
+
+### 5. Install required libraries
 
 ```Shell
 sudo apt install ffmpeg \
@@ -62,8 +72,7 @@ sudo apt install ffmpeg \
   opencl-headers
 ```
 
-
-### 5. Build rkmppenc
+### 6. Build rkmppenc
 ```Shell
 git clone https://github.com/rigaya/rkmppenc --recursive
 cd rkmppenc

@@ -40,6 +40,7 @@
 #include "rgy_device.h"
 #include "mpp_device.h"
 #include "mpp_param.h"
+#include "mpp_filter.h"
 #include "mpp_pipeline.h"
 #include "rgy_filter.h"
 #include "rgy_filter_ssim.h"
@@ -56,7 +57,7 @@
 #define THREAD_DEC_USE_FUTURE 1
 #endif
 
-#define ENABLE_VPPRGA 0
+#define ENABLE_VPPRGA 1
 
 #if ENABLE_AVSW_READER
 struct AVChapter;
@@ -110,10 +111,8 @@ protected:
         const bool cspConvRequired, const bool cropRequired, const RGY_VPP_RESIZE_TYPE resizeRequired);
     virtual RGY_ERR AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilters,
         RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
-#if ENABLE_VPPRGA
-    virtual std::tuple<RGY_ERR, std::unique_ptr<AMFFilter>> AddFilterAMF(
+    virtual RGY_ERR AddFilterRGA(std::vector<std::unique_ptr<RGAFilter>>&filters,
         RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
-#endif
     virtual RGY_ERR createOpenCLCopyFilterForPreVideoMetric(const MPPParam *inputParam);
     virtual RGY_ERR initChapters(MPPParam *prm);
     virtual RGY_ERR initEncoderPrep(const MPPParam *prm);

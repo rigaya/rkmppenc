@@ -47,6 +47,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
   - H.264 / AVC
   - HEVC
   - MPEG2
+- Resize filter by librga
 - OpenCL filters
 - Supports various formats such as avs, vpy, y4m, and raw
 - Supports demux/muxing using libavformat

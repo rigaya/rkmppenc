@@ -34,6 +34,7 @@
 #include "rgy_opencl.h"
 #include "rgy_frame.h"
 #include "mpp_frame.h"
+#include "rga/rga.h"
 
 #include "mpp_param.h"
 #include "convert_csp.h"
@@ -43,8 +44,10 @@ class RGYFrameData;
 MAP_PAIR_0_1_PROTO(codec, rgy, RGY_CODEC, enc, MppCodingType);
 MAP_PAIR_0_1_PROTO(codec, rgy, RGY_CODEC, dec, MppCodingType);
 MAP_PAIR_0_1_PROTO(csp, rgy, RGY_CSP, enc, MppFrameFormat);
+MAP_PAIR_0_1_PROTO(csp, rgy, RGY_CSP, rkrga, RgaSURF_FORMAT);
 MAP_PAIR_0_1_PROTO(picstruct, rgy, RGY_PICSTRUCT, enc, uint32_t);
 MAP_PAIR_0_1_PROTO(loglevel, rgy, int, enc, int);
+MAP_PAIR_0_1_PROTO(interp, rgy, RGY_VPP_RESIZE_ALGO, rga, IM_SCALE_MODE);
 
 #define MPP_ALIGN ALIGN16
 
@@ -67,7 +70,7 @@ struct MPPCfg {
         } else {
             csp = (yuv444) ? RGY_CSP_YUV444 : RGY_CSP_NV12;
         }
-        return RGYFrameInfo(outWidth, outHeight, csp, bitdepth, RGY_PICSTRUCT_FRAME, RGY_MEM_TYPE_MPP);
+        return RGYFrameInfo(outWidth, outHeight, csp, bitdepth, RGY_PICSTRUCT_FRAME, RGY_MEM_TYPE_CPU);
     }
     RGY_CODEC rgy_codec() const {
         return codec_enc_to_rgy(codec.coding);
@@ -436,7 +439,7 @@ static RGYFrameInfo infoMPP(MppFrame mppframe) {
     info.duration = duration;
     info.picstruct = picstruct_enc_to_rgy(mpp_frame_get_mode(mppframe) & MPP_FRAME_FLAG_FIELD_ORDER_MASK);
     info.flags = RGY_FRAME_FLAG_NONE;
-    info.mem_type = RGY_MEM_TYPE_MPP;
+    info.mem_type = RGY_MEM_TYPE_CPU;
     info.inputFrameId = -1;
     info.flags = RGY_FRAME_FLAG_NONE;
     return info;

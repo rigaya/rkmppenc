@@ -29,6 +29,7 @@
 #include "rk_mpi.h"
 #include "mpp_util.h"
 #include "mpp_device.h"
+#include "rga/im2d.hpp"
 
 DeviceCodecCsp getMPPDecoderSupport() {
     CodecCsp codecCsp;
@@ -51,4 +52,19 @@ std::vector<RGY_CODEC> getMPPEncoderSupport() {
         }
     }
     return encCodec;
+}
+
+tstring getRGAInfo() {
+    std::string str;
+    str += std::string(querystring(RGA_VENDOR));
+    str += std::string(querystring(RGA_VERSION));
+    str += std::string(querystring(RGA_MAX_INPUT));
+    str += std::string(querystring(RGA_MAX_OUTPUT));
+    str += std::string(querystring(RGA_BYTE_STRIDE));
+    str += std::string(querystring(RGA_SCALE_LIMIT));
+    str += std::string(querystring(RGA_INPUT_FORMAT));
+    str += std::string(querystring(RGA_OUTPUT_FORMAT));
+    //str += std::string(querystring(RGA_FEATURE));
+    str += std::string(querystring(RGA_EXPECTED));
+    return char_to_tstring(str);
 }

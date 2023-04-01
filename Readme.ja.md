@@ -47,6 +47,7 @@ Debian/Ubuntu系
   - H.264
   - HEVC
   - MPEG2
+- librgaによるリサイズフィルタ
 - OpenCLフィルタ
 - ソースファイルからの音声抽出や音声エンコード
 - mp4,mkv,tsなどの多彩なコンテナに映像・音声をmuxしながら出力

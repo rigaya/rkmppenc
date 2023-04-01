@@ -32,3 +32,30 @@
 #include "rgy_filter.h"
 #include "mpp_util.h"
 
+
+class RGAFilter : public RGYFilter {
+public:
+    RGAFilter();
+    virtual ~RGAFilter();
+    virtual RGY_ERR filter(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) override;
+protected:
+    virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event = nullptr) override final;
+    virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) = 0;
+    virtual RGY_ERR AllocFrameBuf(const RGYFrameInfo &frame, int frames) override;
+    virtual RGY_ERR AllocFrameBufRGA(const RGYFrameInfo &frame, int frames);
+
+    std::vector<std::unique_ptr<RGYMPPRGAFrame>> m_frameBufRGA;
+};
+
+class RGAFilterResize : public RGAFilter {
+public:
+    RGAFilterResize();
+    virtual ~RGAFilterResize();
+    virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
+protected:
+    RGY_ERR checkParams(const RGYFilterParam *param);  
+    virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum) override;
+    virtual void close() override;
+
+    rga_buffer_handle_t getRGABufferHandle(const RGYFrameInfo *frame);
+};

@@ -359,6 +359,8 @@ else
     if cxx_check "-mfpmath=sse" "${CXXFLAGS} -mfpmath=sse ${LDFLAGS}" ; then
         CXXFLAGS="$CXXFLAGS -mfpmath=sse"
         cnf_write "yes"
+    else
+        cnf_write "no"
     fi
     if cxx_check "-fPIE" "${CXXFLAGS} -fPIE ${LDFLAGS}" ; then
         CXXFLAGS="$CXXFLAGS -fPIE"
@@ -374,11 +376,15 @@ else
         if cxx_check "-ffast-math" "${CXXFLAGS} -ffast-math ${LDFLAGS}" ; then
             CXXFLAGS="$CXXFLAGS -ffast-math"
             cnf_write "yes"
+        else
+            cnf_write "no"
         fi
     fi
     if cxx_check "-fomit-frame-pointer" "${CXXFLAGS} -fomit-frame-pointer ${LDFLAGS}" ; then
         CXXFLAGS="$CXXFLAGS -fomit-frame-pointer"
         cnf_write "yes"
+    else
+        cnf_write "no"
     fi
     LDFLAGS="$LDFLAGS -Wl,-s"
 
@@ -420,6 +426,15 @@ if cxx_check "mpp" "${CXXFLAGS} ${EXTRACXXFLAGS} ${LIBVPL_CFLAGS} ${LDFLAGS} ${E
     cnf_write "yes"
 else
     cnf_write "mpp not installed." 
+    exit 1
+fi
+
+LIBRGA_LIBS="-lrga"
+if cxx_check "librga" "${CXXFLAGS} ${EXTRACXXFLAGS} ${LIBVPL_CFLAGS} ${LDFLAGS} ${EXTRALDFLAGS} ${LIBRGA_LIBS}" "rga/im2d.hpp" "" "imsync(0);" ; then
+    LDFLAGS="${LDFLAGS} ${LIBRGA_LIBS}"
+    cnf_write "yes"
+else
+    cnf_write "rga not installed." 
     exit 1
 fi
 

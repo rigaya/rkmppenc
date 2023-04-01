@@ -28,8 +28,7 @@ sudo apt install build-essential libtool git cmake
 
 ```Shell
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/lib/aarch64-linux-gnu/libmali-valhall-g610-g6p0-wayland-gbm.so
-sudo mv libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
-sudo chmod 755 /usr/lib/libmali-valhall-g610-g6p0-wayland-gbm.so
+sudo install libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
 
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/firmware/g610/mali_csffw.bin
 sudo mv mali_csffw.bin /lib/firmware
@@ -54,7 +53,17 @@ make -j8 && sudo make install
 cd ../../../..
 ```
 
-### 4. ビルドに必要なライブラリのインストール
+### 4. librgaのインストール
+```Shell
+git clone https://github.com/airockchip/librga
+cd librga
+sudo mkdir /usr/local/include/rga
+sudo mkdir /usr/local/lib/rga
+sudo cp ./include/* /usr/local/include/rga/
+sudo install ./libs/Linux/gcc-aarch64/* /usr/local/lib/rga/
+```
+
+### 5. ビルドに必要なライブラリのインストール
 
 ```Shell
 sudo apt install libvdpau1 libva-x11-2 libvulkan-dev libx11-dev
@@ -66,7 +75,7 @@ sudo apt install ffmpeg \
 ```
 
 
-### 5. rkmppencのビルド
+### 6. rkmppencのビルド
 ```Shell
 git clone https://github.com/rigaya/rkmppenc --recursive
 cd rkmppenc

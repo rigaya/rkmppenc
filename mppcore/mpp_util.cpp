@@ -31,6 +31,7 @@
 #include "mpp_param.h"
 #include "mpp_frame.h"
 #include "mpp_log_def.h"
+#include "rga/rga.h"
 #include "rgy_frame.h"
 
 static const auto RGY_CODEC_TO_MPP = make_array<std::pair<RGY_CODEC, MppCodingType>>(
@@ -86,6 +87,40 @@ static const auto RGY_CSP_TO_MPP = make_array<std::pair<RGY_CSP, MppFrameFormat>
 
 MAP_PAIR_0_1(csp, rgy, RGY_CSP, enc, MppFrameFormat, RGY_CSP_TO_MPP, RGY_CSP_NA, MPP_FMT_BUTT);
 
+
+static const auto RGY_CSP_TO_RKRGA = make_array<std::pair<RGY_CSP, RgaSURF_FORMAT>>(
+    std::make_pair(RGY_CSP_NA,        RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_NV12,      RK_FORMAT_YCbCr_420_SP),
+    std::make_pair(RGY_CSP_YV12,      RK_FORMAT_YCbCr_420_P),
+    std::make_pair(RGY_CSP_YUY2,      RK_FORMAT_YUYV_422),
+    std::make_pair(RGY_CSP_YUV422,    RK_FORMAT_YCbCr_422_P),
+    std::make_pair(RGY_CSP_YUV444,    RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YV12_09,   RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YV12_10,   RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YV12_12,   RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YV12_14,   RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YV12_16,   RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_P010,      RK_FORMAT_YCbCr_420_SP_10B),
+    std::make_pair(RGY_CSP_YUV422_09, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV422_10, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV422_12, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV422_14, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV422_16, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_P210,      RK_FORMAT_YCbCr_422_10b_SP),
+    std::make_pair(RGY_CSP_YUV444_09, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV444_10, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV444_12, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV444_14, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YUV444_16, RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_RGB24R,    RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_RGB32R,    RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_RGB24,     RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_RGB32,     RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_YC48,      RK_FORMAT_UNKNOWN)
+    );
+
+MAP_PAIR_0_1(csp, rgy, RGY_CSP, rkrga, RgaSURF_FORMAT, RGY_CSP_TO_RKRGA, RGY_CSP_NA, RK_FORMAT_UNKNOWN);
+
 static const auto RGY_PICSTRUCT_TO_MPP = make_array<std::pair<RGY_PICSTRUCT, uint32_t>>(
     std::make_pair(RGY_PICSTRUCT_UNKNOWN,      MPP_FRAME_FLAG_FRAME),
     std::make_pair(RGY_PICSTRUCT_FRAME,        MPP_FRAME_FLAG_FRAME),
@@ -106,6 +141,13 @@ static const auto RGY_LOGLEVEL_TO_MPP = make_array<std::pair<int, int>>(
     std::make_pair(RGY_LOG_ERROR, MPP_LOG_ERROR)
     );
 MAP_PAIR_0_1(loglevel, rgy, int, enc, int, RGY_LOGLEVEL_TO_MPP, RGY_LOG_INFO, MPP_LOG_INFO);
+
+static const auto RGY_INTERP_TO_RGA = make_array<std::pair<RGY_VPP_RESIZE_ALGO, IM_SCALE_MODE>>(
+    std::make_pair(RGY_VPP_RESIZE_RGA_NEAREST,  INTER_NEAREST),
+    std::make_pair(RGY_VPP_RESIZE_RGA_BILINEAR, INTER_LINEAR),
+    std::make_pair(RGY_VPP_RESIZE_RGA_BICUBIC,  INTER_CUBIC)
+    );
+MAP_PAIR_0_1(interp, rgy, RGY_VPP_RESIZE_ALGO, rga, IM_SCALE_MODE, RGY_INTERP_TO_RGA, RGY_VPP_RESIZE_UNKNOWN, (IM_SCALE_MODE)-1);
 
 void RGYBitstream::addFrameData(RGYFrameData *frameData) {
     if (frameData != nullptr) {

@@ -175,7 +175,7 @@ std::vector<uint8_t> RGYFrameDataDOVIRpu::gen_obu() const {
 }
 #endif
 
-RGYSysFrame::RGYSysFrame() : frame() {}
+RGYSysFrame::RGYSysFrame() : frame(), allocatedFirstPlaneOnly(false) {}
 RGYSysFrame::RGYSysFrame(const RGYFrameInfo& frame_) : frame(frame_) {}
 RGYSysFrame::~RGYSysFrame() { deallocate(); }
 
@@ -244,10 +244,72 @@ RGY_ERR RGYSysFrame::allocate(const RGYFrameInfo &info) {
     return RGY_ERR_NONE;
 }
 void RGYSysFrame::deallocate() {
-    for (int i = 0; i < _countof(frame.ptr); i++) {
+    for (int i = 0; i < ((allocatedFirstPlaneOnly) ? 1 : _countof(frame.ptr)); i++) {
         if (frame.ptr[i] != nullptr) {
             _aligned_free(frame.ptr[i]);
             frame.ptr[i] = nullptr;
         }
     }
+}
+
+
+RGYMPPRGAFrame::RGYMPPRGAFrame() : RGYSysFrame() { allocatedFirstPlaneOnly = true; }
+RGYMPPRGAFrame::RGYMPPRGAFrame(const RGYFrameInfo& frame_) : RGYSysFrame(frame_) {  allocatedFirstPlaneOnly = true; }
+RGYMPPRGAFrame::~RGYMPPRGAFrame() { deallocate(); }
+
+RGY_ERR RGYMPPRGAFrame::allocate(const RGYFrameInfo &info) {
+    frame = info;
+    frame.mem_type = RGY_MEM_TYPE_CPU;
+    for (int i = 0; i < _countof(frame.ptr); i++) {
+        frame.ptr[i] = nullptr;
+        frame.pitch[i] = 0;
+    }
+
+    int pixsize = (RGY_CSP_BIT_DEPTH[frame.csp] + 7) / 8;
+    switch (frame.csp) {
+    case RGY_CSP_RGB24R:
+    case RGY_CSP_RGB24:
+    case RGY_CSP_BGR24:
+    case RGY_CSP_YC48:
+        pixsize *= 3;
+        break;
+    case RGY_CSP_RGB32R:
+    case RGY_CSP_RGB32:
+    case RGY_CSP_BGR32:
+        pixsize *= 4;
+        break;
+    case RGY_CSP_AYUV:
+    case RGY_CSP_AYUV_16:
+        pixsize *= 4;
+        break;
+    case RGY_CSP_YUY2:
+    case RGY_CSP_Y210:
+    case RGY_CSP_Y216:
+    case RGY_CSP_Y410:
+        pixsize *= 2;
+        break;
+    case RGY_CSP_Y416:
+        pixsize *= 4;
+        break;
+    default:
+        break;
+    }
+
+    allocatedFirstPlaneOnly = true;
+
+    const int image_pitch_alignment = 64;
+    const int widthByte = frame.width * pixsize;
+    const int memPitch = ALIGN(widthByte, image_pitch_alignment);
+    const int size = memPitch * frame.height * RGY_CSP_PLANES[frame.csp];
+    auto mem = _aligned_malloc(size, image_pitch_alignment);
+    if (mem == nullptr) {
+        return RGY_ERR_NULL_PTR;
+    }
+    frame.pitch[0] = memPitch;
+    frame.ptr[0] = (uint8_t *)mem;
+    for (int i = 1; i < RGY_CSP_PLANES[frame.csp]; i++) {
+        frame.pitch[i] = memPitch;
+        frame.ptr[i] = frame.ptr[i-1] + memPitch * frame.height;
+    }
+    return RGY_ERR_NONE;
 }

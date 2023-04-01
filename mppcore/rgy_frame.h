@@ -119,15 +119,26 @@ struct RGYSysFrame {
 public:
     RGYSysFrame();
     RGYSysFrame(const RGYFrameInfo& frame_);
-    ~RGYSysFrame();
-    RGY_ERR allocate(const int width, const int height, const RGY_CSP csp, const int bitdepth);
-    RGY_ERR allocate(const RGYFrameInfo &frame);
-    void deallocate();
+    virtual ~RGYSysFrame();
+    virtual RGY_ERR allocate(const int width, const int height, const RGY_CSP csp, const int bitdepth);
+    virtual RGY_ERR allocate(const RGYFrameInfo &frame);
+    virtual void deallocate();
 protected:
     RGYSysFrame(const RGYSysFrame &) = delete;
     void operator =(const RGYSysFrame &) = delete;
 public:
     RGYFrameInfo frame;
+    bool allocatedFirstPlaneOnly; // 最初のplaneでフレーム全体を確保している
+};
+struct RGYMPPRGAFrame : public RGYSysFrame {
+public:
+    RGYMPPRGAFrame();
+    RGYMPPRGAFrame(const RGYFrameInfo& frame_);
+    virtual ~RGYMPPRGAFrame();
+    virtual RGY_ERR allocate(const RGYFrameInfo &frame) override;
+protected:
+    RGYMPPRGAFrame(const RGYMPPRGAFrame &) = delete;
+    void operator =(const RGYMPPRGAFrame &) = delete;
 };
 
 #endif //__RGY_FRAME_H__

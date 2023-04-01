@@ -27,6 +27,8 @@
 
 #pragma once
 #include "rgy_def.h"
+#include "rgy_util.h"
 
 DeviceCodecCsp getMPPDecoderSupport();
 std::vector<RGY_CODEC> getMPPEncoderSupport();
+tstring getRGAInfo();

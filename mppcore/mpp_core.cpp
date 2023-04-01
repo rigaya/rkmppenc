@@ -936,23 +936,20 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     sInputCrop *inputCrop = (cropRequired) ? &inputParam->input.crop : nullptr;
     const auto resize = std::make_pair(resizeWidth, resizeHeight);
 
-    std::vector<std::unique_ptr<RGYFilter>> vppOpenCLFilters;
     for (size_t i = 0; i < filterPipeline.size(); i++) {
         const VppFilterType ftype0 = (i >= 1)                      ? getVppFilterType(filterPipeline[i-1]) : VppFilterType::FILTER_NONE;
         const VppFilterType ftype1 =                                 getVppFilterType(filterPipeline[i+0]);
         const VppFilterType ftype2 = (i+1 < filterPipeline.size()) ? getVppFilterType(filterPipeline[i+1]) : VppFilterType::FILTER_NONE;
         if (ftype1 == VppFilterType::FILTER_RGA) {
-#if ENABLE_VPPRGA
-            auto [err, vppamf] = AddFilterAMF(inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
+            std::vector<std::unique_ptr<RGAFilter>> vppFilters;
+            auto err = AddFilterRGA(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
             inputCrop = nullptr;
             if (err != RGY_ERR_NONE) {
                 return err;
             }
-            if (vppamf) {
-                m_vpFilters.push_back(VppVilterBlock(vppamf));
-            }
-#endif
+            m_vpFilters.push_back(VppVilterBlock(vppFilters));
         } else if (ftype1 == VppFilterType::FILTER_OPENCL) {
+            std::vector<std::unique_ptr<RGYFilter>> vppOpenCLFilters;
             if (ftype0 != VppFilterType::FILTER_OPENCL || filterPipeline[i] == VppType::CL_CROP) { // 前のfilterがOpenCLでない場合、変換が必要
                 if (false) { // CPU -> GPU
                     auto filterCrop = std::make_unique<RGYFilterCspCrop>(m_cl);
@@ -1037,9 +1034,6 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
                     m_encFps = param->baseFps;
                     //登録
                     vppOpenCLFilters.push_back(std::move(filterCrop));
-                    // ブロックに追加する
-                    m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
-                    vppOpenCLFilters.clear();
                 }
                 if (false) { // GPU->CPU
                     std::unique_ptr<RGYFilter> filterCrop(new RGYFilterCspCrop(m_cl));
@@ -1059,11 +1053,10 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
                     m_encFps = param->baseFps;
                     //登録
                     vppOpenCLFilters.push_back(std::move(filterCrop));
-                    // ブロックに追加する
-                    m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
-                    vppOpenCLFilters.clear();
                 }
             }
+            // ブロックに追加する
+            m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
         } else {
             PrintMes(RGY_LOG_ERROR, _T("Unsupported vpp filter type.\n"));
             return RGY_ERR_UNSUPPORTED;
@@ -1126,12 +1119,8 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.knn.enable)           filterPipeline.push_back(VppType::CL_DENOISE_KNN);
     if (inputParam->vpp.pmd.enable)           filterPipeline.push_back(VppType::CL_DENOISE_PMD);
     if (inputParam->vpp.subburn.size()>0)     filterPipeline.push_back(VppType::CL_SUBBURN);
-#if ENABLE_VPPRGA
     if (     resizeRequired == RGY_VPP_RESIZE_TYPE_OPENCL) filterPipeline.push_back(VppType::CL_RESIZE);
     else if (resizeRequired != RGY_VPP_RESIZE_TYPE_NONE)   filterPipeline.push_back(VppType::RGA_RESIZE);
-#else
-    if (resizeRequired != RGY_VPP_RESIZE_TYPE_NONE) filterPipeline.push_back(VppType::CL_RESIZE);
-#endif
     if (inputParam->vpp.unsharp.enable)    filterPipeline.push_back(VppType::CL_UNSHARP);
     if (inputParam->vpp.edgelevel.enable)  filterPipeline.push_back(VppType::CL_EDGELEVEL);
     if (inputParam->vpp.warpsharp.enable)  filterPipeline.push_back(VppType::CL_WARPSHARP);
@@ -1180,41 +1169,37 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     return filterPipeline;
 }
 
-#if ENABLE_VPPRGA
-std::tuple<RGY_ERR, std::unique_ptr<AMFFilter>> MPPCore::AddFilterAMF(
+RGY_ERR MPPCore::AddFilterRGA(std::vector<std::unique_ptr<RGAFilter>>&filters,
     RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *inputParam, const sInputCrop *crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo) {
-    std::unique_ptr<AMFFilter> filter;
+    std::unique_ptr<RGAFilter> filter;
     switch (vppType) {
     case VppType::RGA_RESIZE: {
-        filter = std::make_unique<AMFFilterHQScaler>(m_dev->context(), m_pLog);
-        auto param = std::make_shared<AMFFilterParamHQScaler>();
-        param->scaler = inputParam->vppamf.scaler;
-        param->scaler.algorithm = resize_mode_rgy_to_enc(inputParam->vpp.resize_algo);
-        if (param->scaler.algorithm < 0) {
-            PrintMes(RGY_LOG_ERROR, _T("Unknown resize algorithm %s for HQ Scaler.\n"), get_cx_desc(list_vpp_resize, inputParam->vpp.resize_mode));
-            return { RGY_ERR_UNSUPPORTED, nullptr };
-        }
+        filter = std::make_unique<RGAFilterResize>();
+        auto param = std::make_shared<RGYFilterParamResize>();
+        param->interp = inputParam->vpp.resize_algo;
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->frameOut.width = resize.first;
         param->frameOut.height = resize.second;
+        param->frameIn.mem_type = RGY_MEM_TYPE_CPU;
+        param->frameOut.mem_type = RGY_MEM_TYPE_CPU;
         param->baseFps = m_encFps;
         m_pLastFilterParam = param;
         } break;
     default:
         PrintMes(RGY_LOG_ERROR, _T("Unknown filter type.\n"));
-        return { RGY_ERR_UNSUPPORTED, nullptr };
+        return RGY_ERR_UNSUPPORTED;
     }
-    auto sts = filter->init(m_pFactory, m_pTrace, m_pLastFilterParam);
+    auto sts = filter->init(m_pLastFilterParam, m_pLog);
     if (sts != RGY_ERR_NONE) {
-        return { sts, nullptr };
+        return sts;
     }
     //入力フレーム情報を更新
     inputFrame = m_pLastFilterParam->frameOut;
     m_encFps = m_pLastFilterParam->baseFps;
-    return { RGY_ERR_NONE, std::move(filter) };
+    filters.push_back(std::move(filter));
+    return RGY_ERR_NONE;
 }
-#endif
 
 RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilters,
         RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *inputParam, const sInputCrop *crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo) {
@@ -2100,12 +2085,10 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
     }
 
     for (auto& filterBlock : m_vpFilters) {
-#if ENABLE_VPPRGA
         if (filterBlock.type == VppFilterType::FILTER_RGA) {
-            m_pipelineTasks.push_back(std::make_unique<PipelineTaskAMFPreProcess>(filterBlock.vppamf, m_cl, 1, m_pLog));
-        } else
-#endif
-        if (filterBlock.type == VppFilterType::FILTER_OPENCL) {
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskRGAPreProcess>(filterBlock.vpprga,
+                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
+        } else if (filterBlock.type == VppFilterType::FILTER_OPENCL) {
             if (!m_cl) {
                 PrintMes(RGY_LOG_ERROR, _T("OpenCL not enabled, OpenCL filters cannot be used.\n"));
                 return RGY_ERR_UNSUPPORTED;
@@ -2630,7 +2613,9 @@ tstring MPPCore::GetEncoderParam() {
             for (auto& block : m_vpFilters) {
 #if ENABLE_VPPRGA
                 if (block.type == VppFilterType::FILTER_RGA) {
-                    vppstr += str_replace(block.vppamf->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
+                    for (auto& filter : block.vpprga) {
+                        vppstr += str_replace(filter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
+                    }
                 } else
 #endif
                 if (block.type == VppFilterType::FILTER_OPENCL) {
