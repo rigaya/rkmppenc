@@ -5,7 +5,7 @@ by rigaya
 
 [![Build Linux Packages](https://github.com/rigaya/rkmppenc/actions/workflows/build_packages.yml/badge.svg)](https://github.com/rigaya/rkmppenc/actions/workflows/build_packages.yml)  
 
-このソフトウェアは、Rockchip系SoCに搭載されているHWエンコーダ(rkmpp)の画質や速度といった性能の実験を目的としています。  
+このソフトウェアは、Orange Pi、Nano Pi、Radxa Rockシリーズ等のSBCに使用されているRockchip系SoC内蔵のHWエンコーダ(rkmpp)の画質や速度といった性能の実験を目的としています。  
 
 ## 配布場所 & 更新履歴
 [こちら](https://github.com/rigaya/rkmppenc/releases)  
@@ -47,7 +47,7 @@ Debian/Ubuntu系
   - H.264
   - HEVC
   - MPEG2
-- librgaによるリサイズフィルタ
+- NPUによるリサイズフィルタ(librga im2d API使用)
 - OpenCLフィルタ
 - ソースファイルからの音声抽出や音声エンコード
 - mp4,mkv,tsなどの多彩なコンテナに映像・音声をmuxしながら出力
