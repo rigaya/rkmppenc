@@ -32,6 +32,19 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+RUN git clone https://github.com/rockchip-linux/mpp && \
+    cd mpp/build/linux/aarch64/ && \
+    ./make-Makefiles.bash && make -j8 && sudo make install && \
+    cd ../../../..
+
+RUN git clone https://github.com/airockchip/librga && \
+    cd librga && \
+    sudo cp ./include/* /usr/local/include/rockchip/ && \
+    sudo install -m 644 ./libs/Linux/gcc-aarch64/librga.a /usr/local/lib/ && \
+    sudo install -m 755 ./libs/Linux/gcc-aarch64/librga.so /usr/local/lib/ && \
+    sudo ln -s /usr/local/lib/librga.so /usr/local/lib/librga.so.2 && \
+    cd ..
+
 RUN useradd -u $LOCAL_USER_ID -m --user-group --shell /bin/bash rigaya
 RUN groupmod -g $LOCAL_GROUP_ID rigaya
 WORKDIR /home/rigaya

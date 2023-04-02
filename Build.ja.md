@@ -57,10 +57,11 @@ cd ../../../..
 ```Shell
 git clone https://github.com/airockchip/librga
 cd librga
-sudo mkdir /usr/local/include/rga
-sudo mkdir /usr/local/lib/rga
-sudo cp ./include/* /usr/local/include/rga/
-sudo install ./libs/Linux/gcc-aarch64/* /usr/local/lib/rga/
+sudo mkdir -p /usr/local/include/rockchip/
+sudo cp ./include/* /usr/local/include/rockchip/
+sudo install -m 644 ./libs/Linux/gcc-aarch64/librga.a /usr/local/lib/
+sudo install -m 755 ./libs/Linux/gcc-aarch64/librga.so /usr/local/lib/
+sudo ln -s /usr/local/lib/librga.so /usr/local/lib/librga.so.2
 ```
 
 ### 5. ビルドに必要なライブラリのインストール
