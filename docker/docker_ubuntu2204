@@ -6,10 +6,17 @@ ARG DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update \
     && apt install -y \
+      sudo \
       wget \
       git \
       opencl-headers \
+      libvdpau1 \
+      libvulkan-dev \
+      libva-x11-2 \
+      libx11-dev \
       build-essential \
+      cmake \
+      libtool \
       libavcodec58 \
       libavcodec-dev \
       libavutil56 \
