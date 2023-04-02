@@ -17,6 +17,7 @@ RUN apt-get update \
       build-essential \
       cmake \
       libtool \
+      pkg-config \
       libavcodec58 \
       libavcodec-dev \
       libavutil56 \
@@ -44,6 +45,8 @@ RUN git clone https://github.com/airockchip/librga && \
     sudo install -m 755 ./libs/Linux/gcc-aarch64/librga.so /usr/local/lib/ && \
     sudo ln -s /usr/local/lib/librga.so /usr/local/lib/librga.so.2 && \
     cd ..
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
 
 RUN useradd -u $LOCAL_USER_ID -m --user-group --shell /bin/bash rigaya
 RUN groupmod -g $LOCAL_GROUP_ID rigaya
