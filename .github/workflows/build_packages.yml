@@ -118,6 +118,22 @@ jobs:
           echo ${PKGFILE}
           echo "pkgfile=${PKGFILE}" >> $GITHUB_OUTPUT
 
+      - name: Normalize path and get filename
+        id: normalize_path
+        run: |
+          normalized_path=$(realpath "${{ steps.build_exec.outputs.pkgfile }}")
+          filename=$(basename "${{ steps.build_exec.outputs.pkgfile }}")
+          echo "Normalized path: $normalized_path"
+          echo "Filename: $filename"
+          echo "normalized_path=$normalized_path" >> $GITHUB_OUTPUT
+          echo "filename=$filename" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.normalize_path.outputs.filename }}
+          path: ${{ steps.normalize_path.outputs.normalized_path }}
+
       - name: Upload Release Asset
         id: upload-release-asset
         uses: softprops/action-gh-release@v1
