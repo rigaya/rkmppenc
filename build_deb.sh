@@ -6,7 +6,7 @@ PACKAGE_MAINTAINER=rigaya
 PACKAGE_DESCRIPTION=
 PACKAGE_ROOT=.debpkg
 PACKAGE_ARCH=`uname -m`
-PACKAGE_ARCH=`echo ${PACKAGE_ARCH} | sed -e 's/x86_64/amd64/g'`
+PACKAGE_ARCH=`echo ${PACKAGE_ARCH} | sed -e 's/aarch64/arm64/g'`
 if PACKAGE_VERSION=`git describe --tags | cut -f 1 --delim="-"`; then
     PACKAGE_VERSION="0.00-"`git show --format='%h' --no-patch`
 fi
