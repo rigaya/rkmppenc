@@ -281,7 +281,7 @@ Set output file name, pipe output with "-"
 ### -i, --input &lt;string&gt;
 Set input file name, pipe input with "-"
 
-Table below shows the supported readers of VCEEnc. When input format is not set,
+Table below shows the supported readers of rkmppenc. When input format is not set,
 reader used will be selected depending on the extension of input file.
 
 **Auto selection of reader**  

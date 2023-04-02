@@ -1,6 +1,6 @@
 #!/bin/sh
 
-TARGET_EXE=vceencc
+TARGET_EXE=rkmppenc
 TARGET_OS=$1
 PKG_TYPE=$2
 OUTPUT_DIR=`pwd`/../output

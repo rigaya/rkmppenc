@@ -34,7 +34,7 @@
 #include "mpp_param.h"
 #include "rgy_cmd.h"
 
-tstring GetVCEEncVersion();
+tstring GetMPPEncVersion();
 tstring encoder_help();
 const TCHAR *cmd_short_opt_to_long(TCHAR short_opt);
 
