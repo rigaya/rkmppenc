@@ -44,24 +44,25 @@ sudo apt install clinfo
 clinfo
 ```
 
-### 3. Rockchip MPPのビルドとインストール
+### 3. Rockchip MPPのインストール
 
 ```Shell
-git clone https://github.com/rockchip-linux/mpp && cd mpp/build/linux/aarch64/
-./make-Makefiles.bash
-make -j8 && sudo make install
-cd ../../../..
+wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp1_1.5.0-1_arm64.deb
+sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
+rm librockchip-mpp1_1.5.0-1_arm64.deb
+wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp-dev_1.5.0-1_arm64.deb
+sudo apt install ./librockchip-mpp-dev_1.5.0-1_arm64.deb
+rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 ```
 
 ### 4. librgaのインストール
 ```Shell
-git clone https://github.com/airockchip/librga
-cd librga
-sudo mkdir -p /usr/local/include/rockchip/
-sudo cp ./include/* /usr/local/include/rockchip/
-sudo install -m 644 ./libs/Linux/gcc-aarch64/librga.a /usr/local/lib/
-sudo install -m 755 ./libs/Linux/gcc-aarch64/librga.so /usr/local/lib/
-sudo ln -s /usr/local/lib/librga.so /usr/local/lib/librga.so.2
+wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga2_2.2.0-1_arm64.deb
+sudo apt install ./librga2_2.2.0-1_arm64.deb
+rm librga2_2.2.0-1_arm64.deb
+wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga-dev_2.2.0-1_arm64.deb
+sudo apt install ./librga-dev_2.2.0-1_arm64.deb
+rm librga-dev_2.2.0-1_arm64.deb
 ```
 
 ### 5. ビルドに必要なライブラリのインストール
@@ -74,7 +75,6 @@ sudo apt install ffmpeg \
   libass9 libass-dev \
   opencl-headers
 ```
-
 
 ### 6. rkmppencのビルド
 ```Shell
