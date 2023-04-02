@@ -289,7 +289,7 @@ CFLAGS="-Wall -Wno-missing-braces -Wno-unknown-pragmas -Wno-unused \
  -I${SRCDIR}/clRNG/src/include"
 CXXFLAGS="-Wall -Wno-missing-braces -Wno-unknown-pragmas -Wno-unused \
 -DLINUX -DUNIX -D_FILE_OFFSET_BITS=64 -D__USE_LARGEFILE64 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS \
--I${SRCDIR} -I${SRCDIR}/mpp/inc -I${SRCDIR}/clRNG/src/include \
+-I${SRCDIR} -I${SRCDIR}/mpp/inc -I${SRCDIR} -I${SRCDIR}/librga/include -I${SRCDIR}/clRNG/src/include \
 -I${SRCDIR}/mppcore -I${SRCDIR}/tinyxml2 -I${SRCDIR}/ttmath \
 "
 
