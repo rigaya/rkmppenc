@@ -5,7 +5,7 @@ ARG DEBIAN_FRONTEND=noninteractive \
     LOCAL_GROUP_ID=1000
 
 RUN apt-get update \
-    && apt install -y \
+    && apt-get install -y \
       sudo \
       wget \
       git \
@@ -33,18 +33,19 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/rockchip-linux/mpp && \
-    cd mpp/build/linux/aarch64/ && \
-    ./make-Makefiles.bash && make -j8 && sudo make install && \
-    cd ../../../..
+RUN wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp1_1.5.0-1_arm64.deb && \
+    sudo apt-get install -y ./librockchip-mpp1_1.5.0-1_arm64.deb && \
+    rm librockchip-mpp1_1.5.0-1_arm64.deb && \
+    wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp-dev_1.5.0-1_arm64.deb && \
+    sudo apt-get install -y ./librockchip-mpp-dev_1.5.0-1_arm64.deb && \
+    rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 
-RUN git clone https://github.com/airockchip/librga && \
-    cd librga && \
-    sudo cp ./include/* /usr/local/include/rockchip/ && \
-    sudo install -m 644 ./libs/Linux/gcc-aarch64/librga.a /usr/local/lib/ && \
-    sudo install -m 755 ./libs/Linux/gcc-aarch64/librga.so /usr/local/lib/ && \
-    sudo ln -s /usr/local/lib/librga.so /usr/local/lib/librga.so.2 && \
-    cd ..
+RUN wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-eb317900dbcb548d02736a904c36bd2348f487c9/librga2_2.2.0-1_arm64.deb && \
+    sudo apt-get install -y ./librga2_2.2.0-1_arm64.deb && \
+    rm librga2_2.2.0-1_arm64.deb && \
+    wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-eb317900dbcb548d02736a904c36bd2348f487c9/librga-dev_2.2.0-1_arm64.deb && \
+    sudo apt-get install -y ./librga-dev_2.2.0-1_arm64.deb && \
+    rm librga-dev_2.2.0-1_arm64.deb
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
