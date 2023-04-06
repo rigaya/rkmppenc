@@ -1735,7 +1735,7 @@ RGYCLMemObjInfo RGYCLBuf::getMemObjectInfo() const {
     return getRGYCLMemObjectInfo(m_mem);
 }
 
-RGYCLFrameMap::RGYCLFrameMap(RGYFrameInfo dev, RGYOpenCLQueue &queue) : m_dev(dev), m_queue(queue.get()), m_host(), m_eventMap() {};
+RGYCLFrameMap::RGYCLFrameMap(RGYCLFrame *dev, RGYOpenCLQueue &queue) : m_dev(dev), m_queue(queue.get()), m_host(), m_eventMap() {};
 
 RGY_ERR RGYCLFrameMap::map(cl_map_flags map_flags, RGYOpenCLQueue& queue) {
     return map(map_flags, queue, {}, RGY_CL_MAP_BLOCK_NONE);
@@ -1744,21 +1744,21 @@ RGY_ERR RGYCLFrameMap::map(cl_map_flags map_flags, RGYOpenCLQueue& queue) {
 RGY_ERR RGYCLFrameMap::map(cl_map_flags map_flags, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, const RGYCLMapBlock block_map) {
     std::vector<cl_event> v_wait_list = toVec(wait_events);
     cl_event *wait_list = (v_wait_list.size() > 0) ? v_wait_list.data() : nullptr;
-    m_host = m_dev;
+    m_host = m_dev->frameInfo();
     m_queue = queue.get();
     for (int i = 0; i < _countof(m_host.ptr); i++) {
         m_host.ptr[i] = nullptr;
     }
-    if (m_eventMap.size() != RGY_CSP_PLANES[m_dev.csp]) {
-        m_eventMap.resize(RGY_CSP_PLANES[m_dev.csp]);
+    if (m_eventMap.size() != RGY_CSP_PLANES[m_dev->frame.csp]) {
+        m_eventMap.resize(RGY_CSP_PLANES[m_dev->frame.csp]);
     }
-    for (int i = 0; i < RGY_CSP_PLANES[m_dev.csp]; i++) {
-        const auto plane = getPlane(&m_dev, (RGY_PLANE)i);
+    for (int i = 0; i < RGY_CSP_PLANES[m_host.csp]; i++) {
+        const auto plane = getPlane(&m_dev->frame, (RGY_PLANE)i);
         cl_int err = 0;
         cl_bool block = CL_FALSE;
         switch (block_map) {
             case RGY_CL_MAP_BLOCK_ALL: block = CL_TRUE; break;
-            case RGY_CL_MAP_BLOCK_LAST: { if (i == (RGY_CSP_PLANES[m_dev.csp]-1)) block = CL_TRUE; } break;
+            case RGY_CL_MAP_BLOCK_LAST: { if (i == (RGY_CSP_PLANES[m_dev->frame.csp]-1)) block = CL_TRUE; } break;
             case RGY_CL_MAP_BLOCK_NONE:
             default: break;
         }
@@ -1788,7 +1788,7 @@ RGY_ERR RGYCLFrameMap::unmap(cl_command_queue queue, const std::vector<RGYOpenCL
     m_queue = queue;
     for (int i = 0; i < _countof(m_host.ptr); i++) {
         if (m_host.ptr[i]) {
-            auto err = err_cl_to_rgy(clEnqueueUnmapMemObject(m_queue, (cl_mem)m_dev.ptr[i], m_host.ptr[i], (int)v_wait_list.size(), wait_list, m_eventMap[i].reset_ptr()));
+            auto err = err_cl_to_rgy(clEnqueueUnmapMemObject(m_queue, (cl_mem)m_dev->frame.ptr[i], m_host.ptr[i], (int)v_wait_list.size(), wait_list, m_eventMap[i].reset_ptr()));
             v_wait_list.clear();
             wait_list = nullptr;
             if (err != RGY_ERR_NONE) {
@@ -1799,8 +1799,18 @@ RGY_ERR RGYCLFrameMap::unmap(cl_command_queue queue, const std::vector<RGYOpenCL
     return RGY_ERR_NONE;
 }
 
+void RGYCLFrameMap::setTimestamp(uint64_t timestamp) { m_host.timestamp = timestamp; m_dev->setTimestamp(timestamp); }
+void RGYCLFrameMap::setDuration(uint64_t duration) { m_host.duration = duration; m_dev->setDuration(duration); }
+void RGYCLFrameMap::setPicstruct(RGY_PICSTRUCT picstruct) { m_host.picstruct = picstruct; m_dev->setPicstruct(picstruct); }
+void RGYCLFrameMap::setInputFrameId(int id) { m_host.inputFrameId = id; m_dev->setInputFrameId(id);}
+void RGYCLFrameMap::setFlags(RGY_FRAME_FLAGS frameflags) { m_host.flags = frameflags; m_dev->setTimestamp(frameflags); }
+void RGYCLFrameMap::clearDataList() { m_host.dataList.clear(); m_dev->clearDataList(); }
+const std::vector<std::shared_ptr<RGYFrameData>>& RGYCLFrameMap::dataList() const { return m_dev->dataList(); }
+std::vector<std::shared_ptr<RGYFrameData>>& RGYCLFrameMap::dataList() { return m_dev->dataList(); }
+void RGYCLFrameMap::setDataList(const std::vector<std::shared_ptr<RGYFrameData>>& dataList) { m_dev->setDataList(dataList); }
+
 RGY_ERR RGYCLFrame::queueMapBuffer(RGYOpenCLQueue &queue, cl_map_flags map_flags, const std::vector<RGYOpenCLEvent> &wait_events, const RGYCLMapBlock block_map) {
-    m_mapped = std::make_unique<RGYCLFrameMap>(frame, queue);
+    m_mapped = std::make_unique<RGYCLFrameMap>(this, queue);
     return m_mapped->map(map_flags, queue, wait_events, block_map);
 }
 
@@ -1810,6 +1820,17 @@ RGY_ERR RGYCLFrame::unmapBuffer() {
 RGY_ERR RGYCLFrame::unmapBuffer(RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events) {
     return (m_mapped) ? m_mapped->unmap(queue, wait_events) : RGY_ERR_NONE;
 }
+
+RGY_ERR RGYCLFrame::mapWait() const { return m_mapped->map_wait(); }
+
+bool RGYCLFrame::isMapped() const { return m_mapped != nullptr;  }
+
+RGYCLFrameMap *RGYCLFrame::mappedHost() { return m_mapped.get(); }
+
+const RGYCLFrameMap *RGYCLFrame::mappedHost() const { return m_mapped.get(); }
+
+std::vector<RGYOpenCLEvent>& RGYCLFrame::mapEvents() { return m_mapped->mapEvents(); }
+
 void RGYCLFrame::clear() {
     m_mapped.reset();
     for (int i = 0; i < _countof(frame.ptr); i++) {
@@ -1824,6 +1845,8 @@ void RGYCLFrame::clear() {
 RGYCLMemObjInfo RGYCLFrame::getMemObjectInfo() const {
     return getRGYCLMemObjectInfo(mem(0));
 }
+
+void RGYCLFrame::resetMappedFrame() { m_mapped.reset(); }
 
 RGY_ERR RGYCLFrameInterop::acquire(RGYOpenCLQueue &queue, RGYOpenCLEvent *event) {
     cl_event *event_ptr = (event) ? event->reset_ptr() : nullptr;
@@ -1915,13 +1938,13 @@ void RGYCLFramePool::add(RGYCLFrame *frame) {
     }
 }
 
-std::unique_ptr<RGYCLFrame, RGYCLImageFromBufferDeleter> RGYCLFramePool::get(const RGYFrameInfo &frame, const bool normalized, const cl_mem_flags flags) {
+std::unique_ptr<RGYCLFrame, RGYCLImageFromBufferDeleter> RGYCLFramePool::get(const RGYFrameInfo &frame, const bool normalized, const cl_mem_flags clflags) {
     const auto target_mem_type = (normalized) ? RGY_MEM_TYPE_GPU_IMAGE_NORMALIZED : RGY_MEM_TYPE_GPU_IMAGE;
     for (auto it = m_pool.begin(); it != m_pool.end(); it++) {
         auto& poolFrame = (*it);
         if (!cmpFrameInfoCspResolution(&poolFrame->frame, &frame)
             && poolFrame->frame.mem_type == target_mem_type
-            && poolFrame->flags == flags) {
+            && poolFrame->clflags == clflags) {
             auto f = std::move(*it);
             m_pool.erase(it);
             return std::unique_ptr<RGYCLFrame, RGYCLImageFromBufferDeleter>(f.release(), RGYCLImageFromBufferDeleter(this));

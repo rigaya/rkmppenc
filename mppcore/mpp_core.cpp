@@ -1191,8 +1191,8 @@ RGY_ERR MPPCore::AddFilterRGAIEP(std::vector<std::unique_ptr<RGAFilter>>&filters
         param->frameOut = inputFrame;
         param->frameOut.width = resize.first;
         param->frameOut.height = resize.second;
-        param->frameIn.mem_type = RGY_MEM_TYPE_CPU;
-        param->frameOut.mem_type = RGY_MEM_TYPE_CPU;
+        param->frameIn.mem_type = RGY_MEM_TYPE_MPP;
+        param->frameOut.mem_type = RGY_MEM_TYPE_MPP;
         param->baseFps = m_encFps;
         m_pLastFilterParam = param;
         } break;
@@ -1201,14 +1201,10 @@ RGY_ERR MPPCore::AddFilterRGAIEP(std::vector<std::unique_ptr<RGAFilter>>&filters
         auto param = std::make_shared<RGYFilterParamDeinterlaceIEP>();
         param->mode = inputParam->deint;
         param->picstruct = inputFrame.picstruct;
-        param->threadCsp = inputParam->ctrl.threadCsp;
-        param->threadParamCsp = inputParam->ctrl.threadParams.get(RGYThreadType::CSP);
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
-        param->frameOut.width = resize.first;
-        param->frameOut.height = resize.second;
-        param->frameIn.mem_type = RGY_MEM_TYPE_CPU;
-        param->frameOut.mem_type = RGY_MEM_TYPE_CPU;
+        param->frameIn.mem_type = RGY_MEM_TYPE_MPP;
+        param->frameOut.mem_type = RGY_MEM_TYPE_MPP;
         param->baseFps = m_encFps;
         m_pLastFilterParam = param;
         } break;
@@ -1792,7 +1788,7 @@ RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
     m_enccfg.prep.width         = m_encWidth;
     m_enccfg.prep.height        = m_encHeight;
     m_enccfg.prep.hor_stride    = MPP_ALIGN(m_encWidth);
-    m_enccfg.prep.ver_stride    = MPP_ALIGN(m_encHeight);
+    m_enccfg.prep.ver_stride    = m_encHeight;
     m_enccfg.prep.format        = csp_rgy_to_enc(RGY_CSP_NV12);
     m_enccfg.prep.rotation      = MPP_ENC_ROT_0;
 
@@ -2091,7 +2087,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
 
     if (m_decoder) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskMPPDecode>(m_decoder.get(), 1, m_pFileReader.get(),
-            m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), m_pLog));
+            m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, m_pLog));
     } else {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(0, m_pFileReader.get(), m_cl, m_pLog));
     }
@@ -2112,11 +2108,11 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
 
     for (auto& filterBlock : m_vpFilters) {
         if (filterBlock.type == VppFilterType::FILTER_RGA) {
-            m_pipelineTasks.push_back(std::make_unique<PipelineTaskRGAPreProcess>(filterBlock.vpprga,
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskRGA>(filterBlock.vpprga,
                 m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_IEP) {
             m_pipelineTasks.push_back(std::make_unique<PipelineTaskIEP>(filterBlock.vpprga,
-                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 3, m_pLog));
+                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_OPENCL) {
             if (!m_cl) {
                 PrintMes(RGY_LOG_ERROR, _T("OpenCL not enabled, OpenCL filters cannot be used.\n"));
@@ -2254,17 +2250,20 @@ RGY_ERR MPPCore::allocatePiplelineFrames() {
                 PrintMes(RGY_LOG_ERROR, _T("AllocFrames:   Failed to allocate frames for %s-%s: %s."), t0->print().c_str(), t1->print().c_str(), get_err_mes(sts));
                 return sts;
             }
-        } else {
+        }
+#if 0
+        else {
             const int requestNumFrames = std::max(1, t0RequestNumFrame + t1RequestNumFrame + asyncdepth + 1);
-            PrintMes(RGY_LOG_DEBUG, _T("AllocFrames: %s-%s, type: Sys, %s %dx%d, request %d frames\n"),
+            PrintMes(RGY_LOG_DEBUG, _T("AllocFrames: %s-%s, type: Mpp, %s %dx%d, request %d frames\n"),
                 t0->print().c_str(), t1->print().c_str(), RGY_CSP_NAMES[allocateFrameInfo.csp],
                 allocateFrameInfo.width, allocateFrameInfo.height, requestNumFrames);
-            auto sts = t0->workSurfacesAllocSys(requestNumFrames, allocateFrameInfo);
+            auto sts = t0->workSurfacesAllocMpp(requestNumFrames, allocateFrameInfo);
             if (sts != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("AllocFrames:   Failed to allocate frames for %s-%s: %s."), t0->print().c_str(), t1->print().c_str(), get_err_mes(sts));
                 return sts;
             }
         }
+#endif
         t0 = t1;
     }
     return RGY_ERR_NONE;
@@ -2645,8 +2644,8 @@ tstring MPPCore::GetEncoderParam() {
                         vppstr += str_replace(filter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
                     }
                 } else if (block.type == VppFilterType::FILTER_OPENCL) {
-                    for (auto& clfilter : block.vppcl) {
-                        vppstr += str_replace(clfilter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
+                    for (auto& filter : block.vppcl) {
+                        vppstr += str_replace(filter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
                     }
                 }
             }
