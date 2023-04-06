@@ -897,6 +897,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     //}
     //インタレ解除の個数をチェック
     int deinterlacer = 0;
+    if (inputParam->deint != IEPDeinterlaceMode::DISABLED) deinterlacer++;
     if (inputParam->vpp.afs.enable) deinterlacer++;
     if (inputParam->vpp.nnedi.enable) deinterlacer++;
     if (inputParam->vpp.yadif.enable) deinterlacer++;
@@ -942,12 +943,20 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
         const VppFilterType ftype2 = (i+1 < filterPipeline.size()) ? getVppFilterType(filterPipeline[i+1]) : VppFilterType::FILTER_NONE;
         if (ftype1 == VppFilterType::FILTER_RGA) {
             std::vector<std::unique_ptr<RGAFilter>> vppFilters;
-            auto err = AddFilterRGA(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
+            auto err = AddFilterRGAIEP(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
             inputCrop = nullptr;
             if (err != RGY_ERR_NONE) {
                 return err;
             }
-            m_vpFilters.push_back(VppVilterBlock(vppFilters));
+            m_vpFilters.push_back(VppVilterBlock(vppFilters, VppFilterType::FILTER_RGA));
+        } else if (ftype1 == VppFilterType::FILTER_IEP) {
+            std::vector<std::unique_ptr<RGAFilter>> vppFilters;
+            auto err = AddFilterRGAIEP(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
+            inputCrop = nullptr;
+            if (err != RGY_ERR_NONE) {
+                return err;
+            }
+            m_vpFilters.push_back(VppVilterBlock(vppFilters, VppFilterType::FILTER_IEP));
         } else if (ftype1 == VppFilterType::FILTER_OPENCL) {
             std::vector<std::unique_ptr<RGYFilter>> vppOpenCLFilters;
             if (ftype0 != VppFilterType::FILTER_OPENCL || filterPipeline[i] == VppType::CL_CROP) { // 前のfilterがOpenCLでない場合、変換が必要
@@ -1112,6 +1121,7 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.afs.enable)           filterPipeline.push_back(VppType::CL_AFS);
     if (inputParam->vpp.nnedi.enable)         filterPipeline.push_back(VppType::CL_NNEDI);
     if (inputParam->vpp.yadif.enable)         filterPipeline.push_back(VppType::CL_YADIF);
+    if (inputParam->deint != IEPDeinterlaceMode::DISABLED) filterPipeline.push_back(VppType::IEP_DEINTERLACE);
     if (inputParam->vpp.decimate.enable)      filterPipeline.push_back(VppType::CL_DECIMATE);
     if (inputParam->vpp.mpdecimate.enable)    filterPipeline.push_back(VppType::CL_MPDECIMATE);
     if (inputParam->vpp.convolution3d.enable) filterPipeline.push_back(VppType::CL_CONVOLUTION3D);
@@ -1169,7 +1179,7 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     return filterPipeline;
 }
 
-RGY_ERR MPPCore::AddFilterRGA(std::vector<std::unique_ptr<RGAFilter>>&filters,
+RGY_ERR MPPCore::AddFilterRGAIEP(std::vector<std::unique_ptr<RGAFilter>>&filters,
     RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *inputParam, const sInputCrop *crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo) {
     std::unique_ptr<RGAFilter> filter;
     switch (vppType) {
@@ -1177,6 +1187,22 @@ RGY_ERR MPPCore::AddFilterRGA(std::vector<std::unique_ptr<RGAFilter>>&filters,
         filter = std::make_unique<RGAFilterResize>();
         auto param = std::make_shared<RGYFilterParamResize>();
         param->interp = inputParam->vpp.resize_algo;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameOut.width = resize.first;
+        param->frameOut.height = resize.second;
+        param->frameIn.mem_type = RGY_MEM_TYPE_CPU;
+        param->frameOut.mem_type = RGY_MEM_TYPE_CPU;
+        param->baseFps = m_encFps;
+        m_pLastFilterParam = param;
+        } break;
+    case VppType::IEP_DEINTERLACE: {
+        filter = std::make_unique<RGAFilterDeinterlaceIEP>();
+        auto param = std::make_shared<RGYFilterParamDeinterlaceIEP>();
+        param->mode = inputParam->deint;
+        param->picstruct = inputFrame.picstruct;
+        param->threadCsp = inputParam->ctrl.threadCsp;
+        param->threadParamCsp = inputParam->ctrl.threadParams.get(RGYThreadType::CSP);
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->frameOut.width = resize.first;
@@ -2088,6 +2114,9 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
         if (filterBlock.type == VppFilterType::FILTER_RGA) {
             m_pipelineTasks.push_back(std::make_unique<PipelineTaskRGAPreProcess>(filterBlock.vpprga,
                 m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
+        } else if (filterBlock.type == VppFilterType::FILTER_IEP) {
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskIEP>(filterBlock.vpprga,
+                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_OPENCL) {
             if (!m_cl) {
                 PrintMes(RGY_LOG_ERROR, _T("OpenCL not enabled, OpenCL filters cannot be used.\n"));
@@ -2611,14 +2640,11 @@ tstring MPPCore::GetEncoderParam() {
         if (m_vpFilters.size() > 0) {
             tstring vppstr;
             for (auto& block : m_vpFilters) {
-#if ENABLE_VPPRGA
-                if (block.type == VppFilterType::FILTER_RGA) {
+                if (block.type == VppFilterType::FILTER_RGA || block.type == VppFilterType::FILTER_IEP) {
                     for (auto& filter : block.vpprga) {
                         vppstr += str_replace(filter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
                     }
-                } else
-#endif
-                if (block.type == VppFilterType::FILTER_OPENCL) {
+                } else if (block.type == VppFilterType::FILTER_OPENCL) {
                     for (auto& clfilter : block.vppcl) {
                         vppstr += str_replace(clfilter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
                     }

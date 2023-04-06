@@ -25,6 +25,7 @@
 //
 // ------------------------------------------------------------------------------------------
 
+#include "rgy_input.h"
 #include "mpp_param.h"
 #include "mpp_filter.h"
 #include "rga/rga.h"
@@ -256,4 +257,435 @@ RGY_ERR RGAFilterResize::run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFram
     //    releasebuffer_handle(dst_handle);
     //}
     return sts;
+}
+
+RGAFilterDeinterlaceIEP::RGAFilterDeinterlaceIEP() :
+    RGAFilter(),
+    m_iepCtx(std::unique_ptr<iep_com_ctx, decltype(&rockchip_iep2_api_release_ctx)>(nullptr, rockchip_iep2_api_release_ctx)),
+    m_dilMode(IEP2_DIL_MODE_DISABLE),
+    m_isTFF(true),
+    m_mppBufInfo(),
+    m_mppBufSrc(),
+    m_mppBufDst(),
+    m_frameGrp(nullptr),
+    m_convertIn(),
+    m_convertOut(),
+    m_frameCountIn(0),
+    m_frameCountOut(0),
+    m_prevOutFrameDuration(0) {
+    m_name = _T("deint(iep)");
+}
+
+RGAFilterDeinterlaceIEP::~RGAFilterDeinterlaceIEP() {
+    close();
+}
+
+void RGAFilterDeinterlaceIEP::close() {
+    for (auto& buf : m_mppBufSrc) {
+        if (buf.mpp) {
+            mpp_buffer_put(buf.mpp);
+            buf.mpp = nullptr;
+        }
+    }
+    m_mppBufSrc.clear();
+    for (auto& buf : m_mppBufDst) {
+        if (buf.mpp) {
+            mpp_buffer_put(buf.mpp);
+            buf.mpp = nullptr;
+        }
+    }
+    m_mppBufDst.clear();
+    if (m_frameGrp) {
+        mpp_buffer_group_put(m_frameGrp);
+        m_frameGrp = nullptr;
+    }
+    if (m_iepCtx) {
+        m_iepCtx->ops->deinit(m_iepCtx->priv);
+        m_iepCtx.reset();
+    }
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::checkParams(const RGYFilterParam *param) {
+    auto prm = dynamic_cast<const RGYFilterParamDeinterlaceIEP*>(param);
+    if (prm == nullptr) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid param.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+    //パラメータチェック
+    if (prm->frameOut.height <= 0 || prm->frameOut.width <= 0) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid parameter.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+    return RGY_ERR_NONE;
+}
+
+static const TCHAR *getDILModeName(const IEP2_DIL_MODE mode) {
+    switch (mode) {
+        #define DIL_MODE_NAME(x) case x: return _T(#x);
+        DIL_MODE_NAME(IEP2_DIL_MODE_I5O2);
+        DIL_MODE_NAME(IEP2_DIL_MODE_I5O1T);
+        DIL_MODE_NAME(IEP2_DIL_MODE_I5O1B);
+        DIL_MODE_NAME(IEP2_DIL_MODE_I2O2);
+        DIL_MODE_NAME(IEP2_DIL_MODE_I1O1T);
+        DIL_MODE_NAME(IEP2_DIL_MODE_I1O1B);
+        default: return _T("Unknown");
+        #undef DIL_MODE_NAME
+    }
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) {
+    m_pLog = pPrintMes;
+
+    auto err = checkParams(param.get());
+    if (err != RGY_ERR_NONE) {
+        return err;
+    }
+
+    auto iep = get_iep_ctx();
+
+    if (!m_iepCtx) {
+        m_iepCtx = std::unique_ptr<iep_com_ctx, decltype(&put_iep_ctx)>(get_iep_ctx(), put_iep_ctx);
+        err = err_to_rgy(m_iepCtx->ops->init(&m_iepCtx->priv));
+        if (err != RGY_ERR_NONE) {
+            AddMessage(RGY_LOG_ERROR, _T("Failed to init iep context.\n"));
+            return RGY_ERR_INVALID_PARAM;
+        }
+        AddMessage(RGY_LOG_DEBUG, _T("Init iep context done: ver %d.\n"), m_iepCtx->ver);
+    }
+
+    auto prm = dynamic_cast<RGYFilterParamDeinterlaceIEP*>(param.get());
+    if (!prm) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid parameter type.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+    m_isTFF = (prm->picstruct & RGY_PICSTRUCT_TFF) != 0;
+    m_frameCountIn = 0;
+    m_frameCountOut = 0;
+    
+    switch (prm->mode) {
+    case IEPDeinterlaceMode::NORMAL_I5:
+        m_dilMode = (m_isTFF) ? IEP2_DIL_MODE_I5O1T : IEP2_DIL_MODE_I5O1B;
+        m_mppBufSrc.resize(3);
+        m_mppBufDst.resize(1);
+        break;
+    case IEPDeinterlaceMode::NORMAL_I2:
+        m_dilMode = (m_isTFF) ? IEP2_DIL_MODE_I1O1T : IEP2_DIL_MODE_I1O1B;
+        m_mppBufSrc.resize(1);
+        m_mppBufDst.resize(1);
+        break;
+    case IEPDeinterlaceMode::BOB_I5:
+        m_dilMode = IEP2_DIL_MODE_I5O2;
+        m_mppBufSrc.resize(3);
+        m_mppBufDst.resize(2);
+        break;
+    case IEPDeinterlaceMode::BOB_I2:
+        m_dilMode = IEP2_DIL_MODE_I2O2;
+        m_mppBufSrc.resize(1);
+        m_mppBufDst.resize(2);
+        break;
+    default:
+        AddMessage(RGY_LOG_ERROR, _T("Unknown deinterlace mode.\n"));
+        return RGY_ERR_UNSUPPORTED;
+    }
+    AddMessage(RGY_LOG_DEBUG, _T("Selected deinterlace mode: %s %s.\n"), getDILModeName(m_dilMode), m_isTFF ? _T("TFF") : _T("BFF"));
+
+    struct iep2_api_params params;
+    params.ptype = IEP2_PARAM_TYPE_MODE;
+    params.param.mode.dil_mode = m_dilMode;
+    params.param.mode.out_mode = IEP2_OUT_MODE_LINE;
+    params.param.mode.dil_order = m_isTFF ? IEP2_FIELD_ORDER_TFF : IEP2_FIELD_ORDER_BFF;
+    err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
+    if (err != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace mode: %s.\n"), get_err_mes(err));
+        return err;
+    }
+    AddMessage(RGY_LOG_DEBUG, _T("Set deinterlace mode.\n"));
+
+    params.ptype = IEP2_PARAM_TYPE_COM;
+    params.param.com.sfmt = IEP2_FMT_YUV420; // nv12
+    params.param.com.dfmt = IEP2_FMT_YUV420; // nv12
+    params.param.com.sswap = IEP2_YUV_SWAP_SP_UV; // nv12
+    params.param.com.dswap = IEP2_YUV_SWAP_SP_UV; // nv12
+    params.param.com.width = param->frameIn.width;
+    params.param.com.height = param->frameIn.height;
+    params.param.com.hor_stride = param->frameIn.pitch[0];
+    err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
+    if (err != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace params: %s.\n"), get_err_mes(err));
+        return err;
+    }
+    AddMessage(RGY_LOG_DEBUG, _T("Set deinterlace params.\n"));
+    
+    err = allocateMppBuffer(param->frameIn);
+    if (err != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("failed to allocate memory: %s.\n"), get_err_mes(err));
+        return err;
+    }
+    AddMessage(RGY_LOG_DEBUG, _T("Allocated memory for deinterlace.\n"));
+
+    const auto& mppFrameBufSrcInfo = m_mppBufSrc.front().info;
+
+    m_convertIn = std::make_unique<RGYConvertCSP>(prm->threadCsp, prm->threadParamCsp);
+    if (m_convertIn->getFunc() == nullptr) {
+        if (auto func = m_convertIn->getFunc(param->frameIn.csp, m_mppBufInfo.csp, false, RGY_SIMD::SIMD_ALL); func == nullptr) {
+            AddMessage(RGY_LOG_ERROR, _T("Failed to find conversion(in) for %s -> %s.\n"),
+                RGY_CSP_NAMES[param->frameIn.csp], RGY_CSP_NAMES[m_mppBufInfo.csp]);
+            return RGY_ERR_UNSUPPORTED;
+        } else {
+            AddMessage(RGY_LOG_DEBUG, _T("Selected conversion(in) for %s -> %s [%s].\n"),
+                RGY_CSP_NAMES[func->csp_from], RGY_CSP_NAMES[func->csp_to], get_simd_str(func->simd));
+        }
+    }
+    m_convertOut = std::make_unique<RGYConvertCSP>(prm->threadCsp, prm->threadParamCsp);
+    if (m_convertOut->getFunc() == nullptr) {
+        if (auto func = m_convertOut->getFunc(m_mppBufInfo.csp, param->frameOut.csp, false, RGY_SIMD::SIMD_ALL); func == nullptr) {
+            AddMessage(RGY_LOG_ERROR, _T("Failed to find conversion(out) for %s -> %s.\n"),
+                RGY_CSP_NAMES[m_mppBufInfo.csp], RGY_CSP_NAMES[param->frameOut.csp]);
+            return RGY_ERR_UNSUPPORTED;
+        } else {
+            AddMessage(RGY_LOG_DEBUG, _T("Selected conversion(out) for %s -> %s [%s].\n"),
+                RGY_CSP_NAMES[func->csp_from], RGY_CSP_NAMES[func->csp_to], get_simd_str(func->simd));
+        }
+    }
+    m_pathThrough &= ~(FILTER_PATHTHROUGH_PICSTRUCT | FILTER_PATHTHROUGH_TIMESTAMP | FILTER_PATHTHROUGH_FLAGS | FILTER_PATHTHROUGH_DATA);
+    m_infoStr = strsprintf(_T("deinterlace(%s)"),
+        get_chr_from_value(list_iep_deinterlace, (int)prm->mode));
+
+    //コピーを保存
+    m_param = param;
+    return err;
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::allocateMppBuffer(const RGYFrameInfo& frameInfo) {
+    if (frameInfo.csp != RGY_CSP_YV12 && frameInfo.csp != RGY_CSP_NV12) {
+        AddMessage(RGY_LOG_ERROR, _T("Unsupported colorpace: %s.\n"), RGY_CSP_NAMES[frameInfo.csp]);
+        return RGY_ERR_UNSUPPORTED;
+    }
+    m_mppBufInfo = frameInfo;
+    m_mppBufInfo.csp = RGY_CSP_NV12;
+    m_mppBufInfo.pitch[0] = ALIGN(frameInfo.width, 64);
+    for (int i = 1; i < RGY_CSP_PLANES[m_mppBufInfo.csp]; i++) {
+        m_mppBufInfo.pitch[i] = m_mppBufInfo.pitch[0];
+    }
+    const int planeSize = m_mppBufInfo.pitch[0] * frameInfo.height;
+    int frameSize = 0;
+    switch (m_mppBufInfo.csp) {
+        case RGY_CSP_NV12: {
+            frameSize = planeSize * 3 / 2;
+        } break;
+        default:
+            AddMessage(RGY_LOG_ERROR, _T("Unspported colorspace: %s.\n"), RGY_CSP_NAMES[frameInfo.csp]);
+            return RGY_ERR_UNSUPPORTED;
+    }
+
+    auto ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
+    if (ret != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(ret));
+        return ret;
+    }
+
+    for (auto& buf : m_mppBufSrc) {
+        ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &buf.mpp, frameSize));
+        if (ret != RGY_ERR_NONE) {
+            AddMessage(RGY_LOG_ERROR, _T("failed to get buffer for input frame : %s\n"), get_err_mes(ret));
+            return ret;
+        }
+        buf.info = setMPPBufferInfo(m_mppBufInfo.csp, m_mppBufInfo.width, m_mppBufInfo.height,
+            m_mppBufInfo.pitch[0], m_mppBufInfo.height, buf.mpp);
+        buf.img.format = IEP2_FMT_YUV420;
+    }
+    for (auto& buf : m_mppBufDst) {
+        ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &buf.mpp, frameSize));
+        if (ret != RGY_ERR_NONE) {
+            AddMessage(RGY_LOG_ERROR, _T("failed to get buffer for output frame : %s\n"), get_err_mes(ret));
+            return ret;
+        }
+        buf.info = setMPPBufferInfo(m_mppBufInfo.csp, m_mppBufInfo.width, m_mppBufInfo.height,
+            m_mppBufInfo.pitch[0], m_mppBufInfo.height, buf.mpp);
+        buf.img.format = IEP2_FMT_YUV420;
+    }
+    return RGY_ERR_NONE;
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::setInputFrame(const RGYFrameInfo *pInputFrame) {
+    auto& mppinfo = getBufSrc(m_frameCountIn)->info;
+    
+    auto crop = initCrop();
+    m_convertIn->run((mppinfo.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
+        (void **)mppinfo.ptr, (const void **)pInputFrame->ptr,
+        pInputFrame->width, pInputFrame->pitch[0], pInputFrame->pitch[1], mppinfo.pitch[0],
+        pInputFrame->height, mppinfo.height, crop.c);
+    copyFrameProp(&mppinfo, pInputFrame);
+    m_frameCountIn++;
+    return RGY_ERR_NONE;
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::setOutputFrame(RGYFrameInfo *pOutputFrame, const IepBufferInfo *bufDst) {
+    auto& mppinfo = bufDst->info;
+    auto crop = initCrop();
+    m_convertOut->run(0,
+        (void **)pOutputFrame->ptr, (const void **)mppinfo.ptr,
+        mppinfo.width, mppinfo.pitch[0], mppinfo.pitch[1], pOutputFrame->pitch[0],
+        mppinfo.height, pOutputFrame->height, crop.c);
+    copyFrameProp(pOutputFrame, &mppinfo);
+    return RGY_ERR_NONE;
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) {
+    RGY_ERR sts = RGY_ERR_NONE;
+    auto prm = dynamic_cast<RGYFilterParamDeinterlaceIEP*>(m_param.get());
+    if (!prm) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid parameter type.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+
+    RGYFrameInfo *const pOutFrame = ppOutputFrames[0];
+    ppOutputFrames[0]->picstruct = RGY_PICSTRUCT_FRAME;
+
+    if (pInputFrame && pInputFrame->ptr[0]) {
+        if (pInputFrame->mem_type != RGY_MEM_TYPE_CPU) {
+            AddMessage(RGY_LOG_ERROR, _T("Invalid input memory type: %s.\n"), get_memtype_str(pInputFrame->mem_type));
+            return RGY_ERR_INVALID_FORMAT;
+        }
+
+        if (pOutFrame->mem_type != RGY_MEM_TYPE_CPU) {
+            AddMessage(RGY_LOG_ERROR, _T("Invalid output memory type: %s.\n"), get_memtype_str(pOutFrame->mem_type));
+            return RGY_ERR_INVALID_FORMAT;
+        }
+
+        if (pInputFrame->csp != RGY_CSP_NV12) {
+            AddMessage(RGY_LOG_ERROR, _T("Invalid input memory format: %s.\n"), RGY_CSP_NAMES[pInputFrame->csp]);
+            return RGY_ERR_INVALID_FORMAT;
+        }
+
+        if (pOutFrame->csp != RGY_CSP_NV12) {
+            AddMessage(RGY_LOG_ERROR, _T("Invalid output memory format: %s.\n"), RGY_CSP_NAMES[pOutFrame->csp]);
+            return RGY_ERR_INVALID_FORMAT;
+        }
+
+        sts = setInputFrame(pInputFrame);
+        if (sts != RGY_ERR_NONE) {
+            AddMessage(RGY_LOG_ERROR, _T("Failed to set input frame: %s.\n"), get_err_mes(sts));
+            return sts;
+        }
+    }
+    std::vector<IepBufferInfo*> dst = { &m_mppBufDst[0] };
+    if (m_dilMode == IEP2_DIL_MODE_I5O2
+     || m_dilMode == IEP2_DIL_MODE_I2O2) {
+        dst.push_back(&m_mppBufDst[1]);
+    }
+    if (pInputFrame->ptr[0] == nullptr) {
+        if (m_frameCountIn == m_frameCountOut) {
+            return RGY_ERR_NONE;
+        }
+    }
+    if (m_dilMode == IEP2_DIL_MODE_I5O2
+     || m_dilMode == IEP2_DIL_MODE_I5O1T
+     || m_dilMode == IEP2_DIL_MODE_I5O1B) {
+        if (m_frameCountIn < 2) {
+            *pOutputFrameNum = 0;
+            return RGY_ERR_NONE; // 出力なし
+        }
+        sts = runFilter(dst, { getBufSrc(std::max<int64_t>(0, m_frameCountOut-1)),
+                               getBufSrc(m_frameCountOut + 0),
+                               getBufSrc(std::min(m_frameCountOut + 1, m_frameCountIn-1)) });
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+    } else if (m_dilMode == IEP2_DIL_MODE_I2O2
+            || m_dilMode == IEP2_DIL_MODE_I1O1T
+            || m_dilMode == IEP2_DIL_MODE_I1O1B) {
+        sts = runFilter(dst, { getBufSrc(m_frameCountOut) });
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+    } else {
+        AddMessage(RGY_LOG_ERROR, _T("Unknown dil mode: %d.\n"), m_dilMode);
+        return RGY_ERR_UNSUPPORTED;
+    }
+    *pOutputFrameNum = (int)dst.size();
+    for (size_t i = 0; i < dst.size(); i++) {
+        if (ppOutputFrames[i] == nullptr) {
+            AddMessage(RGY_LOG_ERROR, _T("No output buffer for %d frame.\n"), i);
+            return RGY_ERR_UNSUPPORTED;
+        }
+        sts = setOutputFrame(ppOutputFrames[i], dst[i]);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        copyFrameProp(ppOutputFrames[i], &getBufSrc(m_frameCountOut)->info);
+        ppOutputFrames[i]->picstruct = RGY_PICSTRUCT_FRAME;
+        if (m_frameCountOut < m_frameCountIn-1) {
+            const auto duration = getBufSrc(m_frameCountOut+1)->info.timestamp - getBufSrc(m_frameCountOut)->info.timestamp;
+            if (i > 0) { //bob化の場合
+                ppOutputFrames[i]->timestamp += duration / 2;
+                ppOutputFrames[i]->duration = duration - ppOutputFrames[0]->duration;
+            } else {
+                ppOutputFrames[i]->duration = duration / 2;
+            }
+        } else {
+            ppOutputFrames[i]->duration = m_prevOutFrameDuration;
+            if (i > 0) { //bob化の場合
+                ppOutputFrames[i]->timestamp += m_prevOutFrameDuration;
+            }
+        }
+        m_prevOutFrameDuration = ppOutputFrames[i]->duration;
+    }
+    m_frameCountOut++;
+    return sts;
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::setImage(IepBufferInfo *buffer, const IepCmd cmd) {
+    auto fd = mpp_buffer_get_fd(buffer->mpp);
+    RK_S32 y_size = buffer->info.pitch[0] * buffer->info.height;
+    buffer->img.act_w = buffer->info.width;
+    buffer->img.act_h = buffer->info.height;
+    buffer->img.vir_w = buffer->info.pitch[0];
+    buffer->img.vir_h = buffer->info.height;
+    buffer->img.x_off = 0;
+    buffer->img.y_off = 0;
+    buffer->img.mem_addr = fd;
+    buffer->img.uv_addr = fd + (y_size << 10);
+    switch (buffer->img.format) {
+    case IEP2_FMT_YUV422:
+        buffer->img.v_addr = fd + ((y_size + y_size / 2) << 10);
+        break;
+    case IEP2_FMT_YUV420:
+        buffer->img.v_addr = fd + ((y_size + y_size / 4) << 10);
+        break;
+    default:
+        break;
+    }
+
+    MPP_RET ret = m_iepCtx->ops->control(m_iepCtx->priv, cmd, &buffer->img);
+    return err_to_rgy(ret);
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::runFilter(std::vector<IepBufferInfo*> dst, const std::vector<IepBufferInfo*> src) {
+#define CHECK_SETIMG(x) { if (auto err = (x); err != RGY_ERR_NONE) { AddMessage(RGY_LOG_ERROR, _T("Failed to set image: %s.\n"), get_err_mes(err)); return err; }}
+    if (dst.size() > 0) { CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));      }
+    if (dst.size() > 1) { CHECK_SETIMG(setImage(dst[1], IEP_CMD_SET_DEI_DST1)); }
+    if (src.size() == 1) {
+        CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_SRC)); //curr
+    } else if (src.size() == 3) {
+        CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC2)); // prev
+        CHECK_SETIMG(setImage(src[1], IEP_CMD_SET_SRC));      // curr
+        CHECK_SETIMG(setImage(src[2], IEP_CMD_SET_DEI_SRC1)); // next
+    } else {
+        AddMessage(RGY_LOG_ERROR, _T("Unknwon src frame count: %d.\n"), src.size());
+        return RGY_ERR_UNKNOWN;
+    }
+#undef CHECK_SETIMG
+    struct iep2_api_info dei_info;
+    auto err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_RUN_SYNC, &dei_info));
+    if (err != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("Failed to run filter: %s.\n"), get_err_mes(err));
+        return err;
+    }
+
+    const int out_order = dei_info.dil_order == IEP2_FIELD_ORDER_BFF ? 1 : 0;
+    if (out_order && dst.size() == 2) {
+        std::swap(dst[0], dst[1]);
+    }
+    return RGY_ERR_NONE;
 }

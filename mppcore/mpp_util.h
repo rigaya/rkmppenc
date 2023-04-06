@@ -399,27 +399,21 @@ static unique_mppframe createMPPFrame() {
     return unique_mppframe(frame, RGYMPPDeleter<MppFrame>(mpp_frame_deinit));
 }
 
-static RGYFrameInfo infoMPP(MppFrame mppframe) {
-    MppBuffer buffer = mpp_frame_get_buffer(mppframe);
+static RGYFrameInfo setMPPBufferInfo(const RGY_CSP csp, 
+    const int width, const int height, const int x_stride, const int y_stride, MppBuffer buffer) {
     uint8_t *base = (uint8_t *)mpp_buffer_get_ptr(buffer);
-    const int x_stride = mpp_frame_get_hor_stride(mppframe);
-    const int y_stride = mpp_frame_get_ver_stride(mppframe);
-    const MppFrameFormat fmt = mpp_frame_get_fmt(mppframe);
-
     RGYFrameInfo info;
-    info.csp = csp_enc_to_rgy(fmt);
-    info.width = mpp_frame_get_width(mppframe);
-    info.height = mpp_frame_get_height(mppframe);
-
-    switch (fmt) {
-    case MPP_FMT_YUV420SP_VU:
-    case MPP_FMT_YUV420SP:
+    info.csp = csp;
+    info.width = width;
+    info.height = height;
+    switch (csp) {
+    case RGY_CSP_NV12:
         info.ptr[0] = base;
         info.ptr[1] = base + x_stride * y_stride;
         info.pitch[0] = x_stride;
         info.pitch[1] = x_stride;
         break;
-    case MPP_FMT_YUV420P:
+    case RGY_CSP_YV12:
         info.ptr[0] = base;
         info.ptr[1] = base + (x_stride >> 1) * y_stride;
         info.ptr[2] = base + (x_stride >> 1) * (info.height >> 1);
@@ -430,6 +424,16 @@ static RGYFrameInfo infoMPP(MppFrame mppframe) {
     default:
         break;
     }
+    return info;
+}
+
+static RGYFrameInfo infoMPP(MppFrame mppframe) {
+    const int x_stride = mpp_frame_get_hor_stride(mppframe);
+    const int y_stride = mpp_frame_get_ver_stride(mppframe);
+    const MppFrameFormat fmt = mpp_frame_get_fmt(mppframe);
+
+    RGYFrameInfo info = setMPPBufferInfo(csp_enc_to_rgy(fmt), mpp_frame_get_width(mppframe), mpp_frame_get_height(mppframe),
+        x_stride, y_stride, mpp_frame_get_buffer(mppframe));
 
     auto meta = mpp_frame_get_meta(mppframe);
     RK_S64 duration;

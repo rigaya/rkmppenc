@@ -47,6 +47,7 @@ MPPParam::MPPParam() :
     ctrl(),
     vpp(),
     hwdec(),
+    deint(IEPDeinterlaceMode::DISABLED),
     codec(RGY_CODEC_H264),
     codecParam(),
     outputDepth(8),

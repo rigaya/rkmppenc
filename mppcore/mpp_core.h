@@ -111,7 +111,7 @@ protected:
         const bool cspConvRequired, const bool cropRequired, const RGY_VPP_RESIZE_TYPE resizeRequired);
     virtual RGY_ERR AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilters,
         RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
-    virtual RGY_ERR AddFilterRGA(std::vector<std::unique_ptr<RGAFilter>>&filters,
+    virtual RGY_ERR AddFilterRGAIEP(std::vector<std::unique_ptr<RGAFilter>>&filters,
         RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *prm, const sInputCrop * crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo);
     virtual RGY_ERR createOpenCLCopyFilterForPreVideoMetric(const MPPParam *inputParam);
     virtual RGY_ERR initChapters(MPPParam *prm);

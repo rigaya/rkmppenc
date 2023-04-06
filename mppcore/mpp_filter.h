@@ -32,6 +32,8 @@
 #include "rgy_filter.h"
 #include "mpp_util.h"
 
+#include "iep2_api.h"
+
 
 class RGAFilter : public RGYFilter {
 public:
@@ -58,4 +60,55 @@ protected:
     virtual void close() override;
 
     rga_buffer_handle_t getRGABufferHandle(const RGYFrameInfo *frame);
+};
+
+class RGYFilterParamDeinterlaceIEP : public RGYFilterParam {
+public:
+    RGY_PICSTRUCT picstruct;
+    IEPDeinterlaceMode mode;
+    int threadCsp;
+    RGYParamThread threadParamCsp;
+    RGYFilterParamDeinterlaceIEP() : picstruct(RGY_PICSTRUCT_AUTO), mode(IEPDeinterlaceMode::DISABLED), threadCsp(0), threadParamCsp() {};
+    virtual ~RGYFilterParamDeinterlaceIEP() {};
+};
+
+class RGYConvertCSP;
+
+class RGAFilterDeinterlaceIEP : public RGAFilter {
+public:
+    RGAFilterDeinterlaceIEP();
+    virtual ~RGAFilterDeinterlaceIEP();
+    virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
+protected:
+    struct IepBufferInfo {
+        MppBuffer mpp;
+        IepImg img;
+        RGYFrameInfo info;
+
+        IepBufferInfo() : mpp(nullptr), img(), info() {};
+    };
+    virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) override;
+    RGY_ERR checkParams(const RGYFilterParam *param);
+    RGY_ERR allocateMppBuffer(const RGYFrameInfo& frameInfo);
+    RGY_ERR setInputFrame(const RGYFrameInfo *pInputFrame);
+    RGY_ERR setOutputFrame(RGYFrameInfo *pOutputFrame, const IepBufferInfo *bufDst);
+    RGY_ERR setImage(IepBufferInfo *buffer, const IepCmd cmd);
+    RGY_ERR runFilter(std::vector<IepBufferInfo*> dst, const std::vector<IepBufferInfo*> src);
+    virtual void close() override;
+
+    IepBufferInfo *getBufSrc(const int64_t idx) { return &m_mppBufSrc[idx % m_mppBufSrc.size()]; }
+    IepBufferInfo *getBufDst(const int64_t idx) { return &m_mppBufDst[idx % m_mppBufDst.size()]; }
+
+    std::unique_ptr<iep_com_ctx, decltype(&put_iep_ctx)> m_iepCtx;
+    IEP2_DIL_MODE m_dilMode;
+    bool m_isTFF;
+    RGYFrameInfo m_mppBufInfo;
+    std::vector<IepBufferInfo> m_mppBufSrc;
+    std::vector<IepBufferInfo> m_mppBufDst;
+    MppBufferGroup m_frameGrp;
+    std::unique_ptr<RGYConvertCSP> m_convertIn;
+    std::unique_ptr<RGYConvertCSP> m_convertOut;
+    int64_t m_frameCountIn;
+    int64_t m_frameCountOut;
+    int64_t m_prevOutFrameDuration;
 };
