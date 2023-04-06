@@ -49,8 +49,6 @@ MAP_PAIR_0_1_PROTO(picstruct, rgy, RGY_PICSTRUCT, enc, uint32_t);
 MAP_PAIR_0_1_PROTO(loglevel, rgy, int, enc, int);
 MAP_PAIR_0_1_PROTO(interp, rgy, RGY_VPP_RESIZE_ALGO, rga, IM_SCALE_MODE);
 
-#define MPP_ALIGN ALIGN16
-
 struct MPPCfg {
     MppEncCfg       cfg;
     MppEncPrepCfg   prep;
@@ -377,11 +375,14 @@ static inline RGYBitstream RGYBitstreamInit() {
 static_assert(std::is_pod<RGYBitstream>::value == true, "RGYBitstream should be POD type.");
 #endif
 
+int mpp_frame_pitch(RGY_CSP csp, const int width);
+int mpp_frame_size(const RGYFrameInfo &frame);
+
 template<typename T>
 struct RGYMPPDeleter {
     RGYMPPDeleter() : deleter(nullptr) {};
     RGYMPPDeleter(std::function<MPP_RET(T*)> deleter) : deleter(deleter) {};
-    void operator()(T p) { deleter(&p); }
+    void operator()(T p) { /* fprintf(stderr, "RGYMPPDeleter: %p\n", p);*/ deleter(&p); }
     std::function<MPP_RET(T*)> deleter;
 };
 
@@ -435,12 +436,12 @@ static RGYFrameInfo infoMPP(MppFrame mppframe) {
     RGYFrameInfo info = setMPPBufferInfo(csp_enc_to_rgy(fmt), mpp_frame_get_width(mppframe), mpp_frame_get_height(mppframe),
         x_stride, y_stride, mpp_frame_get_buffer(mppframe));
 
-    auto meta = mpp_frame_get_meta(mppframe);
-    RK_S64 duration;
-    mpp_meta_get_s64(meta, KEY_USER_DATA, &duration);
+    //auto meta = mpp_frame_get_meta(mppframe);
+    //RK_S64 duration;
+    //mpp_meta_get_s64(meta, KEY_USER_DATA, &duration);
     
     info.timestamp = mpp_frame_get_pts(mppframe);
-    info.duration = duration;
+    info.duration = 0;
     info.picstruct = picstruct_enc_to_rgy(mpp_frame_get_mode(mppframe) & MPP_FRAME_FLAG_FIELD_ORDER_MASK);
     info.flags = RGY_FRAME_FLAG_NONE;
     info.mem_type = RGY_MEM_TYPE_MPP;

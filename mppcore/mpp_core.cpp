@@ -1787,7 +1787,7 @@ RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
                                   MPP_ENC_PREP_CFG_CHANGE_FORMAT;
     m_enccfg.prep.width         = m_encWidth;
     m_enccfg.prep.height        = m_encHeight;
-    m_enccfg.prep.hor_stride    = MPP_ALIGN(m_encWidth);
+    m_enccfg.prep.hor_stride    = mpp_frame_pitch(RGY_CSP_NV12, m_encWidth);
     m_enccfg.prep.ver_stride    = m_encHeight;
     m_enccfg.prep.format        = csp_rgy_to_enc(RGY_CSP_NV12);
     m_enccfg.prep.rotation      = MPP_ENC_ROT_0;

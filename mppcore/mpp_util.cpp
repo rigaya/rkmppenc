@@ -197,14 +197,10 @@ RGYFrameMpp::~RGYFrameMpp() {
     frameDataList.clear();
 }
 
-RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup) {
-    if (!frmGroup) {
-        return RGY_ERR_NULL_PTR;
-    }
-    mppframe = createMPPFrame();
+int mpp_frame_pitch(RGY_CSP csp, const int width) {
 
-    int pixsize = (RGY_CSP_BIT_DEPTH[frame.csp] + 7) / 8;
-    switch (frame.csp) {
+    int pixsize = (RGY_CSP_BIT_DEPTH[csp] + 7) / 8;
+    switch (csp) {
     case RGY_CSP_RGB24R:
     case RGY_CSP_RGB24:
     case RGY_CSP_BGR24:
@@ -233,10 +229,24 @@ RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup
         break;
     }
 
+    const int widthByte = width * pixsize;
     const int image_pitch_alignment = 64;
-    const int widthByte = frame.width * pixsize;
     const int memPitch = ALIGN(widthByte, image_pitch_alignment);
+    return memPitch;
+}
+
+int mpp_frame_size(const RGYFrameInfo &frame) {
+    const int memPitch = mpp_frame_pitch(frame.csp, frame.width);
     const int frameSize = memPitch * frame.height * RGY_CSP_PLANES[frame.csp];
+    return frameSize;
+}
+
+RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup) {
+    if (!frmGroup) {
+        return RGY_ERR_NULL_PTR;
+    }
+    mppframe = createMPPFrame();
+    const int frameSize = mpp_frame_size(frame);
     MppBuffer mppbuffer = nullptr;
     auto ret = err_to_rgy(mpp_buffer_get(frmGroup, &mppbuffer, frameSize));
     if (ret != RGY_ERR_NONE) {
@@ -246,7 +256,7 @@ RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup
     mpp_frame_set_fmt(mppframe.get(), csp_rgy_to_enc(frame.csp));
     mpp_frame_set_width(mppframe.get(), frame.width);
     mpp_frame_set_height(mppframe.get(), frame.height);
-    mpp_frame_set_hor_stride(mppframe.get(), frame.pitch[0]);
+    mpp_frame_set_hor_stride(mppframe.get(), mpp_frame_pitch(frame.csp, frame.width));
     mpp_frame_set_ver_stride(mppframe.get(), frame.height);
     mpp_frame_set_offset_x(mppframe.get(), 0);
     mpp_frame_set_offset_y(mppframe.get(), 0);
@@ -255,6 +265,10 @@ RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup
     mpp_frame_set_buf_size(mppframe.get(), frameSize);
     mpp_frame_set_buffer(mppframe.get(), mppbuffer);
     mpp_frame_set_poc(mppframe.get(), frame.inputFrameId);
+    // mpp_frame_set_bufferして、frameに持たせることで、mppbufferの参照カウントはさらに増えている
+    // mpp_buffer_get と合わせて +2
+    // なので、mppbuffer は put して参照カウントを +1 に戻す
+    mpp_buffer_put(mppbuffer);
     return RGY_ERR_NONE;
 }
 

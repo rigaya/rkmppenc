@@ -661,6 +661,7 @@ public:
                 PrintMes(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(sts));
                 return std::make_unique<RGYFrameMpp>();
             }
+            mpp_buffer_group_limit_config(m_frameGrp, mpp_frame_size(frame), 32);
         }
         return std::make_unique<RGYFrameMpp>(frame, m_frameGrp);
     }
