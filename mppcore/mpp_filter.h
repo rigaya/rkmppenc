@@ -26,10 +26,12 @@
 // ------------------------------------------------------------------------------------------
 
 #pragma once
+#include <thread>
 #include "rgy_version.h"
 #include "rgy_err.h"
 #include "rgy_util.h"
 #include "rgy_filter.h"
+#include "rgy_event.h"
 #include "mpp_util.h"
 
 #include "iep2_api.h"
@@ -40,9 +42,11 @@ public:
     RGAFilter();
     virtual ~RGAFilter();
     RGY_ERR filter_rga(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync);
+    RGY_ERR filter_iep(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, unique_event& sync);
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event) override;
     virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) = 0;
+    virtual RGY_ERR run_filter_iep(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) = 0;
     virtual RGY_ERR AllocFrameBuf(const RGYFrameInfo &frame, int frames) override;
     virtual RGY_ERR AllocFrameBufRGA(const RGYFrameInfo &frame, int frames);
 
@@ -56,6 +60,7 @@ public:
     virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
 protected:
     virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) override;
+    virtual RGY_ERR run_filter_iep(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) override;
     RGY_ERR checkParams(const RGYFilterParam *param);  
     virtual void close() override;
 
@@ -88,12 +93,14 @@ protected:
         IepBufferInfo() : mpp(nullptr), img(), info() {};
     };
     virtual RGY_ERR run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) override;
+    virtual RGY_ERR run_filter_iep(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) override;
     RGY_ERR checkParams(const RGYFilterParam *param);
     RGY_ERR allocateMppBuffer(const RGYFrameInfo& frameInfo);
     RGY_ERR setInputFrame(const RGYFrameInfo *pInputFrame);
     RGY_ERR setOutputFrame(RGYFrameInfo *pOutputFrame, const IepBufferInfo *bufDst);
     RGY_ERR setImage(IepBufferInfo *buffer, const IepCmd cmd);
     RGY_ERR runFilter(std::vector<IepBufferInfo*> dst, const std::vector<IepBufferInfo*> src);
+    RGY_ERR workerThreadFunc();
     virtual void close() override;
 
     IepBufferInfo *getBufSrc(const int64_t idx) { return &m_mppBufSrc[idx % m_mppBufSrc.size()]; }
@@ -108,7 +115,17 @@ protected:
     MppBufferGroup m_frameGrp;
     std::unique_ptr<RGYConvertCSP> m_convertIn;
     std::unique_ptr<RGYConvertCSP> m_convertOut;
+    int m_maxAsyncCount;
     int64_t m_frameCountIn;
     int64_t m_frameCountOut;
     int64_t m_prevOutFrameDuration;
+
+    double m_timeElapsed;
+
+    std::unique_ptr<std::thread> m_threadWorker;
+    unique_event m_eventThreadStart; // main -> worker
+    unique_event m_eventThreadFin;   // worker -> main
+    HANDLE m_eventThreadFinSync;
+    std::array<RGYFrameInfo,2> m_threadNextOutBuf;
+    bool m_threadAbort;
 };

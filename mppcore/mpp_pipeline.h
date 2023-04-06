@@ -345,21 +345,22 @@ protected:
     PipelineTaskSurface m_surf;
     std::unique_ptr<PipelineTaskOutput> m_dependencyFrame;
     std::vector<RGYOpenCLEvent> m_clevents;
+    unique_event m_event;
     int m_release_fence_rga;
 public:
     PipelineTaskOutputSurf(PipelineTaskSurface surf) :
-        PipelineTaskOutput(PipelineTaskOutputType::SURFACE), m_surf(surf), m_dependencyFrame(), m_clevents(), m_release_fence_rga(0) {
+        PipelineTaskOutput(PipelineTaskOutputType::SURFACE), m_surf(surf), m_dependencyFrame(), m_clevents(), m_event(unique_event(nullptr, CloseEvent)), m_release_fence_rga(0) {
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutputDataCustom>& customData) :
-        PipelineTaskOutput(PipelineTaskOutputType::SURFACE, customData), m_surf(surf), m_dependencyFrame(), m_clevents(), m_release_fence_rga(0) {
+        PipelineTaskOutput(PipelineTaskOutputType::SURFACE, customData), m_surf(surf), m_dependencyFrame(), m_clevents(), m_event(unique_event(nullptr, CloseEvent)), m_release_fence_rga(0) {
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutput>& dependencyFrame) :
         PipelineTaskOutput(PipelineTaskOutputType::SURFACE),
-        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents(), m_release_fence_rga(0) {
+        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents(), m_event(unique_event(nullptr, CloseEvent)), m_release_fence_rga(0) {
     };
     PipelineTaskOutputSurf(PipelineTaskSurface surf, std::unique_ptr<PipelineTaskOutput>& dependencyFrame, RGYOpenCLEvent& clevent) :
         PipelineTaskOutput(PipelineTaskOutputType::SURFACE),
-        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents(), m_release_fence_rga(0) {
+        m_surf(surf), m_dependencyFrame(std::move(dependencyFrame)), m_clevents(), m_event(unique_event(nullptr, CloseEvent)), m_release_fence_rga(0) {
         m_clevents.push_back(clevent);
     };
     virtual ~PipelineTaskOutputSurf() {
@@ -368,6 +369,10 @@ public:
     };
 
     PipelineTaskSurface& surf() { return m_surf; }
+
+    void addEvent(unique_event& event) {
+        m_event = std::move(event);
+    }
 
     void addClEvent(RGYOpenCLEvent& clevent) {
         m_clevents.push_back(clevent);
@@ -381,6 +386,10 @@ public:
         RGYOpenCLEvent::wait(m_clevents);
         m_clevents.clear();
         m_dependencyFrame.reset();
+        if (m_event) {
+            WaitForSingleObject(m_event.get(), INFINITE);
+            m_event.reset();
+        }
         if (m_release_fence_rga) {
             imsync(m_release_fence_rga);
             m_release_fence_rga = 0;
@@ -2066,7 +2075,7 @@ public:
         return std::make_pair(m_vpFilters.front()->GetFilterParam()->frameIn, 1);
     };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
-        return std::make_pair(m_vpFilters.back()->GetFilterParam()->frameOut, m_outMaxQueueSize + 2);
+        return std::make_pair(m_vpFilters.back()->GetFilterParam()->frameOut, m_outMaxQueueSize + 4);
     };
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
         if (m_prevInputFrame.size() > 0) {
@@ -2152,8 +2161,9 @@ public:
             surfOut[i] = surfVppOut;
             ptrOutInfo[i] = &surfVppOut.syssurf()->frame;
         }
+        unique_event sync = unique_event(nullptr, CloseEvent);
         int dummy = 0;
-        auto sts_filter = m_vpFilters.front()->filter_rga(&filterframes.front().first, (RGYFrameInfo **)&ptrOutInfo, &nOutFrames, &dummy);
+        auto sts_filter = m_vpFilters.front()->filter_iep(&filterframes.front().first, (RGYFrameInfo **)&ptrOutInfo, &nOutFrames, sync);
         if (sts_filter != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Error while running filter \"%s\".\n"), m_vpFilters.front()->name().c_str());
             return sts_filter;
@@ -2164,7 +2174,9 @@ public:
         }
 
         for (int i = 0; i < nOutFrames; i++) {
-            m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfOut[i]));
+            auto outSurf = std::make_unique<PipelineTaskOutputSurf>(surfOut[i]);
+            outSurf->addEvent(sync);
+            m_outQeueue.push_back(std::move(outSurf));
         }
         return RGY_ERR_NONE;
     }

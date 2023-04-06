@@ -46,7 +46,6 @@ RGAFilter::~RGAFilter() {
 RGY_ERR RGAFilter::run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event) {
     return RGY_ERR_UNSUPPORTED;
 }
-    
 
 RGY_ERR RGAFilter::filter_rga(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) {
     if (pInputFrame == nullptr) {
@@ -61,6 +60,40 @@ RGY_ERR RGAFilter::filter_rga(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutput
         *pOutputFrameNum = 1;
     }
     const auto ret = run_filter_rga(pInputFrame, ppOutputFrames, pOutputFrameNum, sync);
+    const int nOutFrame = *pOutputFrameNum;
+    if (!m_param->bOutOverwrite && nOutFrame > 0) {
+        if (m_pathThrough & FILTER_PATHTHROUGH_TIMESTAMP) {
+            if (nOutFrame != 1) {
+                AddMessage(RGY_LOG_ERROR, _T("timestamp path through can only be applied to 1-in/1-out filter.\n"));
+                return RGY_ERR_INVALID_CALL;
+            } else {
+                ppOutputFrames[0]->timestamp = pInputFrame->timestamp;
+                ppOutputFrames[0]->duration = pInputFrame->duration;
+                ppOutputFrames[0]->inputFrameId = pInputFrame->inputFrameId;
+            }
+        }
+        for (int i = 0; i < nOutFrame; i++) {
+            if (m_pathThrough & FILTER_PATHTHROUGH_FLAGS)     ppOutputFrames[i]->flags = pInputFrame->flags;
+            if (m_pathThrough & FILTER_PATHTHROUGH_PICSTRUCT) ppOutputFrames[i]->picstruct = pInputFrame->picstruct;
+            if (m_pathThrough & FILTER_PATHTHROUGH_DATA)      ppOutputFrames[i]->dataList  = pInputFrame->dataList;
+        }
+    }
+    return ret;
+}
+
+RGY_ERR RGAFilter::filter_iep(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) {
+    if (pInputFrame == nullptr) {
+        *pOutputFrameNum = 0;
+        ppOutputFrames[0] = nullptr;
+    }
+    if (m_param
+        && m_param->bOutOverwrite //上書きか?
+        && pInputFrame != nullptr && pInputFrame->ptr[0] != nullptr //入力が存在するか?
+        && ppOutputFrames != nullptr && ppOutputFrames[0] == nullptr) { //出力先がセット可能か?
+        ppOutputFrames[0] = pInputFrame;
+        *pOutputFrameNum = 1;
+    }
+    const auto ret = run_filter_iep(pInputFrame, ppOutputFrames, pOutputFrameNum, sync);
     const int nOutFrame = *pOutputFrameNum;
     if (!m_param->bOutOverwrite && nOutFrame > 0) {
         if (m_pathThrough & FILTER_PATHTHROUGH_TIMESTAMP) {
@@ -259,6 +292,10 @@ RGY_ERR RGAFilterResize::run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFram
     return sts;
 }
 
+RGY_ERR RGAFilterResize::run_filter_iep(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) {
+    return RGY_ERR_UNSUPPORTED;
+}
+
 RGAFilterDeinterlaceIEP::RGAFilterDeinterlaceIEP() :
     RGAFilter(),
     m_iepCtx(std::unique_ptr<iep_com_ctx, decltype(&rockchip_iep2_api_release_ctx)>(nullptr, rockchip_iep2_api_release_ctx)),
@@ -270,9 +307,17 @@ RGAFilterDeinterlaceIEP::RGAFilterDeinterlaceIEP() :
     m_frameGrp(nullptr),
     m_convertIn(),
     m_convertOut(),
+    m_maxAsyncCount(0),
     m_frameCountIn(0),
     m_frameCountOut(0),
-    m_prevOutFrameDuration(0) {
+    m_prevOutFrameDuration(0),
+    m_timeElapsed(0.0),
+    m_threadWorker(),
+    m_eventThreadStart(unique_event(nullptr, CloseEvent)),
+    m_eventThreadFin(unique_event(nullptr, CloseEvent)),
+    m_eventThreadFinSync(),
+    m_threadNextOutBuf(),
+    m_threadAbort(false) {
     m_name = _T("deint(iep)");
 }
 
@@ -281,6 +326,16 @@ RGAFilterDeinterlaceIEP::~RGAFilterDeinterlaceIEP() {
 }
 
 void RGAFilterDeinterlaceIEP::close() {
+    if (m_threadWorker->joinable()) {
+        m_threadAbort = true;
+        SetEvent(m_eventThreadStart.get());
+        m_threadWorker->join();
+    }
+    m_eventThreadStart.reset();
+    m_eventThreadFin.reset();
+    m_threadAbort = false;
+    AddMessage(RGY_LOG_INFO, _T("iep filter run time: %.3f ms\n"), m_timeElapsed * 0.001 / m_frameCountOut);
+
     for (auto& buf : m_mppBufSrc) {
         if (buf.mpp) {
             mpp_buffer_put(buf.mpp);
@@ -361,26 +416,28 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
     m_isTFF = (prm->picstruct & RGY_PICSTRUCT_TFF) != 0;
     m_frameCountIn = 0;
     m_frameCountOut = 0;
+
+    m_maxAsyncCount = 1;
     
     switch (prm->mode) {
     case IEPDeinterlaceMode::NORMAL_I5:
         m_dilMode = (m_isTFF) ? IEP2_DIL_MODE_I5O1T : IEP2_DIL_MODE_I5O1B;
-        m_mppBufSrc.resize(3);
+        m_mppBufSrc.resize(3+m_maxAsyncCount);
         m_mppBufDst.resize(1);
         break;
     case IEPDeinterlaceMode::NORMAL_I2:
         m_dilMode = (m_isTFF) ? IEP2_DIL_MODE_I1O1T : IEP2_DIL_MODE_I1O1B;
-        m_mppBufSrc.resize(1);
+        m_mppBufSrc.resize(1+m_maxAsyncCount);
         m_mppBufDst.resize(1);
         break;
     case IEPDeinterlaceMode::BOB_I5:
         m_dilMode = IEP2_DIL_MODE_I5O2;
-        m_mppBufSrc.resize(3);
+        m_mppBufSrc.resize(3+m_maxAsyncCount);
         m_mppBufDst.resize(2);
         break;
     case IEPDeinterlaceMode::BOB_I2:
         m_dilMode = IEP2_DIL_MODE_I2O2;
-        m_mppBufSrc.resize(1);
+        m_mppBufSrc.resize(1+m_maxAsyncCount);
         m_mppBufDst.resize(2);
         break;
     default:
@@ -420,6 +477,15 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
                 RGY_CSP_NAMES[func->csp_from], RGY_CSP_NAMES[func->csp_to], get_simd_str(func->simd));
         }
     }
+    m_eventThreadStart = CreateEventUnique(nullptr, false, false, nullptr);
+    AddMessage(RGY_LOG_DEBUG, _T("Create m_eventThreadStart.\n"));
+    
+    m_eventThreadFin = CreateEventUnique(nullptr, false, false, nullptr);
+    AddMessage(RGY_LOG_DEBUG, _T("Create m_eventThreadFin.\n"));
+    
+    m_threadWorker = std::make_unique<std::thread>(&RGAFilterDeinterlaceIEP::workerThreadFunc, this);
+    AddMessage(RGY_LOG_DEBUG, _T("Start worker thread.\n"));
+
     m_pathThrough &= ~(FILTER_PATHTHROUGH_PICSTRUCT | FILTER_PATHTHROUGH_TIMESTAMP | FILTER_PATHTHROUGH_FLAGS | FILTER_PATHTHROUGH_DATA);
     m_infoStr = strsprintf(_T("deinterlace(%s)"),
         get_chr_from_value(list_iep_deinterlace, (int)prm->mode));
@@ -505,6 +571,10 @@ RGY_ERR RGAFilterDeinterlaceIEP::setOutputFrame(RGYFrameInfo *pOutputFrame, cons
 }
 
 RGY_ERR RGAFilterDeinterlaceIEP::run_filter_rga(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, int *sync) {
+    return RGY_ERR_UNSUPPORTED;
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::run_filter_iep(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) {
     RGY_ERR sts = RGY_ERR_NONE;
     auto prm = dynamic_cast<RGYFilterParamDeinterlaceIEP*>(m_param.get());
     if (!prm) {
@@ -542,49 +612,34 @@ RGY_ERR RGAFilterDeinterlaceIEP::run_filter_rga(const RGYFrameInfo *pInputFrame,
             return sts;
         }
     }
-    std::vector<IepBufferInfo*> dst = { &m_mppBufDst[0] };
-    if (m_dilMode == IEP2_DIL_MODE_I5O2
-     || m_dilMode == IEP2_DIL_MODE_I2O2) {
-        dst.push_back(&m_mppBufDst[1]);
+    if (m_frameCountIn < 2
+        && (m_dilMode == IEP2_DIL_MODE_I5O2
+         || m_dilMode == IEP2_DIL_MODE_I5O1T
+         || m_dilMode == IEP2_DIL_MODE_I5O1B
+         || m_dilMode == IEP2_DIL_MODE_I2O2)) {
+        *pOutputFrameNum = 0;
+        return RGY_ERR_NONE; // 出力なし
     }
     if (pInputFrame->ptr[0] == nullptr) {
         if (m_frameCountIn == m_frameCountOut) {
             return RGY_ERR_NONE;
         }
     }
+
+    sync = CreateEventUnique(nullptr, false, false, nullptr);
+
+    // 前回のIEPの実行終了を待つ
+    WaitForSingleObject(m_eventThreadFin.get(), INFINITE);
+
+    *pOutputFrameNum = 1;
     if (m_dilMode == IEP2_DIL_MODE_I5O2
-     || m_dilMode == IEP2_DIL_MODE_I5O1T
-     || m_dilMode == IEP2_DIL_MODE_I5O1B) {
-        if (m_frameCountIn < 2) {
-            *pOutputFrameNum = 0;
-            return RGY_ERR_NONE; // 出力なし
-        }
-        sts = runFilter(dst, { getBufSrc(std::max<int64_t>(0, m_frameCountOut-1)),
-                               getBufSrc(m_frameCountOut + 0),
-                               getBufSrc(std::min(m_frameCountOut + 1, m_frameCountIn-1)) });
-        if (sts != RGY_ERR_NONE) {
-            return sts;
-        }
-    } else if (m_dilMode == IEP2_DIL_MODE_I2O2
-            || m_dilMode == IEP2_DIL_MODE_I1O1T
-            || m_dilMode == IEP2_DIL_MODE_I1O1B) {
-        sts = runFilter(dst, { getBufSrc(m_frameCountOut) });
-        if (sts != RGY_ERR_NONE) {
-            return sts;
-        }
-    } else {
-        AddMessage(RGY_LOG_ERROR, _T("Unknown dil mode: %d.\n"), m_dilMode);
-        return RGY_ERR_UNSUPPORTED;
+     || m_dilMode == IEP2_DIL_MODE_I2O2) {
+        *pOutputFrameNum = 2;
     }
-    *pOutputFrameNum = (int)dst.size();
-    for (size_t i = 0; i < dst.size(); i++) {
+    for (int i = 0; i < *pOutputFrameNum; i++) {
         if (ppOutputFrames[i] == nullptr) {
             AddMessage(RGY_LOG_ERROR, _T("No output buffer for %d frame.\n"), i);
             return RGY_ERR_UNSUPPORTED;
-        }
-        sts = setOutputFrame(ppOutputFrames[i], dst[i]);
-        if (sts != RGY_ERR_NONE) {
-            return sts;
         }
         copyFrameProp(ppOutputFrames[i], &getBufSrc(m_frameCountOut)->info);
         ppOutputFrames[i]->picstruct = RGY_PICSTRUCT_FRAME;
@@ -603,8 +658,66 @@ RGY_ERR RGAFilterDeinterlaceIEP::run_filter_rga(const RGYFrameInfo *pInputFrame,
             }
         }
         m_prevOutFrameDuration = ppOutputFrames[i]->duration;
+        // 処理スレッドに出力先を設定
+        m_threadNextOutBuf[i] = (*ppOutputFrames[i]);
     }
-    m_frameCountOut++;
+    m_eventThreadFinSync = sync.get();
+    // 処理スレッドに処理開始を通知
+    SetEvent(m_eventThreadStart.get());
+    return sts;
+}
+
+RGY_ERR RGAFilterDeinterlaceIEP::workerThreadFunc() {
+    RGY_ERR sts = RGY_ERR_NONE;
+    // メインスレッドからの開始通知待ち
+    SetEvent(m_eventThreadFin.get());
+    WaitForSingleObject(m_eventThreadStart.get(), INFINITE);
+
+    while (!m_threadAbort) {
+        std::vector<IepBufferInfo*> dst = { &m_mppBufDst[0] };
+        if (m_dilMode == IEP2_DIL_MODE_I5O2
+        ||  m_dilMode == IEP2_DIL_MODE_I2O2) {
+            dst.push_back(&m_mppBufDst[1]);
+        }
+        if (m_dilMode == IEP2_DIL_MODE_I5O2
+         || m_dilMode == IEP2_DIL_MODE_I5O1T
+         || m_dilMode == IEP2_DIL_MODE_I5O1B) {
+            sts = runFilter(dst, { getBufSrc(std::max<int64_t>(0, m_frameCountOut-1)),
+                                   getBufSrc(m_frameCountOut + 0),
+                                   getBufSrc(std::min(m_frameCountOut + 1, m_frameCountIn-1)) });
+            if (sts != RGY_ERR_NONE) {
+                return sts;
+            }
+        } else if (m_dilMode == IEP2_DIL_MODE_I2O2
+                || m_dilMode == IEP2_DIL_MODE_I1O1T
+                || m_dilMode == IEP2_DIL_MODE_I1O1B) {
+            sts = runFilter(dst, { getBufSrc(m_frameCountOut) });
+            if (sts != RGY_ERR_NONE) {
+                return sts;
+            }
+        } else {
+            AddMessage(RGY_LOG_ERROR, _T("Unknown dil mode: %d.\n"), m_dilMode);
+            return RGY_ERR_UNSUPPORTED;
+        }
+    auto start = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < dst.size(); i++) {
+            sts = setOutputFrame(&m_threadNextOutBuf[i], dst[i]);
+            if (sts != RGY_ERR_NONE) {
+                return sts;
+            }
+        }
+    auto fin = std::chrono::high_resolution_clock::now();
+    m_timeElapsed += std::chrono::duration_cast<std::chrono::microseconds>(fin-start).count();
+
+        m_frameCountOut++;
+        // メインスレッドに終了を通知
+        SetEvent(m_eventThreadFin.get());
+        // フレームに終了を通知
+        SetEvent(m_eventThreadFinSync);
+        // メインスレッドからの開始通知待ち
+        WaitForSingleObject(m_eventThreadStart.get(), INFINITE);
+    }
+    AddMessage(RGY_LOG_DEBUG, _T("worker thread terminate.\n"));
     return sts;
 }
 

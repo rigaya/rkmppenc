@@ -2116,7 +2116,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
                 m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_IEP) {
             m_pipelineTasks.push_back(std::make_unique<PipelineTaskIEP>(filterBlock.vpprga,
-                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
+                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 3, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_OPENCL) {
             if (!m_cl) {
                 PrintMes(RGY_LOG_ERROR, _T("OpenCL not enabled, OpenCL filters cannot be used.\n"));
