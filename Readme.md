@@ -48,6 +48,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
   - HEVC
   - MPEG2
 - Resize filter by NPU (via librga im2d API)
+- HW deinterlace filter (via mpp iep v2 API)
 - OpenCL filters
 - Supports various formats such as avs, vpy, y4m, and raw
 - Supports demux/muxing using libavformat

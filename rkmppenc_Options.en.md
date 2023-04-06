@@ -130,6 +130,7 @@
   - [Vpp Filtering order](#vpp-filtering-order)
   - [--vpp-colorspace \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--vpp-colorspace-param1value1param2value2)
   - [--vpp-delogo \<string\>\[,\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-delogo-stringparam1value1param2value2)
+  - [--vpp-deinterlace \[\<string\>\]](#--vpp-deinterlace-string)
   - [--vpp-afs \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--vpp-afs-param1value1param2value2)
   - [--vpp-nnedi \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--vpp-nnedi-param1value1param2value2)
   - [--vpp-yadif \[\<param1\>=\<value1\>\]](#--vpp-yadif-param1value1)
@@ -1365,7 +1366,18 @@ Values for parameters will be copied from input file for "input".
     Adjustment of each color component of the logo.  
 
 
+### --vpp-deinterlace [&lt;string&gt;]
+hw deinterlace by mpp(iep v2). Requires /dev/mpp_service to be present.
 
+- **parameters**
+  - normal_i5  
+    Generate latter field from first field (high quality).
+  - normal_i2  
+    Generate latter field from first field (fast).
+  - bob_i5  
+    Generate one frame from each field (high quality). 
+  - bob_i2  
+    Generate one frame from each field (fast).
 
 ### --vpp-afs [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 Activate Auto Field Shift (AFS) deinterlacer.

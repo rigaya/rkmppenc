@@ -330,6 +330,10 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
             AddMessage(RGY_LOG_ERROR, _T("Failed to init iep context.\n"));
             return RGY_ERR_INVALID_PARAM;
         }
+        if (m_iepCtx->ver < 2) {
+            AddMessage(RGY_LOG_ERROR, _T("Requires iep ver 2 or later: detected version: %d.\n"), m_iepCtx->ver);
+            return RGY_ERR_INVALID_PARAM;
+        }
         AddMessage(RGY_LOG_DEBUG, _T("Init iep context done: ver %d.\n"), m_iepCtx->ver);
     }
 

@@ -1301,6 +1301,18 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - cr=&lt;int&gt;  
     ロゴの各色成分の補正。Aviutlで言うところの &lt;Y&gt;, &lt;Cb&gt;, &lt;Cr&gt;。  
 
+### --vpp-deinterlace [&lt;string&gt;]
+mpp(iep v2)によるhwベースのインタレ解除を行います。システムに ```/dev/mpp_service``` が存在する必要があります。
+
+- **parameters**
+  - normal_i5  
+    通常のインタレ解除を行います。(高品質)
+  - normal_i2  
+    通常のインタレ解除を行います。(高速)
+  - bob_i5  
+    60fps化を行います。(高品質)
+  - bob_i2  
+    60fps化を行います。(高速)
 
 ### --vpp-afs [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 自動フィールドシフトによるインタレ解除を行う。

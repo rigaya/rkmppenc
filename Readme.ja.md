@@ -48,6 +48,7 @@ Debian/Ubuntu系
   - HEVC
   - MPEG2
 - NPUによるリサイズフィルタ(librga im2d API使用)
+- HWインタレ解除フィルタ (mpp iep v2 API使用)
 - OpenCLフィルタ
 - ソースファイルからの音声抽出や音声エンコード
 - mp4,mkv,tsなどの多彩なコンテナに映像・音声をmuxしながら出力
