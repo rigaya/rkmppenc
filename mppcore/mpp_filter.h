@@ -27,6 +27,7 @@
 
 #pragma once
 #include <thread>
+#include <mutex>
 #include "rgy_version.h"
 #include "rgy_err.h"
 #include "rgy_util.h"
@@ -127,12 +128,13 @@ public:
     RGAFilterDeinterlaceIEP();
     virtual ~RGAFilterDeinterlaceIEP();
     virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
-protected:
-    struct IepBufferInfo {
-        std::unique_ptr<RGYFrameMpp> mpp;
-        IepImg img;
 
-        IepBufferInfo() : mpp(), img() {};
+    static int maxAsyncCount;
+protected:
+    struct IepBufferOutInfo {
+        RGYFrameMpp *mpp;
+        HANDLE handle;
+        int64_t outFrame;
     };
     virtual RGY_ERR run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, int *sync) override;
     virtual RGY_ERR run_filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) override;
@@ -150,8 +152,8 @@ protected:
     bool m_isTFF;
     RGYFrameInfo m_mppBufInfo;
     std::vector<std::unique_ptr<RGYFrameMpp>> m_mppBufSrc;
-    std::array<RGYFrameMpp*,2> m_mppBufDst;
-    int m_maxAsyncCount;
+    std::deque<IepBufferOutInfo> m_mppBufDst;
+    std::mutex m_mtxBufDst;
     int64_t m_frameCountIn;
     int64_t m_frameCountOut;
     int64_t m_prevOutFrameDuration;
@@ -161,6 +163,5 @@ protected:
     std::unique_ptr<std::thread> m_threadWorker;
     unique_event m_eventThreadStart; // main -> worker
     unique_event m_eventThreadFin;   // worker -> main
-    HANDLE m_eventThreadFinSync;
     bool m_threadAbort;
 };
