@@ -2150,7 +2150,11 @@ RGY_ERR RGYOpenCLContext::copyPlane(RGYFrameInfo *planeDstOrg, const RGYFrameInf
                 (cl_mem)planeSrc.ptr[0], planeSrc.pitch[0], (int)src_origin[0] / pixel_size, (int)src_origin[1],
                 planeSrc.width, planeSrc.height);
             err = err_rgy_to_cl(rgy_err);
-        } else if (planeDst.mem_type == RGY_MEM_TYPE_CPU) {
+        } else if (planeDst.mem_type == RGY_MEM_TYPE_CPU
+#if ENCODER_MPP
+                || planeDst.mem_type == RGY_MEM_TYPE_MPP
+#endif
+        ) {
             err = clEnqueueReadBufferRect(queue.get(), (cl_mem)planeSrc.ptr[0], false, src_origin, dst_origin,
                 region, planeSrc.pitch[0], 0, planeDst.pitch[0], 0, planeDst.ptr[0], wait_count, wait_list, event_ptr);
         } else {
@@ -2188,14 +2192,22 @@ RGY_ERR RGYOpenCLContext::copyPlane(RGYFrameInfo *planeDstOrg, const RGYFrameInf
                     planeSrc.width, planeSrc.height);
                 err = err_rgy_to_cl(rgy_err);
             }
-        } else if (planeDst.mem_type == RGY_MEM_TYPE_CPU) {
+        } else if (planeDst.mem_type == RGY_MEM_TYPE_CPU
+#if ENCODER_MPP
+                || planeDst.mem_type == RGY_MEM_TYPE_MPP
+#endif
+        ) {
             clGetImageInfo((cl_mem)planeSrc.ptr[0], CL_IMAGE_WIDTH, sizeof(region[0]), &region[0], nullptr);
             err = clEnqueueReadImage(queue.get(), (cl_mem)planeSrc.ptr[0], false, dst_origin,
                 region, planeDst.pitch[0], 0, planeDst.ptr[0], wait_count, wait_list, event_ptr);
         } else {
             return RGY_ERR_UNSUPPORTED;
         }
-    } else if (planeSrc.mem_type == RGY_MEM_TYPE_CPU) {
+    } else if (planeSrc.mem_type == RGY_MEM_TYPE_CPU
+#if ENCODER_MPP
+            || planeSrc.mem_type == RGY_MEM_TYPE_MPP
+#endif
+    ) {
         if (planeDst.mem_type == RGY_MEM_TYPE_GPU) {
             err = clEnqueueWriteBufferRect(queue.get(), (cl_mem)planeDst.ptr[0], false, dst_origin, src_origin,
                 region, planeDst.pitch[0], 0, planeSrc.pitch[0], 0, planeSrc.ptr[0], wait_count, wait_list, event_ptr);
@@ -2203,7 +2215,11 @@ RGY_ERR RGYOpenCLContext::copyPlane(RGYFrameInfo *planeDstOrg, const RGYFrameInf
             clGetImageInfo((cl_mem)planeDst.ptr[0], CL_IMAGE_WIDTH, sizeof(region[0]), &region[0], nullptr);
             err = clEnqueueWriteImage(queue.get(), (cl_mem)planeDst.ptr[0], false, src_origin,
                 region, planeSrc.pitch[0], 0, (void *)planeSrc.ptr[0], wait_count, wait_list, event_ptr);
-        } else if (planeDst.mem_type == RGY_MEM_TYPE_CPU) {
+        } else if (planeDst.mem_type == RGY_MEM_TYPE_CPU
+#if ENCODER_MPP
+                || planeDst.mem_type == RGY_MEM_TYPE_MPP
+#endif
+        ) {
             for (int y = 0; y < planeDst.height; y++) {
                 memcpy(planeDst.ptr[0] + (y + dst_origin[1]) * planeDst.pitch[0] + dst_origin[0] * pixel_size,
                         planeSrc.ptr[0] + (y + src_origin[1]) * planeSrc.pitch[0] + src_origin[0] * pixel_size,
