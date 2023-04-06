@@ -388,33 +388,6 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
         return RGY_ERR_UNSUPPORTED;
     }
     AddMessage(RGY_LOG_DEBUG, _T("Selected deinterlace mode: %s %s.\n"), getDILModeName(m_dilMode), m_isTFF ? _T("TFF") : _T("BFF"));
-
-    struct iep2_api_params params;
-    params.ptype = IEP2_PARAM_TYPE_MODE;
-    params.param.mode.dil_mode = m_dilMode;
-    params.param.mode.out_mode = IEP2_OUT_MODE_LINE;
-    params.param.mode.dil_order = m_isTFF ? IEP2_FIELD_ORDER_TFF : IEP2_FIELD_ORDER_BFF;
-    err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
-    if (err != RGY_ERR_NONE) {
-        AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace mode: %s.\n"), get_err_mes(err));
-        return err;
-    }
-    AddMessage(RGY_LOG_DEBUG, _T("Set deinterlace mode.\n"));
-
-    params.ptype = IEP2_PARAM_TYPE_COM;
-    params.param.com.sfmt = IEP2_FMT_YUV420; // nv12
-    params.param.com.dfmt = IEP2_FMT_YUV420; // nv12
-    params.param.com.sswap = IEP2_YUV_SWAP_SP_UV; // nv12
-    params.param.com.dswap = IEP2_YUV_SWAP_SP_UV; // nv12
-    params.param.com.width = param->frameIn.width;
-    params.param.com.height = param->frameIn.height;
-    params.param.com.hor_stride = param->frameIn.pitch[0];
-    err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
-    if (err != RGY_ERR_NONE) {
-        AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace params: %s.\n"), get_err_mes(err));
-        return err;
-    }
-    AddMessage(RGY_LOG_DEBUG, _T("Set deinterlace params.\n"));
     
     err = allocateMppBuffer(param->frameIn);
     if (err != RGY_ERR_NONE) {
@@ -478,7 +451,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::allocateMppBuffer(const RGYFrameInfo& frameInfo
             return RGY_ERR_UNSUPPORTED;
     }
 
-    auto ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
+    auto ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_ION));
     if (ret != RGY_ERR_NONE) {
         AddMessage(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(ret));
         return ret;
@@ -492,7 +465,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::allocateMppBuffer(const RGYFrameInfo& frameInfo
         }
         buf.info = setMPPBufferInfo(m_mppBufInfo.csp, m_mppBufInfo.width, m_mppBufInfo.height,
             m_mppBufInfo.pitch[0], m_mppBufInfo.height, buf.mpp);
-        buf.img.format = IEP2_FMT_YUV420;
+        buf.img.format = IEP_FORMAT_YCbCr_420_SP;
     }
     for (auto& buf : m_mppBufDst) {
         ret = err_to_rgy(mpp_buffer_get(m_frameGrp, &buf.mpp, frameSize));
@@ -502,7 +475,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::allocateMppBuffer(const RGYFrameInfo& frameInfo
         }
         buf.info = setMPPBufferInfo(m_mppBufInfo.csp, m_mppBufInfo.width, m_mppBufInfo.height,
             m_mppBufInfo.pitch[0], m_mppBufInfo.height, buf.mpp);
-        buf.img.format = IEP2_FMT_YUV420;
+        buf.img.format = IEP_FORMAT_YCbCr_420_SP;
     }
     return RGY_ERR_NONE;
 }
@@ -646,42 +619,73 @@ RGY_ERR RGAFilterDeinterlaceIEP::setImage(IepBufferInfo *buffer, const IepCmd cm
     buffer->img.y_off = 0;
     buffer->img.mem_addr = fd;
     buffer->img.uv_addr = fd + (y_size << 10);
-    switch (buffer->img.format) {
-    case IEP2_FMT_YUV422:
-        buffer->img.v_addr = fd + ((y_size + y_size / 2) << 10);
-        break;
-    case IEP2_FMT_YUV420:
-        buffer->img.v_addr = fd + ((y_size + y_size / 4) << 10);
-        break;
-    default:
-        break;
-    }
-
+    buffer->img.v_addr = fd + ((y_size + y_size / 4) << 10);
+    AddMessage(RGY_LOG_TRACE, _T("SetImage %d: fd %d, buffermpp %p\n"), cmd, fd, buffer->mpp);
     MPP_RET ret = m_iepCtx->ops->control(m_iepCtx->priv, cmd, &buffer->img);
     return err_to_rgy(ret);
 }
 
 RGY_ERR RGAFilterDeinterlaceIEP::runFilter(std::vector<IepBufferInfo*> dst, const std::vector<IepBufferInfo*> src) {
 #define CHECK_SETIMG(x) { if (auto err = (x); err != RGY_ERR_NONE) { AddMessage(RGY_LOG_ERROR, _T("Failed to set image: %s.\n"), get_err_mes(err)); return err; }}
-    if (dst.size() > 0) { CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));      }
-    if (dst.size() > 1) { CHECK_SETIMG(setImage(dst[1], IEP_CMD_SET_DEI_DST1)); }
+    if (dst.size() == 1) {
+        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));
+        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DEI_DST1));
+    } else if (dst.size() == 2) {
+        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));
+        CHECK_SETIMG(setImage(dst[1], IEP_CMD_SET_DEI_DST1));
+    } else {
+        AddMessage(RGY_LOG_ERROR, _T("Unknwon dst frame count: %d.\n"), dst.size());
+        return RGY_ERR_UNKNOWN;
+    }
     if (src.size() == 1) {
-        CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_SRC)); //curr
-    } else if (src.size() == 3) {
+        CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_SRC));      // curr
+        CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC1)); // next
         CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC2)); // prev
+    } else if (src.size() == 3) {
         CHECK_SETIMG(setImage(src[1], IEP_CMD_SET_SRC));      // curr
         CHECK_SETIMG(setImage(src[2], IEP_CMD_SET_DEI_SRC1)); // next
+        CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC2)); // prev
     } else {
         AddMessage(RGY_LOG_ERROR, _T("Unknwon src frame count: %d.\n"), src.size());
         return RGY_ERR_UNKNOWN;
     }
 #undef CHECK_SETIMG
+
+    struct iep2_api_params params;
+    params.ptype = IEP2_PARAM_TYPE_MODE;
+    params.param.mode.dil_mode = m_dilMode;
+    params.param.mode.out_mode = IEP2_OUT_MODE_LINE;
+    params.param.mode.dil_order = m_isTFF ? IEP2_FIELD_ORDER_TFF : IEP2_FIELD_ORDER_BFF;
+    params.param.mode.ff_mode = IEP2_FF_MODE_FRAME;
+    auto err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
+    if (err != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace mode: %s.\n"), get_err_mes(err));
+        return err;
+    }
+    AddMessage(RGY_LOG_TRACE, _T("Set deinterlace mode.\n"));
+
+    params.ptype = IEP2_PARAM_TYPE_COM;
+    params.param.com.sfmt = IEP2_FMT_YUV420; // nv12
+    params.param.com.dfmt = IEP2_FMT_YUV420; // nv12
+    params.param.com.sswap = IEP2_YUV_SWAP_SP_UV; // nv12
+    params.param.com.dswap = IEP2_YUV_SWAP_SP_UV; // nv12
+    params.param.com.width = src[0]->info.width;
+    params.param.com.height = src[0]->info.height;
+    params.param.com.hor_stride = src[0]->info.pitch[0];
+    err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
+    if (err != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace params: %s.\n"), get_err_mes(err));
+        return err;
+    }
+    AddMessage(RGY_LOG_TRACE, _T("Set deinterlace params.\n"));
+
     struct iep2_api_info dei_info;
-    auto err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_RUN_SYNC, &dei_info));
+    err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_RUN_SYNC, &dei_info));
     if (err != RGY_ERR_NONE) {
         AddMessage(RGY_LOG_ERROR, _T("Failed to run filter: %s.\n"), get_err_mes(err));
         return err;
     }
+    AddMessage(RGY_LOG_TRACE, _T("Deinterlace result: dil_order %d, frm_mode %d.\n"), dei_info.dil_order, dei_info.frm_mode ? 1 : 0);
 
     const int out_order = dei_info.dil_order == IEP2_FIELD_ORDER_BFF ? 1 : 0;
     if (out_order && dst.size() == 2) {
