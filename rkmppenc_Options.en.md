@@ -170,7 +170,7 @@
   - [--max-procfps \<int\>](#--max-procfps-int)
   - [--lowlatency](#--lowlatency)
   - [--avsdll \<string\>](#--avsdll-string)
-  - [--process-codepage \<string\> \[Windows OS only\]](#--process-codepage-string-windows-os-only)
+  - [--disable-opencl](#--disable-opencl)
   - [--perf-monitor \[\<string\>\[,\<string\>\]...\]](#--perf-monitor-stringstring)
   - [--perf-monitor-interval \<int\>](#--perf-monitor-interval-int)
 
@@ -2210,19 +2210,10 @@ Tune for lower transcoding latency, but will hurt transcoding throughput. Not re
 ### --avsdll &lt;string&gt;
 Specifies AviSynth DLL location to use. When unspecified, the default AviSynth.dll will be used.
 
-### --process-codepage &lt;string&gt; [Windows OS only]  
-- **parameters**  
-  - utf8  
-    Use UTF-8 as the codepage of the process. (Default)
-  
-  - os  
-    Change the character code of the process to be in the default codepage set in the Operating System.
-    
-    This shall allow AviSynth scripts using non-ASCII characters with legacy codepage to work again.
-  
-    When this option is set, a copy of the exe file will be created in the same directory of the original exe file,
-    and the manifest file of the copy will be modified using UpdateResourceW API to switch back code page
-    to the default of the OS, and then the copied exe will be run, allowing us to handle the AviSynth scripts using legacy code page.
+### --disable-opencl  
+Disable OpenCL realated features.
+
+This can avid error on systems OpenCL not installed or corrupted.
 
 ### --perf-monitor [&lt;string&gt;[,&lt;string&gt;]...]
 Outputs performance information. You can select the information name you want to output as a parameter from the following table. The default is all (all information).

@@ -1,6 +1,3 @@
-# まだ建設中です
-
-
 # rkmppenc  
 by rigaya
 
@@ -8,7 +5,7 @@ by rigaya
 
 **[日本語版はこちら＞＞](./Readme.ja.md)**  
 
-This software is meant to investigate performance and image quality of hw encoder on rockchip SoCs, which is used on SBC such as Orange Pi, Nano Pi, and Radxa Rock.
+This software is meant to investigate performance and image quality of hw encoder on rockchip SoCs, which is used on SBC such as Orange Pi, Nano Pi, and Radxa ROCK.
 
 
 ## Downloads & update history

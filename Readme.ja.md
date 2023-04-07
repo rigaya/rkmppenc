@@ -1,11 +1,9 @@
-# まだ建設中です
-
 # rkmppenc  
 by rigaya
 
 [![Build Linux Packages](https://github.com/rigaya/rkmppenc/actions/workflows/build_packages.yml/badge.svg)](https://github.com/rigaya/rkmppenc/actions/workflows/build_packages.yml)  
 
-このソフトウェアは、Orange Pi、Nano Pi、Radxa Rockシリーズ等のSBCに使用されているRockchip系SoC内蔵のHWエンコーダ(rkmpp)の画質や速度といった性能の実験を目的としています。  
+このソフトウェアは、Orange Pi、Nano Pi、Radxa ROCKシリーズ等のSBCに使用されているRockchip系SoC内蔵のHWエンコーダ(rkmpp)の画質や速度といった性能の実験を目的としています。  
 
 ## 配布場所 & 更新履歴
 [こちら](https://github.com/rigaya/rkmppenc/releases)  

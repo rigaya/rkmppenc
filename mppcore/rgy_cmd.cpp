@@ -5497,7 +5497,7 @@ int parse_one_ctrl_option(const TCHAR *option_name, const TCHAR *strInput[], int
         return 0;
     }
 #endif //#if defined(_WIN32) || defined(_WIN64)
-#if ENCODER_QSV || ENCODER_VCEENC
+#if ENCODER_QSV || ENCODER_VCEENC || ENCODER_MPP
     if (IS_OPTION("disable-opencl")) {
         ctrl->enableOpenCL = false;
         return 0;
@@ -6538,7 +6538,7 @@ tstring gen_cmd(const RGYParamControl *param, const RGYParamControl *defaultPrm,
             cmd << _T(" --gpu-select ") << tmp.str().substr(1);
         }
     }
-#if ENCODER_QSV || ENCODER_VCEENC
+#if ENCODER_QSV || ENCODER_VCEENC || ENCODER_MPP
     OPT_BOOL(_T("--enable-opencl"), _T("--disable-opencl"), enableOpenCL);
 #endif
     return cmd.str();
@@ -7401,6 +7401,10 @@ tstring gen_cmd_help_ctrl() {
         _T("   --process-codepage <string>  utf8 ... use UTF-8 (default)\n")
         _T("                                os   ... use the codepage set in Operating System.\n"));
 #endif //#if defined(_WIN32) || defined(_WIN64)
+#if ENCODER_QSV || ENCODER_VCEENC || ENCODER_MPP
+    str += strsprintf(_T("\n")
+        _T("   --disable-opencl             disable opencl features.\n"));
+#endif
     str += strsprintf(_T("\n")
         _T("   --perf-monitor [<string>][,<string>]...\n")
         _T("       check performance info of encoder and output to log file\n")
