@@ -712,7 +712,7 @@ public:
                 PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(err));
             }
         }
-        copyFrameProp(&clframe->frame, &mappedframe->frame);
+        clframe->setPropertyFrom(mappedframe);
         auto clerr = clframe->unmapBuffer();
         if (clerr != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to unmap buffer: %s.\n"), get_err_mes(err));
@@ -733,19 +733,21 @@ public:
         return err;
     }
     RGY_ERR LoadNextFrameSys() {
-        auto surfWork = getWorkSurf();
+        const auto inputFrameInfo = m_input->GetInputFrameInfo();
+        RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_MPP);
+        auto surfWork = getNewWorkSurfMpp(info);
         if (surfWork == nullptr) {
             PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
             return RGY_ERR_NOT_ENOUGH_BUFFER;
         }
-        auto err = m_input->LoadNextFrame(surfWork.frame());
+        auto err = m_input->LoadNextFrame(surfWork.get());
         if (err == RGY_ERR_MORE_DATA) {// EOF
             err = RGY_ERR_MORE_BITSTREAM; // EOF を PipelineTaskMFXDecode のreturnコードに合わせる
         } else if (err != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(err));
         } else {
-            surfWork.frame()->setInputFrameId(m_inFrames++);
-            m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfWork));
+            surfWork->setInputFrameId(m_inFrames++);
+            m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(surfWork)));
         }
         return err;
     }
