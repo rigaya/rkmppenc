@@ -837,6 +837,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     inputFrame.width = inputParam->input.srcWidth;
     inputFrame.height = inputParam->input.srcHeight;
     inputFrame.csp = inputParam->input.csp;
+    inputFrame.picstruct = inputParam->input.picstruct;
     const int croppedWidth = inputFrame.width - inputParam->input.crop.e.left - inputParam->input.crop.e.right;
     const int croppedHeight = inputFrame.height - inputParam->input.crop.e.bottom - inputParam->input.crop.e.up;
     if (!cropRequired) {
@@ -845,7 +846,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
         inputFrame.height = croppedHeight;
     }
     if (m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN) {
-        inputFrame.mem_type = RGY_MEM_TYPE_GPU_IMAGE;
+        inputFrame.mem_type = RGY_MEM_TYPE_MPP;
     }
 
     //出力解像度が設定されていない場合は、入力解像度と同じにする
