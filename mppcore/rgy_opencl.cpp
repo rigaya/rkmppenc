@@ -1735,7 +1735,7 @@ RGYCLMemObjInfo RGYCLBuf::getMemObjectInfo() const {
     return getRGYCLMemObjectInfo(m_mem);
 }
 
-RGYCLFrameMap::RGYCLFrameMap(RGYCLFrame *dev, RGYOpenCLQueue &queue) : m_dev(dev), m_queue(queue.get()), m_host(), m_eventMap() {};
+RGYCLFrameMap::RGYCLFrameMap(RGYCLFrame *dev, RGYOpenCLQueue &queue) : m_dev(dev), m_queue(queue.get()), m_eventMap() {};
 
 RGY_ERR RGYCLFrameMap::map(cl_map_flags map_flags, RGYOpenCLQueue& queue) {
     return map(map_flags, queue, {}, RGY_CL_MAP_BLOCK_NONE);
@@ -1744,15 +1744,15 @@ RGY_ERR RGYCLFrameMap::map(cl_map_flags map_flags, RGYOpenCLQueue& queue) {
 RGY_ERR RGYCLFrameMap::map(cl_map_flags map_flags, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, const RGYCLMapBlock block_map) {
     std::vector<cl_event> v_wait_list = toVec(wait_events);
     cl_event *wait_list = (v_wait_list.size() > 0) ? v_wait_list.data() : nullptr;
-    m_host = m_dev->frameInfo();
+    frame = m_dev->frameInfo();
     m_queue = queue.get();
-    for (int i = 0; i < _countof(m_host.ptr); i++) {
-        m_host.ptr[i] = nullptr;
+    for (int i = 0; i < _countof(frame.ptr); i++) {
+        frame.ptr[i] = nullptr;
     }
     if (m_eventMap.size() != RGY_CSP_PLANES[m_dev->frame.csp]) {
         m_eventMap.resize(RGY_CSP_PLANES[m_dev->frame.csp]);
     }
-    for (int i = 0; i < RGY_CSP_PLANES[m_host.csp]; i++) {
+    for (int i = 0; i < RGY_CSP_PLANES[frame.csp]; i++) {
         const auto plane = getPlane(&m_dev->frame, (RGY_PLANE)i);
         cl_int err = 0;
         cl_bool block = CL_FALSE;
@@ -1763,7 +1763,7 @@ RGY_ERR RGYCLFrameMap::map(cl_map_flags map_flags, RGYOpenCLQueue &queue, const 
             default: break;
         }
         size_t size = (size_t)plane.pitch[0] * plane.height;
-        m_host.ptr[i] = (uint8_t *)clEnqueueMapBuffer(m_queue, (cl_mem)plane.ptr[0], block, map_flags, 0, size, (int)v_wait_list.size(), wait_list, m_eventMap[i].reset_ptr(), &err);
+        frame.ptr[i] = (uint8_t *)clEnqueueMapBuffer(m_queue, (cl_mem)plane.ptr[0], block, map_flags, 0, size, (int)v_wait_list.size(), wait_list, m_eventMap[i].reset_ptr(), &err);
         if (err != 0) {
             return err_cl_to_rgy(err);
         }
@@ -1786,11 +1786,12 @@ RGY_ERR RGYCLFrameMap::unmap(cl_command_queue queue, const std::vector<RGYOpenCL
     std::vector<cl_event> v_wait_list = toVec(wait_events);
     cl_event *wait_list = (v_wait_list.size() > 0) ? v_wait_list.data() : nullptr;
     m_queue = queue;
-    for (int i = 0; i < _countof(m_host.ptr); i++) {
-        if (m_host.ptr[i]) {
-            auto err = err_cl_to_rgy(clEnqueueUnmapMemObject(m_queue, (cl_mem)m_dev->frame.ptr[i], m_host.ptr[i], (int)v_wait_list.size(), wait_list, m_eventMap[i].reset_ptr()));
+    for (int i = 0; i < _countof(frame.ptr); i++) {
+        if (frame.ptr[i]) {
+            auto err = err_cl_to_rgy(clEnqueueUnmapMemObject(m_queue, (cl_mem)m_dev->frame.ptr[i], frame.ptr[i], (int)v_wait_list.size(), wait_list, m_eventMap[i].reset_ptr()));
             v_wait_list.clear();
             wait_list = nullptr;
+            frame.ptr[i] = nullptr;
             if (err != RGY_ERR_NONE) {
                 return err_cl_to_rgy(err);
             }
@@ -1799,12 +1800,12 @@ RGY_ERR RGYCLFrameMap::unmap(cl_command_queue queue, const std::vector<RGYOpenCL
     return RGY_ERR_NONE;
 }
 
-void RGYCLFrameMap::setTimestamp(uint64_t timestamp) { m_host.timestamp = timestamp; m_dev->setTimestamp(timestamp); }
-void RGYCLFrameMap::setDuration(uint64_t duration) { m_host.duration = duration; m_dev->setDuration(duration); }
-void RGYCLFrameMap::setPicstruct(RGY_PICSTRUCT picstruct) { m_host.picstruct = picstruct; m_dev->setPicstruct(picstruct); }
-void RGYCLFrameMap::setInputFrameId(int id) { m_host.inputFrameId = id; m_dev->setInputFrameId(id);}
-void RGYCLFrameMap::setFlags(RGY_FRAME_FLAGS frameflags) { m_host.flags = frameflags; m_dev->setTimestamp(frameflags); }
-void RGYCLFrameMap::clearDataList() { m_host.dataList.clear(); m_dev->clearDataList(); }
+void RGYCLFrameMap::setTimestamp(uint64_t timestamp) { frame.timestamp = timestamp; m_dev->setTimestamp(timestamp); }
+void RGYCLFrameMap::setDuration(uint64_t duration) { frame.duration = duration; m_dev->setDuration(duration); }
+void RGYCLFrameMap::setPicstruct(RGY_PICSTRUCT picstruct) { frame.picstruct = picstruct; m_dev->setPicstruct(picstruct); }
+void RGYCLFrameMap::setInputFrameId(int id) { frame.inputFrameId = id; m_dev->setInputFrameId(id);}
+void RGYCLFrameMap::setFlags(RGY_FRAME_FLAGS frameflags) { frame.flags = frameflags; m_dev->setTimestamp(frameflags); }
+void RGYCLFrameMap::clearDataList() { frame.dataList.clear(); m_dev->clearDataList(); }
 const std::vector<std::shared_ptr<RGYFrameData>>& RGYCLFrameMap::dataList() const { return m_dev->dataList(); }
 std::vector<std::shared_ptr<RGYFrameData>>& RGYCLFrameMap::dataList() { return m_dev->dataList(); }
 void RGYCLFrameMap::setDataList(const std::vector<std::shared_ptr<RGYFrameData>>& dataList) { m_dev->setDataList(dataList); }

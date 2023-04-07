@@ -630,11 +630,10 @@ public:
     RGY_ERR unmap(RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events);
 
     RGY_ERR map_wait() { return RGYOpenCLEvent::wait(m_eventMap); };
-    const RGYFrameInfo& host() const { return m_host; }
+    const RGYFrameInfo& host() const { return frame; }
     std::vector<RGYOpenCLEvent>& mapEvents() { return m_eventMap; }
 public:
-    virtual bool isempty() const { return m_host.ptr[0] == nullptr; }
-    virtual const RGYFrameInfo& frameInfo() const override { return m_host; }
+    virtual bool isempty() const { return frame.ptr[0] == nullptr; }
     virtual void setTimestamp(uint64_t timestamp) override;
     virtual void setDuration(uint64_t duration) override;
     virtual void setPicstruct(RGY_PICSTRUCT picstruct) override;
@@ -650,7 +649,6 @@ protected:
     void operator =(const RGYCLFrameMap &) = delete;
     RGYCLFrame *m_dev;
     cl_command_queue m_queue;
-    RGYFrameInfo m_host;
     std::vector<RGYOpenCLEvent> m_eventMap;
 };
 
