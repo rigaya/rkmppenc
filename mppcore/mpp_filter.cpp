@@ -369,6 +369,11 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
     }
     AddMessage(RGY_LOG_DEBUG, _T("Selected deinterlace mode: %s %s.\n"), getDILModeName(m_dilMode), m_isTFF ? _T("TFF") : _T("BFF"));
 
+    if ( prm->mode == IEPDeinterlaceMode::BOB_I5
+      || prm->mode == IEPDeinterlaceMode::BOB_I2) {
+        prm->baseFps *= 2;
+    }
+
     m_eventThreadStart = CreateEventUnique(nullptr, false, false, nullptr);
     AddMessage(RGY_LOG_DEBUG, _T("Create m_eventThreadStart.\n"));
     
