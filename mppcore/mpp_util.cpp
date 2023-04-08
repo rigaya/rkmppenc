@@ -126,8 +126,8 @@ static const auto RGY_PICSTRUCT_TO_MPP = make_array<std::pair<RGY_PICSTRUCT, uin
     std::make_pair(RGY_PICSTRUCT_FRAME,        MPP_FRAME_FLAG_FRAME),
     std::make_pair(RGY_PICSTRUCT_FRAME_TFF,    MPP_FRAME_FLAG_TOP_FIRST),
     std::make_pair(RGY_PICSTRUCT_FRAME_BFF,    MPP_FRAME_FLAG_BOT_FIRST),
-    std::make_pair(RGY_PICSTRUCT_TFF,          MPP_FRAME_FLAG_TOP_FIELD),
-    std::make_pair(RGY_PICSTRUCT_BFF,          MPP_FRAME_FLAG_BOT_FIELD),
+    std::make_pair(RGY_PICSTRUCT_TFF,          MPP_FRAME_FLAG_TOP_FIRST),
+    std::make_pair(RGY_PICSTRUCT_BFF,          MPP_FRAME_FLAG_BOT_FIRST),
     std::make_pair(RGY_PICSTRUCT_FIELD_TOP,    MPP_FRAME_FLAG_TOP_FIELD),
     std::make_pair(RGY_PICSTRUCT_FIELD_BOTTOM, MPP_FRAME_FLAG_BOT_FIELD)
     );
@@ -171,6 +171,130 @@ void RGYBitstream::clearFrameDataList() {
 }
 std::vector<RGYFrameData *> RGYBitstream::getFrameDataList() {
     return make_vector(frameDataList, frameDataNum);
+}
+
+RGYFrameMpp::RGYFrameMpp() : mppframe(createMPPFrameEmpty()), duration_(0), flags_(RGY_FRAME_FLAG_NONE), frameDataList() {
+};
+
+RGYFrameMpp::RGYFrameMpp(const RGYFrameInfo &frame, MppBufferGroup frmGroup) :
+    mppframe(createMPPFrameEmpty()),
+    duration_(0),
+    flags_(RGY_FRAME_FLAG_NONE),
+    frameDataList() {
+    allocate(frame, frmGroup);
+};
+
+RGYFrameMpp::RGYFrameMpp(MppFrame mppframe, uint64_t duration__, RGY_FRAME_FLAGS flags__, std::vector<std::shared_ptr<RGYFrameData>> dataList) :
+    mppframe(unique_mppframe(mppframe, RGYMPPDeleter<MppFrame>(mpp_frame_deinit))),
+    duration_(duration__),
+    flags_(flags__),
+    frameDataList(dataList) {
+
+}
+
+RGYFrameMpp::~RGYFrameMpp() {
+    mppframe.reset();
+    frameDataList.clear();
+}
+
+int mpp_frame_pitch(RGY_CSP csp, const int width) {
+
+    int pixsize = (RGY_CSP_BIT_DEPTH[csp] + 7) / 8;
+    switch (csp) {
+    case RGY_CSP_RGB24R:
+    case RGY_CSP_RGB24:
+    case RGY_CSP_BGR24:
+    case RGY_CSP_YC48:
+        pixsize *= 3;
+        break;
+    case RGY_CSP_RGB32R:
+    case RGY_CSP_RGB32:
+    case RGY_CSP_BGR32:
+        pixsize *= 4;
+        break;
+    case RGY_CSP_AYUV:
+    case RGY_CSP_AYUV_16:
+        pixsize *= 4;
+        break;
+    case RGY_CSP_YUY2:
+    case RGY_CSP_Y210:
+    case RGY_CSP_Y216:
+    case RGY_CSP_Y410:
+        pixsize *= 2;
+        break;
+    case RGY_CSP_Y416:
+        pixsize *= 4;
+        break;
+    default:
+        break;
+    }
+
+    const int widthByte = width * pixsize;
+    const int image_pitch_alignment = 64;
+    const int memPitch = ALIGN(widthByte, image_pitch_alignment);
+    return memPitch;
+}
+
+int mpp_frame_size(const RGYFrameInfo &frame) {
+    const int memPitch = mpp_frame_pitch(frame.csp, frame.width);
+    const int frameSize = memPitch * frame.height * RGY_CSP_PLANES[frame.csp];
+    return frameSize;
+}
+
+RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup) {
+    if (!frmGroup) {
+        return RGY_ERR_NULL_PTR;
+    }
+    mppframe = createMPPFrame();
+    const int frameSize = mpp_frame_size(frame);
+    MppBuffer mppbuffer = nullptr;
+    auto ret = err_to_rgy(mpp_buffer_get(frmGroup, &mppbuffer, frameSize));
+    if (ret != RGY_ERR_NONE) {
+        return ret;
+    }
+
+    mpp_frame_set_fmt(mppframe.get(), csp_rgy_to_enc(frame.csp));
+    mpp_frame_set_width(mppframe.get(), frame.width);
+    mpp_frame_set_height(mppframe.get(), frame.height);
+    mpp_frame_set_hor_stride(mppframe.get(), mpp_frame_pitch(frame.csp, frame.width));
+    mpp_frame_set_ver_stride(mppframe.get(), frame.height);
+    mpp_frame_set_offset_x(mppframe.get(), 0);
+    mpp_frame_set_offset_y(mppframe.get(), 0);
+    mpp_frame_set_mode(mppframe.get(), picstruct_rgy_to_enc(frame.picstruct));
+    mpp_frame_set_pts(mppframe.get(), frame.timestamp);
+    mpp_frame_set_buf_size(mppframe.get(), frameSize);
+    mpp_frame_set_buffer(mppframe.get(), mppbuffer);
+    mpp_frame_set_poc(mppframe.get(), frame.inputFrameId);
+    // mpp_frame_set_bufferして、frameに持たせることで、mppbufferの参照カウントはさらに増えている
+    // mpp_buffer_get と合わせて +2
+    // なので、mppbuffer は put して参照カウントを +1 に戻す
+    mpp_buffer_put(mppbuffer);
+    return RGY_ERR_NONE;
+}
+
+std::unique_ptr<RGYFrameMpp> RGYFrameMpp::createCopy() const {
+    MppFrame newFrame = nullptr;
+    if (mpp_frame_init(&newFrame) == MPP_OK) {
+        mpp_frame_set_fmt(newFrame, mpp_frame_get_fmt(mppframe.get()));
+        mpp_frame_set_width(newFrame, mpp_frame_get_width(mppframe.get()));
+        mpp_frame_set_height(newFrame, mpp_frame_get_height(mppframe.get()));
+        mpp_frame_set_hor_stride(newFrame, mpp_frame_get_hor_stride(mppframe.get()));
+        mpp_frame_set_ver_stride(newFrame, mpp_frame_get_ver_stride(mppframe.get()));
+        mpp_frame_set_offset_x(newFrame, mpp_frame_get_offset_x(mppframe.get()));
+        mpp_frame_set_offset_y(newFrame, mpp_frame_get_offset_y(mppframe.get()));
+        mpp_frame_set_mode(newFrame, mpp_frame_get_mode(mppframe.get()));
+        mpp_frame_set_pts(newFrame, mpp_frame_get_pts(mppframe.get()));
+        mpp_frame_set_buf_size(newFrame, mpp_frame_get_buf_size(mppframe.get()));
+        if (mpp_frame_get_buffer(mppframe.get())) {
+            mpp_frame_set_buffer(newFrame, mpp_frame_get_buffer(mppframe.get()));
+        }
+        // TODO: metaの正しいコピーの仕方がわからん
+        //if (mpp_frame_has_meta(mppframe.get())) {
+        //    mpp_frame_set_meta(newFrame, mpp_frame_get_meta(mppframe.get()));
+        //}
+        mpp_frame_set_poc(newFrame, mpp_frame_get_poc(mppframe.get()));
+    }
+    return std::make_unique<RGYFrameMpp>(newFrame, duration_, flags_, frameDataList);
 }
 
 RGY_NOINLINE

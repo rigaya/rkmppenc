@@ -183,6 +183,10 @@ tstring encoder_help() {
     str += _T("\n");
     str += gen_cmd_help_vpp();
     str += _T("\n");
+    str += PrintMultipleListOptions(_T("--vpp-deinterlace <string>"), _T("set deinterlace mode"),
+        { { _T(""), list_iep_deinterlace,   0 },
+        });
+    str += _T("\n");
     str += gen_cmd_help_ctrl();
     return str;
 }
@@ -519,6 +523,18 @@ int parse_one_option(const TCHAR *option_name, const TCHAR* strInput[], int& i, 
     ret = parse_one_vpp_option(option_name, strInput, i, nArgNum, &pParams->vpp, argData);
     if (ret >= 0) return ret;
 
+
+    if (IS_OPTION("vpp-deinterlace")) {
+        i++;
+        int value = 0;
+        if (PARSE_ERROR_FLAG == (value = get_value_from_chr(list_iep_deinterlace, strInput[i]))) {
+            print_cmd_error_invalid_value(option_name, strInput[i], list_iep_deinterlace);
+            return 1;
+        }
+        pParams->deint = (IEPDeinterlaceMode)value;
+        return 0;
+    }
+
     print_cmd_error_unknown_opt(strInput[i]);
     return 1;
 }
@@ -694,7 +710,7 @@ tstring gen_cmd(const MPPParam *pParams, bool save_disabled_prm) {
 #define OPT_NUM_H264(str, codec, opt) if ((pParams->codecParam[RGY_CODEC_H264].opt) != (encPrmDefault.codecParam[RGY_CODEC_H264].opt)) cmd << _T(" ") << (str) << ((save_disabled_prm) ? codec : _T("")) << _T(" ") << (int)(pParams->codecParam[RGY_CODEC_H264].opt);
 #define OPT_GUID(str, opt, list) if ((pParams->opt) != (encPrmDefault.opt)) cmd << _T(" ") << (str) << _T(" ") << get_name_from_guid((pParams->opt), list);
 #define OPT_GUID_HEVC(str, codec, opt, list) if ((pParams->codecParam[RGY_CODEC_HEVC].opt) != (encPrmDefault.codecParam[RGY_CODEC_HEVC].opt)) cmd << _T(" ") << (str) << ((save_disabled_prm) ? codec : _T("")) << _T(" ") << get_name_from_value((pParams->codecParam[RGY_CODEC_HEVC].opt), list);
-#define OPT_LST(str, opt, list) if ((pParams->opt) != (encPrmDefault.opt)) cmd << _T(" ") << (str) << _T(" ") << get_chr_from_value(list, (pParams->opt));
+#define OPT_LST(str, opt, list) if ((pParams->opt) != (encPrmDefault.opt)) cmd << _T(" ") << (str) << _T(" ") << get_chr_from_value(list, (int)(pParams->opt));
 #define OPT_LST_OPTIONAL(str, opt, list) if (pParams->opt.has_value()) cmd << _T(" ") << (str) << _T(" ") << get_chr_from_value(list, (pParams->opt.value()));
 #define OPT_LST_HEVC(str, codec, opt, list) if ((pParams->codecParam[RGY_CODEC_HEVC].opt) != (encPrmDefault.codecParam[RGY_CODEC_HEVC].opt)) cmd << _T(" ") << (str) << ((save_disabled_prm) ? codec : _T("")) << _T(" ") << get_chr_from_value(list, (pParams->codecParam[RGY_CODEC_HEVC].opt));
 #define OPT_LST_H264(str, codec, opt, list) if ((pParams->codecParam[RGY_CODEC_H264].opt) != (encPrmDefault.codecParam[RGY_CODEC_H264].opt)) cmd << _T(" ") << (str) << ((save_disabled_prm) ? codec : _T("")) << _T(" ") << get_chr_from_value(list, (pParams->codecParam[RGY_CODEC_H264].opt));
@@ -803,6 +819,8 @@ tstring gen_cmd(const MPPParam *pParams, bool save_disabled_prm) {
     cmd << gen_cmd(&pParams->ctrl, &encPrmDefault.ctrl, save_disabled_prm);
 
     cmd << gen_cmd(&pParams->vpp, &encPrmDefault.vpp, save_disabled_prm);
+
+    OPT_LST(_T("--vpp-deinterlace"), deint, list_iep_deinterlace);
 
     return cmd.str();
 }

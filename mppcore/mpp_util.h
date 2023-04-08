@@ -49,8 +49,6 @@ MAP_PAIR_0_1_PROTO(picstruct, rgy, RGY_PICSTRUCT, enc, uint32_t);
 MAP_PAIR_0_1_PROTO(loglevel, rgy, int, enc, int);
 MAP_PAIR_0_1_PROTO(interp, rgy, RGY_VPP_RESIZE_ALGO, rga, IM_SCALE_MODE);
 
-#define MPP_ALIGN ALIGN16
-
 struct MPPCfg {
     MppEncCfg       cfg;
     MppEncPrepCfg   prep;
@@ -377,11 +375,14 @@ static inline RGYBitstream RGYBitstreamInit() {
 static_assert(std::is_pod<RGYBitstream>::value == true, "RGYBitstream should be POD type.");
 #endif
 
+int mpp_frame_pitch(RGY_CSP csp, const int width);
+int mpp_frame_size(const RGYFrameInfo &frame);
+
 template<typename T>
 struct RGYMPPDeleter {
     RGYMPPDeleter() : deleter(nullptr) {};
     RGYMPPDeleter(std::function<MPP_RET(T*)> deleter) : deleter(deleter) {};
-    void operator()(T p) { deleter(&p); }
+    void operator()(T p) { /* fprintf(stderr, "RGYMPPDeleter: %p\n", p);*/ deleter(&p); }
     std::function<MPP_RET(T*)> deleter;
 };
 
@@ -399,27 +400,21 @@ static unique_mppframe createMPPFrame() {
     return unique_mppframe(frame, RGYMPPDeleter<MppFrame>(mpp_frame_deinit));
 }
 
-static RGYFrameInfo infoMPP(MppFrame mppframe) {
-    MppBuffer buffer = mpp_frame_get_buffer(mppframe);
+static RGYFrameInfo setMPPBufferInfo(const RGY_CSP csp, 
+    const int width, const int height, const int x_stride, const int y_stride, MppBuffer buffer) {
     uint8_t *base = (uint8_t *)mpp_buffer_get_ptr(buffer);
-    const int x_stride = mpp_frame_get_hor_stride(mppframe);
-    const int y_stride = mpp_frame_get_ver_stride(mppframe);
-    const MppFrameFormat fmt = mpp_frame_get_fmt(mppframe);
-
     RGYFrameInfo info;
-    info.csp = csp_enc_to_rgy(fmt);
-    info.width = mpp_frame_get_width(mppframe);
-    info.height = mpp_frame_get_height(mppframe);
-
-    switch (fmt) {
-    case MPP_FMT_YUV420SP_VU:
-    case MPP_FMT_YUV420SP:
+    info.csp = csp;
+    info.width = width;
+    info.height = height;
+    switch (csp) {
+    case RGY_CSP_NV12:
         info.ptr[0] = base;
         info.ptr[1] = base + x_stride * y_stride;
         info.pitch[0] = x_stride;
         info.pitch[1] = x_stride;
         break;
-    case MPP_FMT_YUV420P:
+    case RGY_CSP_YV12:
         info.ptr[0] = base;
         info.ptr[1] = base + (x_stride >> 1) * y_stride;
         info.ptr[2] = base + (x_stride >> 1) * (info.height >> 1);
@@ -430,240 +425,72 @@ static RGYFrameInfo infoMPP(MppFrame mppframe) {
     default:
         break;
     }
+    return info;
+}
 
-    auto meta = mpp_frame_get_meta(mppframe);
-    RK_S64 duration;
-    mpp_meta_get_s64(meta, KEY_USER_DATA, &duration);
+static RGYFrameInfo infoMPP(MppFrame mppframe) {
+    const int x_stride = mpp_frame_get_hor_stride(mppframe);
+    const int y_stride = mpp_frame_get_ver_stride(mppframe);
+    const MppFrameFormat fmt = mpp_frame_get_fmt(mppframe);
+
+    RGYFrameInfo info = setMPPBufferInfo(csp_enc_to_rgy(fmt), mpp_frame_get_width(mppframe), mpp_frame_get_height(mppframe),
+        x_stride, y_stride, mpp_frame_get_buffer(mppframe));
+
+    //auto meta = mpp_frame_get_meta(mppframe);
+    //RK_S64 duration;
+    //mpp_meta_get_s64(meta, KEY_USER_DATA, &duration);
     
     info.timestamp = mpp_frame_get_pts(mppframe);
-    info.duration = duration;
+    info.duration = 0;
     info.picstruct = picstruct_enc_to_rgy(mpp_frame_get_mode(mppframe) & MPP_FRAME_FLAG_FIELD_ORDER_MASK);
     info.flags = RGY_FRAME_FLAG_NONE;
-    info.mem_type = RGY_MEM_TYPE_CPU;
-    info.inputFrameId = -1;
+    info.mem_type = RGY_MEM_TYPE_MPP;
+    info.inputFrameId = mpp_frame_get_poc(mppframe);
     info.flags = RGY_FRAME_FLAG_NONE;
     return info;
 }
 
-#if ENABLE_OPENCL
+struct RGYFrameMpp : public RGYFrame {
+public:
+    RGYFrameMpp();
+    RGYFrameMpp(const RGYFrameInfo &frame, MppBufferGroup frmGroup);
+    RGYFrameMpp(MppFrame mppframe, uint64_t duration__, RGY_FRAME_FLAGS flags__ = RGY_FRAME_FLAG_NONE, std::vector<std::shared_ptr<RGYFrameData>> dataList = {});
+    virtual ~RGYFrameMpp();
+    virtual RGY_ERR allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup);
 
-struct RGYFrame {
-private:
-    std::unique_ptr<RGYSysFrame> sysbuf;
-    std::unique_ptr<RGYCLFrame> clbuf;
-public:
-    RGYFrame() : sysbuf(), clbuf() {};
-    RGYFrame(std::unique_ptr<RGYSysFrame> sys) : sysbuf(std::move(sys)), clbuf() {
+    MppFrame mpp() { return mppframe.get(); }
+    MppFrame releaseMpp() { return mppframe.release();}
+    RGYFrameInfo getInfoCopy() const { return getInfo(); }
+
+    virtual bool isempty() const { return !mppframe; }
+    virtual void setTimestamp(uint64_t timestamp) override { mpp_frame_set_pts(mppframe.get(), timestamp); }
+    virtual void setDuration(uint64_t duration) override { duration_ = duration; }
+    virtual void setPicstruct(RGY_PICSTRUCT picstruct) override { mpp_frame_set_mode(mppframe.get(), picstruct_rgy_to_enc(picstruct)); }
+    virtual void setInputFrameId(int id) override { mpp_frame_set_poc(mppframe.get(), id); }
+    virtual void setFlags(RGY_FRAME_FLAGS frameflags) override { flags_ = frameflags; }
+    virtual void clearDataList() override { frameDataList.clear(); }
+    virtual const std::vector<std::shared_ptr<RGYFrameData>>& dataList() const override { return frameDataList; }
+    virtual std::vector<std::shared_ptr<RGYFrameData>>& dataList() override { return frameDataList; }
+    virtual void setDataList(const std::vector<std::shared_ptr<RGYFrameData>>& dataList) override { frameDataList = dataList; }
+
+    std::unique_ptr<RGYFrameMpp> createCopy() const;
+protected:
+    RGYFrameMpp(const RGYFrameMpp &) = delete;
+    void operator =(const RGYFrameMpp &) = delete;
+
+    virtual RGYFrameInfo getInfo() const override {
+        auto info = infoMPP(mppframe.get());
+        info.duration = duration_;
+        info.flags = flags_;
+        info.dataList = frameDataList;
+        return info;
     }
-    RGYFrame(unique_ptr<RGYCLFrame> clframe) : sysbuf(), clbuf(std::move(clframe)) {
-    }
-    virtual ~RGYFrame() {
-        clbuf.reset();
-    }
-    virtual bool isempty() const {
-        return sysbuf == nullptr && clbuf == nullptr;
-    }
-    virtual const std::unique_ptr<RGYSysFrame>& sys() const {
-        return sysbuf;
-    }
-    virtual std::unique_ptr<RGYSysFrame>& sys() {
-        return sysbuf;
-    }
-    virtual const RGYSysFrame *sysframe() const {
-        return sysbuf.get();
-    }
-    virtual RGYSysFrame *sysframe() {
-        return sysbuf.get();
-    }
-    virtual const unique_ptr<RGYCLFrame> &cl() const {
-        return clbuf;
-    }
-    virtual unique_ptr<RGYCLFrame> &cl() {
-        return clbuf;
-    }
-    virtual const RGYCLFrame *clframe() const {
-        return clbuf.get();
-    }
-    virtual RGYCLFrame *clframe() {
-        return clbuf.get();
-    }
-    virtual std::unique_ptr<RGYSysFrame> detachSysSurface() {
-        return std::move(sysbuf);
-    }
-    virtual unique_ptr<RGYCLFrame> detachCLFrame() {
-        return std::move(clbuf);
-    }
-private:
-    RGYFrameInfo infoSys() const {
-        return sysbuf->frame;
-    }
-    RGYFrameInfo infoCL() const {
-        return clbuf->frame;
-    }
-public:
-    virtual RGYFrameInfo getInfo() const {
-        if (sysbuf) {
-            return infoSys();
-        } else if (clbuf) {
-            return infoCL();
-        } else {
-            return RGYFrameInfo();
-        }
-    }
-    void ptrArray(void *array[3], bool bRGB) {
-        auto frame = getInfo();
-        UNREFERENCED_PARAMETER(bRGB);
-        array[0] = (void *)frame.ptr[0];
-        array[1] = (void *)frame.ptr[1];
-        array[2] = (void *)frame.ptr[2];
-    }
-    uint8_t *ptrY() const {
-        return getInfo().ptr[0];
-    }
-    uint8_t *ptrUV() const {
-        return getInfo().ptr[1];
-    }
-    uint8_t *ptrU() const {
-        return getInfo().ptr[1];
-    }
-    uint8_t *ptrV() const {
-        return getInfo().ptr[2];
-    }
-    uint8_t *ptrRGB() const {
-        return getInfo().ptr[0];
-    }
-    uint32_t pitch(int index = 0) const {
-        return getInfo().pitch[index];
-    }
-    uint64_t timestamp() const {
-        return getInfo().timestamp;
-    }
-    virtual void setTimestamp(uint64_t timestamp) {
-        if (sysbuf) {
-            sysbuf->frame.timestamp = timestamp;
-        } else if (clbuf) {
-            clbuf->frame.timestamp = timestamp;
-        }
-    }
-    int64_t duration() const {
-        return getInfo().duration;
-    }
-    virtual void setDuration(uint64_t duration) {
-        if (sysbuf) {
-            sysbuf->frame.duration = duration;
-        } else if (clbuf) {
-            clbuf->frame.duration = duration;
-        }
-    }
-    RGY_PICSTRUCT picstruct() const {
-        return getInfo().picstruct;
-    }
-    virtual void setPicstruct(RGY_PICSTRUCT picstruct) {
-        if (sysbuf) {
-            sysbuf->frame.picstruct = picstruct;
-        } else if (clbuf) {
-            clbuf->frame.picstruct = picstruct;
-        }
-    }
-    int inputFrameId() const {
-        return getInfo().inputFrameId;
-    }
-    virtual void setInputFrameId(int id) {
-        if (sysbuf) {
-            sysbuf->frame.inputFrameId = id;
-        } else if (clbuf) {
-            clbuf->frame.inputFrameId = id;
-        }
-    }
-    RGY_FRAME_FLAGS flags() const {
-        return getInfo().flags;
-    }
-    virtual void setFlags(RGY_FRAME_FLAGS flags) {
-        if (sysbuf) {
-            sysbuf->frame.flags = flags;
-        } else if (clbuf) {
-            clbuf->frame.flags = flags;
-        }
-    }
-    virtual void clearDataList() {
-        if (sysbuf) {
-            sysbuf->frame.dataList.clear();
-        } else if (clbuf) {
-            clbuf->frame.dataList.clear();
-        }
-    }
-    virtual const std::vector<std::shared_ptr<RGYFrameData>>& dataList() const {
-        if (clbuf) {
-            return clbuf->frame.dataList;
-        } else {
-            return sysbuf->frame.dataList;
-        }
-    };
-    virtual std::vector<std::shared_ptr<RGYFrameData>>& dataList() {
-        if (clbuf) {
-            return clbuf->frame.dataList;
-        } else {
-            return sysbuf->frame.dataList;
-        }
-    };
-    virtual void setDataList(std::vector<std::shared_ptr<RGYFrameData>>& dataList) {
-        if (sysbuf) {
-            sysbuf->frame.dataList = dataList;
-        } else if (clbuf) {
-            clbuf->frame.dataList = dataList;
-        }
-    }
+
+    unique_mppframe mppframe;
+    uint64_t duration_;
+    RGY_FRAME_FLAGS flags_;
+    std::vector<std::shared_ptr<RGYFrameData>> frameDataList;
 };
-
-class RGYFrameRef : public RGYFrame {
-private:
-    RGYFrameInfo frame;
-public:
-    RGYFrameRef(const RGYFrameInfo& f) : frame(f) {};
-    virtual ~RGYFrameRef() { }
-    const RGYFrameInfo *info() const { return &frame; }
-    virtual bool isempty() const override { return frame.ptr[0] == nullptr; }
-    virtual const RGYSysFrame *sysframe() const override { return nullptr; }
-    virtual RGYSysFrame *sysframe() override { return nullptr; }
-    virtual const RGYCLFrame *clframe() const override { return nullptr; }
-    virtual RGYCLFrame *clframe() override { return nullptr; }
-    virtual unique_ptr<RGYSysFrame> detachSysSurface() override { return nullptr; }
-    virtual unique_ptr<RGYCLFrame> detachCLFrame() override { return nullptr; }
-public:
-    virtual RGYFrameInfo getInfo() const override { return frame; }
-    virtual void setTimestamp(uint64_t timestamp) override {
-        frame.timestamp = timestamp;
-    }
-    virtual void setDuration(uint64_t duration) override {
-        frame.duration = duration;
-    }
-    virtual void setPicstruct(RGY_PICSTRUCT picstruct) override {
-        frame.picstruct = picstruct;
-    }
-    virtual void setInputFrameId(int id) override {
-        frame.inputFrameId = id;
-    }
-    virtual void setFlags(RGY_FRAME_FLAGS flags) override {
-        frame.flags = flags;
-    }
-    virtual void clearDataList() override {
-        frame.dataList.clear();
-    }
-    virtual const std::vector<std::shared_ptr<RGYFrameData>>& dataList() const override {
-        return frame.dataList;
-    };
-    virtual std::vector<std::shared_ptr<RGYFrameData>>& dataList() override {
-        return frame.dataList;
-    };
-    virtual void setDataList(std::vector<std::shared_ptr<RGYFrameData>>& dataList) override {
-        frame.dataList = dataList;
-    }
-};
-
-#else
-typedef void RGYFrame;
-
-#endif //#if ENABLE_OPENCL
 
 VideoInfo videooutputinfo(
     const MPPCfg &prm,

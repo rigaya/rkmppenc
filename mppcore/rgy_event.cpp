@@ -122,4 +122,9 @@ uint32_t WaitForMultipleObjects(uint32_t count, HANDLE *pev, int dummy, uint32_t
     }
     return (bTimeout) ? WAIT_TIMEOUT : (WAIT_OBJECT_0 + success);
 }
+
 #endif //#if !(defined(_WIN32) || defined(_WIN64))
+
+unique_event CreateEventUnique(void *pDummy, int bManualReset, int bInitialState, void *pDummy2) {
+    return unique_event(CreateEvent(pDummy, bManualReset, bInitialState, pDummy2), CloseEvent);
+}

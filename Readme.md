@@ -1,6 +1,3 @@
-# まだ建設中です
-
-
 # rkmppenc  
 by rigaya
 
@@ -8,7 +5,7 @@ by rigaya
 
 **[日本語版はこちら＞＞](./Readme.ja.md)**  
 
-This software is meant to investigate performance and image quality of rockchip hw encoders.
+This software is meant to investigate performance and image quality of hw encoder on rockchip SoCs, which is used on SBC such as Orange Pi, Nano Pi, and Radxa ROCK.
 
 
 ## Downloads & update history
@@ -47,7 +44,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
   - H.264 / AVC
   - HEVC
   - MPEG2
-- Resize filter by librga
+- Resize filter by NPU (via librga im2d API)
+- HW deinterlace filter (via mpp iep v2 API)
 - OpenCL filters
 - Supports various formats such as avs, vpy, y4m, and raw
 - Supports demux/muxing using libavformat

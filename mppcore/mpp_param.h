@@ -36,6 +36,8 @@
 #include "rk_venc_cmd.h"
 #include "rk_venc_cfg.h"
 
+#include "iep2_api.h"
+
 static const int MPP_DEFAULT_QP_I = 23;
 static const int MPP_DEFAULT_QP_P = 26;
 static const int MPP_DEFAULT_QP_B = 29;
@@ -217,6 +219,23 @@ static inline const CX_DESC *get_tier_list(RGY_CODEC codec) {
     }
 }
 
+enum class IEPDeinterlaceMode {
+    DISABLED,
+    NORMAL_I5,
+    NORMAL_I2,
+    BOB_I5,
+    BOB_I2,
+};
+
+const CX_DESC list_iep_deinterlace[] = {
+    { _T("disabled"),    (int)IEPDeinterlaceMode::DISABLED },
+    { _T("normal_i5"),   (int)IEPDeinterlaceMode::NORMAL_I5 },
+    { _T("normal_i2"),   (int)IEPDeinterlaceMode::NORMAL_I2 },
+    { _T("bob_i5"),      (int)IEPDeinterlaceMode::BOB_I5 },
+    { _T("bob_i2"),      (int)IEPDeinterlaceMode::BOB_I2 },
+    { NULL, 0 }
+};
+
 struct VCECodecParam {
     int profile;
     int tier;
@@ -242,6 +261,7 @@ struct MPPParam {
     RGYParamVpp vpp;
 
     MPPParamDec hwdec;
+    IEPDeinterlaceMode deint;
 
     RGY_CODEC codec;
     VCECodecParam codecParam[RGY_CODEC_NUM];

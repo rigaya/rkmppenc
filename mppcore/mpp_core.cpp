@@ -837,6 +837,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     inputFrame.width = inputParam->input.srcWidth;
     inputFrame.height = inputParam->input.srcHeight;
     inputFrame.csp = inputParam->input.csp;
+    inputFrame.picstruct = inputParam->input.picstruct;
     const int croppedWidth = inputFrame.width - inputParam->input.crop.e.left - inputParam->input.crop.e.right;
     const int croppedHeight = inputFrame.height - inputParam->input.crop.e.bottom - inputParam->input.crop.e.up;
     if (!cropRequired) {
@@ -845,7 +846,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
         inputFrame.height = croppedHeight;
     }
     if (m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN) {
-        inputFrame.mem_type = RGY_MEM_TYPE_GPU_IMAGE;
+        inputFrame.mem_type = RGY_MEM_TYPE_MPP;
     }
 
     //出力解像度が設定されていない場合は、入力解像度と同じにする
@@ -897,6 +898,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     //}
     //インタレ解除の個数をチェック
     int deinterlacer = 0;
+    if (inputParam->deint != IEPDeinterlaceMode::DISABLED) deinterlacer++;
     if (inputParam->vpp.afs.enable) deinterlacer++;
     if (inputParam->vpp.nnedi.enable) deinterlacer++;
     if (inputParam->vpp.yadif.enable) deinterlacer++;
@@ -942,12 +944,20 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
         const VppFilterType ftype2 = (i+1 < filterPipeline.size()) ? getVppFilterType(filterPipeline[i+1]) : VppFilterType::FILTER_NONE;
         if (ftype1 == VppFilterType::FILTER_RGA) {
             std::vector<std::unique_ptr<RGAFilter>> vppFilters;
-            auto err = AddFilterRGA(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
+            auto err = AddFilterRGAIEP(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
             inputCrop = nullptr;
             if (err != RGY_ERR_NONE) {
                 return err;
             }
-            m_vpFilters.push_back(VppVilterBlock(vppFilters));
+            m_vpFilters.push_back(VppVilterBlock(vppFilters, VppFilterType::FILTER_RGA));
+        } else if (ftype1 == VppFilterType::FILTER_IEP) {
+            std::vector<std::unique_ptr<RGAFilter>> vppFilters;
+            auto err = AddFilterRGAIEP(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
+            inputCrop = nullptr;
+            if (err != RGY_ERR_NONE) {
+                return err;
+            }
+            m_vpFilters.push_back(VppVilterBlock(vppFilters, VppFilterType::FILTER_IEP));
         } else if (ftype1 == VppFilterType::FILTER_OPENCL) {
             std::vector<std::unique_ptr<RGYFilter>> vppOpenCLFilters;
             if (ftype0 != VppFilterType::FILTER_OPENCL || filterPipeline[i] == VppType::CL_CROP) { // 前のfilterがOpenCLでない場合、変換が必要
@@ -1112,6 +1122,7 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.afs.enable)           filterPipeline.push_back(VppType::CL_AFS);
     if (inputParam->vpp.nnedi.enable)         filterPipeline.push_back(VppType::CL_NNEDI);
     if (inputParam->vpp.yadif.enable)         filterPipeline.push_back(VppType::CL_YADIF);
+    if (inputParam->deint != IEPDeinterlaceMode::DISABLED) filterPipeline.push_back(VppType::IEP_DEINTERLACE);
     if (inputParam->vpp.decimate.enable)      filterPipeline.push_back(VppType::CL_DECIMATE);
     if (inputParam->vpp.mpdecimate.enable)    filterPipeline.push_back(VppType::CL_MPDECIMATE);
     if (inputParam->vpp.convolution3d.enable) filterPipeline.push_back(VppType::CL_CONVOLUTION3D);
@@ -1169,7 +1180,7 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     return filterPipeline;
 }
 
-RGY_ERR MPPCore::AddFilterRGA(std::vector<std::unique_ptr<RGAFilter>>&filters,
+RGY_ERR MPPCore::AddFilterRGAIEP(std::vector<std::unique_ptr<RGAFilter>>&filters,
     RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *inputParam, const sInputCrop *crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo) {
     std::unique_ptr<RGAFilter> filter;
     switch (vppType) {
@@ -1181,8 +1192,20 @@ RGY_ERR MPPCore::AddFilterRGA(std::vector<std::unique_ptr<RGAFilter>>&filters,
         param->frameOut = inputFrame;
         param->frameOut.width = resize.first;
         param->frameOut.height = resize.second;
-        param->frameIn.mem_type = RGY_MEM_TYPE_CPU;
-        param->frameOut.mem_type = RGY_MEM_TYPE_CPU;
+        param->frameIn.mem_type = RGY_MEM_TYPE_MPP;
+        param->frameOut.mem_type = RGY_MEM_TYPE_MPP;
+        param->baseFps = m_encFps;
+        m_pLastFilterParam = param;
+        } break;
+    case VppType::IEP_DEINTERLACE: {
+        filter = std::make_unique<RGAFilterDeinterlaceIEP>();
+        auto param = std::make_shared<RGYFilterParamDeinterlaceIEP>();
+        param->mode = inputParam->deint;
+        param->picstruct = inputFrame.picstruct;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameIn.mem_type = RGY_MEM_TYPE_MPP;
+        param->frameOut.mem_type = RGY_MEM_TYPE_MPP;
         param->baseFps = m_encFps;
         m_pLastFilterParam = param;
         } break;
@@ -1765,8 +1788,8 @@ RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
                                   MPP_ENC_PREP_CFG_CHANGE_FORMAT;
     m_enccfg.prep.width         = m_encWidth;
     m_enccfg.prep.height        = m_encHeight;
-    m_enccfg.prep.hor_stride    = MPP_ALIGN(m_encWidth);
-    m_enccfg.prep.ver_stride    = MPP_ALIGN(m_encHeight);
+    m_enccfg.prep.hor_stride    = mpp_frame_pitch(RGY_CSP_NV12, m_encWidth);
+    m_enccfg.prep.ver_stride    = m_encHeight;
     m_enccfg.prep.format        = csp_rgy_to_enc(RGY_CSP_NV12);
     m_enccfg.prep.rotation      = MPP_ENC_ROT_0;
 
@@ -2065,7 +2088,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
 
     if (m_decoder) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskMPPDecode>(m_decoder.get(), 1, m_pFileReader.get(),
-            m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), m_pLog));
+            m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, m_pLog));
     } else {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(0, m_pFileReader.get(), m_cl, m_pLog));
     }
@@ -2086,8 +2109,11 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
 
     for (auto& filterBlock : m_vpFilters) {
         if (filterBlock.type == VppFilterType::FILTER_RGA) {
-            m_pipelineTasks.push_back(std::make_unique<PipelineTaskRGAPreProcess>(filterBlock.vpprga,
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskRGA>(filterBlock.vpprga,
                 m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
+        } else if (filterBlock.type == VppFilterType::FILTER_IEP) {
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskIEP>(filterBlock.vpprga,
+                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), RGAFilterDeinterlaceIEP::maxAsyncCount, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_OPENCL) {
             if (!m_cl) {
                 PrintMes(RGY_LOG_ERROR, _T("OpenCL not enabled, OpenCL filters cannot be used.\n"));
@@ -2225,17 +2251,20 @@ RGY_ERR MPPCore::allocatePiplelineFrames() {
                 PrintMes(RGY_LOG_ERROR, _T("AllocFrames:   Failed to allocate frames for %s-%s: %s."), t0->print().c_str(), t1->print().c_str(), get_err_mes(sts));
                 return sts;
             }
-        } else {
+        }
+#if 0
+        else {
             const int requestNumFrames = std::max(1, t0RequestNumFrame + t1RequestNumFrame + asyncdepth + 1);
-            PrintMes(RGY_LOG_DEBUG, _T("AllocFrames: %s-%s, type: Sys, %s %dx%d, request %d frames\n"),
+            PrintMes(RGY_LOG_DEBUG, _T("AllocFrames: %s-%s, type: Mpp, %s %dx%d, request %d frames\n"),
                 t0->print().c_str(), t1->print().c_str(), RGY_CSP_NAMES[allocateFrameInfo.csp],
                 allocateFrameInfo.width, allocateFrameInfo.height, requestNumFrames);
-            auto sts = t0->workSurfacesAllocSys(requestNumFrames, allocateFrameInfo);
+            auto sts = t0->workSurfacesAllocMpp(requestNumFrames, allocateFrameInfo);
             if (sts != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("AllocFrames:   Failed to allocate frames for %s-%s: %s."), t0->print().c_str(), t1->print().c_str(), get_err_mes(sts));
                 return sts;
             }
         }
+#endif
         t0 = t1;
     }
     return RGY_ERR_NONE;
@@ -2611,16 +2640,13 @@ tstring MPPCore::GetEncoderParam() {
         if (m_vpFilters.size() > 0) {
             tstring vppstr;
             for (auto& block : m_vpFilters) {
-#if ENABLE_VPPRGA
-                if (block.type == VppFilterType::FILTER_RGA) {
+                if (block.type == VppFilterType::FILTER_RGA || block.type == VppFilterType::FILTER_IEP) {
                     for (auto& filter : block.vpprga) {
                         vppstr += str_replace(filter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
                     }
-                } else
-#endif
-                if (block.type == VppFilterType::FILTER_OPENCL) {
-                    for (auto& clfilter : block.vppcl) {
-                        vppstr += str_replace(clfilter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
+                } else if (block.type == VppFilterType::FILTER_OPENCL) {
+                    for (auto& filter : block.vppcl) {
+                        vppstr += str_replace(filter->GetInputMessage(), _T("\n               "), _T("\n")) + _T("\n");
                     }
                 }
             }

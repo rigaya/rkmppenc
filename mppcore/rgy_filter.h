@@ -121,10 +121,10 @@ public:
     RGY_ERR filter(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue);
     RGY_ERR filter(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, RGYOpenCLEvent *event);
     RGY_ERR filter(RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event = nullptr);
-    const tstring GetInputMessage() {
+    const tstring GetInputMessage() const {
         return m_infoStr;
     }
-    const RGYFilterParam *GetFilterParam() {
+    const RGYFilterParam *GetFilterParam() const {
         return m_param.get();
     }
     virtual RGY_ERR AllocFrameBuf(const RGYFrameInfo &frame, int frames);
