@@ -534,7 +534,7 @@ vector<std::string> getAVDevicesist(int bOutput) {
     vector<std::string> devices;
 #if ENABLE_LIBAVDEVICE
     if (bOutput) {
-        const AVOutputFormat *ptr = nullptr;
+        decltype(av_output_video_device_next(nullptr)) ptr = nullptr;
         while (nullptr != (ptr = av_output_video_device_next(ptr))) {
             devices.push_back("V " + tolowercase(ptr->name));
         }
@@ -542,7 +542,7 @@ vector<std::string> getAVDevicesist(int bOutput) {
             devices.push_back("A " + tolowercase(ptr->name));
         }
     } else {
-        const AVInputFormat *ptr = nullptr;
+        decltype(av_input_video_device_next(nullptr)) ptr = nullptr;
         while (nullptr != (ptr = av_input_video_device_next(ptr))) {
             devices.push_back("V " + tolowercase(ptr->name));
         }
