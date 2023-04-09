@@ -67,7 +67,7 @@ MPPParam::MPPParam() :
     codecParam[RGY_CODEC_H264].profile = 100;
 
     codecParam[RGY_CODEC_HEVC].level   = 0;
-    codecParam[RGY_CODEC_HEVC].profile = 0;
+    codecParam[RGY_CODEC_HEVC].profile = 1; // main
     codecParam[RGY_CODEC_HEVC].tier    = 0;
 
     codecParam[RGY_CODEC_AV1].level    = -1; // as auto
