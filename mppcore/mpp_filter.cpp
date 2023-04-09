@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -211,10 +211,15 @@ RGY_ERR RGAFilterCspConv::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp *
     rga_buffer_handle_t src_handle = getRGABufferHandle(pInputFrame);
     rga_buffer_handle_t dst_handle = getRGABufferHandle(pOutFrame);
 
-    rga_buffer_t src = wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
-        pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
-    rga_buffer_t dst = wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
-        pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
+    // この指定方法では、うまく動作しない
+    //rga_buffer_t src = wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
+    //    pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
+    //rga_buffer_t dst = wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
+    //    pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
+
+    // こちらを使用すべき
+    rga_buffer_t src = wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp()));
+    rga_buffer_t dst = wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp()));
     if (src.width == 0 || dst.width == 0) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid in/out memory.\n"));
         return RGY_ERR_INVALID_FORMAT;
