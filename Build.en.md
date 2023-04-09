@@ -28,10 +28,10 @@ Here shows examples for installing OpenCL modules for Mali G610 MP4 GPU in RK358
 
 ```Shell
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/lib/aarch64-linux-gnu/libmali-valhall-g610-g6p0-wayland-gbm.so
-sudo cp libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
+sudo install libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
 
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/firmware/g610/mali_csffw.bin
-sudo cp mali_csffw.bin /lib/firmware
+sudo mv mali_csffw.bin /lib/firmware
 
 sudo mkdir -p /etc/OpenCL/vendors
 sudo sh -c 'echo /usr/lib/libmali-valhall-g610-g6p0-wayland-gbm.so > /etc/OpenCL/vendors/mali.icd'
@@ -44,28 +44,32 @@ sudo apt install clinfo
 clinfo
 ```
 
-### 3. Build & Isntall mpp
+### 3. Install mpp
 
 ```Shell
-git clone https://github.com/rockchip-linux/mpp && cd mpp/build/linux/aarch64/
-./make-Makefiles.bash
-make -j8 && sudo make install
-cd ../../../..
+wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp1_1.5.0-1_arm64.deb
+sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
+rm librockchip-mpp1_1.5.0-1_arm64.deb
+wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp-dev_1.5.0-1_arm64.deb
+sudo apt install ./librockchip-mpp-dev_1.5.0-1_arm64.deb
+rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 ```
 
 ### 4. Install librga
 ```Shell
-git clone https://github.com/airockchip/librga
-cd librga
-sudo mkdir /usr/local/include/rga
-sudo mkdir /usr/local/lib/rga
-sudo cp ./include/* /usr/local/include/rga/
-sudo install ./libs/Linux/gcc-aarch64/* /usr/local/lib/rga/
+wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga2_2.2.0-1_arm64.deb
+sudo apt install ./librga2_2.2.0-1_arm64.deb
+rm librga2_2.2.0-1_arm64.deb
+wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga-dev_2.2.0-1_arm64.deb
+sudo apt install ./librga-dev_2.2.0-1_arm64.deb
+rm librga-dev_2.2.0-1_arm64.deb
 ```
 
 ### 5. Install required libraries
 
 ```Shell
+sudo apt install libvdpau1 libva-x11-2 libvulkan-dev libx11-dev
+
 sudo apt install ffmpeg \
   libavcodec-extra libavcodec-dev libavutil-dev libavformat-dev libswresample-dev libavfilter-dev \
   libass9 libass-dev \

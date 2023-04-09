@@ -6,7 +6,7 @@ PACKAGE_MAINTAINER=rigaya
 PACKAGE_DESCRIPTION=
 PACKAGE_ROOT=.debpkg
 PACKAGE_ARCH=`uname -m`
-PACKAGE_ARCH=`echo ${PACKAGE_ARCH} | sed -e 's/x86_64/amd64/g'`
+PACKAGE_ARCH=`echo ${PACKAGE_ARCH} | sed -e 's/aarch64/arm64/g'`
 if PACKAGE_VERSION=`git describe --tags | cut -f 1 --delim="-"`; then
     PACKAGE_VERSION="0.00-"`git show --format='%h' --no-patch`
 fi
@@ -18,9 +18,11 @@ if [ -e /etc/lsb-release ]; then
     PACKAGE_OS="_${PACKAGE_OS_ID}${PACKAGE_OS_VER}"
     if [ "${PACKAGE_OS_CODENAME}" = "focal" ]; then
         PACKAGE_DEPENDS="libc6(>=2.29),libstdc++6(>=6)"
+        PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libva-x11-2,libvdpau1"
         PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libavcodec58,libavutil56,libavformat58,libswresample3,libavfilter7,libass9"
     elif [ "${PACKAGE_OS_CODENAME}" = "jammy" ]; then
         PACKAGE_DEPENDS="libc6(>=2.29),libstdc++6(>=6)"
+        PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libva-x11-2,libvdpau1"
         PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libavcodec58,libavutil56,libavformat58,libswresample3,libavfilter7,libass9"
     else
         echo "${PACKAGE_OS_ID}${PACKAGE_OS_VER} ${PACKAGE_OS_CODENAME} not supported in this script!"

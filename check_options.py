@@ -13,7 +13,7 @@ def extract_options_md(filename):
     re2 = re.compile(r'^###\s-[A-Za-z0-9],\s--([A-Za-z0-9][A-Za-z0-9-_]+)([,\s]+.*)')
     re3 = re.compile(r'^###\s--\(no-\)([A-Za-z0-9][A-Za-z0-9-_]+)([,\s]+.*)')
     re4 = re.compile(r'^,\s--([A-Za-z0-9][A-Za-z0-9-_]+)([\s,]*.*)')
-    
+
     option_list = set()
     with codecs.open(filename, 'r', 'utf_8') as f:
         for line in f.readlines():
@@ -39,7 +39,7 @@ def extract_options_md(filename):
                     break
 
     return option_list
-    
+
 def get_options_exe(exe_file):
     filename = 'nvencc_option_list.txt'
     cmd = '\"' + exe_file + '\" --option-list'
@@ -65,10 +65,10 @@ def get_options_exe(exe_file):
 
 if __name__ == '__main__':
     md_files = []
-    md_en_file = 'VCEEncC_Options.en.md'
-    md_ja_file = 'VCEEncC_Options.ja.md'
-    exe_file = r'_build\x64\RelStatic\VCEEncC64.exe' if os.name == 'nt' else './vceencc'
-    
+    md_en_file = 'rkmppenc_Options.en.md'
+    md_ja_file = 'rkmppenc_Options.ja.md'
+    exe_file = './rkmppenc'
+
     iarg = 0
     while iarg < len(sys.argv):
         if sys.argv[iarg] == "-exe":
@@ -78,20 +78,20 @@ if __name__ == '__main__':
             iarg=iarg+1
             md_files.append(sys.argv[iarg])
         iarg=iarg+1
-            
+
     # デフォルトのファイルの追加
     if os.path.exists(md_en_file):
         md_files.append(md_en_file)
     if os.path.exists(md_ja_file):
         md_files.append(md_ja_file)
-    
+
     # mdファイルからのオプションの抽出
     option_list_md = []
     for md in md_files:
         option_list_md.append(extract_options_md(md))
 
     option_list_exe = get_options_exe(exe_file)
-    
+
     # 全オプションリスト
     option_list_all = option_list_exe
     for optlist in option_list_md:
