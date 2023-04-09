@@ -51,7 +51,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 - Supports demux/muxing using libavformat
 - Supports decode using libavcodec
 
-## mppenc source code
+## rkmppenc source code
 - MIT license.
 - This software depends on
   [ffmpeg](https://ffmpeg.org/),

@@ -79,8 +79,8 @@ const char *get_encoder_version();
 #define ENABLE_LIBASS_SUBBURN 0
 
 #if defined(VCE_AUO)
-#define ENCODER_NAME  "mppenc"
-#define AUO_NAME      "mppenc.auo"
+#define ENCODER_NAME  "rkmppenc"
+#define AUO_NAME      "rkmppenc.auo"
 #define FOR_AUO                   1
 #define ENABLE_RAW_READER         0
 #define ENABLE_AVI_READER         0
@@ -91,7 +91,7 @@ const char *get_encoder_version();
 #define ENABLE_OPENCL             0
 #define ENABLE_CAPTION2ASS        0
 #else
-#define ENCODER_NAME  "mppenc"
+#define ENCODER_NAME  "rkmppenc"
 #define FOR_AUO                   0
 #define ENABLE_RAW_READER         1
 #define ENABLE_AVI_READER         1

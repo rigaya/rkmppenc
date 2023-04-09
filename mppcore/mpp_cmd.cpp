@@ -100,7 +100,7 @@ static tstring PrintMultipleListOptions(const TCHAR *option_name, const TCHAR *o
 
 tstring encoder_help() {
     tstring str;
-    str += _T("Usage: mppenc [Options] -i <filename> -o <filename>\n");
+    str += _T("Usage: rkmppenc [Options] -i <filename> -o <filename>\n");
     str += strsprintf(_T("\n")
 #if ENABLE_AVSW_READER
         _T("When video codec could be decoded by VCE, any format or protocol supported\n")
@@ -113,8 +113,8 @@ tstring encoder_help() {
         _T("when output filename is set to \"-\", ES output is thrown to stdout.\n")
         _T("\n")
         _T("Example:\n")
-        _T("  mppenc -i \"<infilename>\" -o \"<outfilename>\"\n")
-        _T("  avs2pipemod -y4mp \"<avsfile>\" | mppenc --y4m -i - -o \"<outfilename>\"\n")
+        _T("  rkmppenc -i \"<infilename>\" -o \"<outfilename>\"\n")
+        _T("  avs2pipemod -y4mp \"<avsfile>\" | rkmppenc --y4m -i - -o \"<outfilename>\"\n")
         ,
         (ENABLE_AVSW_READER) ? _T("Also, ") : _T(""),
         (ENABLE_AVI_READER)         ? _T("avi, ") : _T(""),
