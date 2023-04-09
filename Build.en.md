@@ -11,7 +11,7 @@
 - git
 - libraries
   - mpp 
-  - ffmpeg 4.x/5.x libs (libavcodec58, libavformat58, libavfilter7, libavutil56, libswresample3)
+  - ffmpeg 4.x/5.x libs (libavcodec58, libavformat58, libavfilter7, libavutil56, libswresample3, libavdevice58)
   - libass9
   - OpenCL
   - [Optional] VapourSynth
@@ -71,7 +71,7 @@ rm librga-dev_2.2.0-1_arm64.deb
 sudo apt install libvdpau1 libva-x11-2 libvulkan-dev libx11-dev
 
 sudo apt install ffmpeg \
-  libavcodec-extra libavcodec-dev libavutil-dev libavformat-dev libswresample-dev libavfilter-dev \
+  libavcodec-extra libavcodec-dev libavutil-dev libavformat-dev libswresample-dev libavfilter-dev libavdevice-dev \
   libass9 libass-dev \
   opencl-headers
 ```

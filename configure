@@ -123,6 +123,7 @@ CHECK_LIBAV_NAMES="libswresample libavutil libavcodec libavformat libavfilter"
 LIBAV_CFLAGS=""
 LIBAV_LIBS=""
 ENABLE_AVSW_READER=1
+ENABLE_LIBAVDEVICE=1
 
 CHECK_VAPOURSYNTH_NAMES="vapoursynth vapoursynth-script"
 ENABLE_VAPOURSYNTH=1
@@ -496,6 +497,27 @@ if [ $ENABLE_AVSW_READER -ne 0 ]; then
         cnf_write "libavutil, libavcodec, libavformat, libavfilter, libswresample are required to build mppencc."
         exit 1
     fi
+
+    if [ $ENABLE_LIBAVDEVICE -ne 0 ]; then
+        if [ $USE_PKGCONFIG -ne 0 ]; then
+            printf "checking libavdevice with pkg-config..."
+            if ! ${PKGCONFIG} --exists libavdevice ; then
+                cnf_write "libs could not be detected by ${PKGCONFIG}. [ PKG_CONFIG_PATH=${PKG_CONFIG_PATH} ]"
+            else
+                cnf_write "OK"
+                LIBAVDEVICE_LIBS=`${PKGCONFIG} --libs libavdevice`
+                LIBAVDEVICE_CFLAGS=`${PKGCONFIG} --cflags libavdevice`
+            fi
+        fi
+        if ! cxx_check "libavdevice" "${CXXFLAGS} ${EXTRACXXFLAGS} ${LIBAV_CFLAGS} ${LIBAVDEVICE_CFLAGS} ${LDFLAGS} ${EXTRALDFLAGS} ${LIBAV_LIBS} ${LIBAVDEVICE_LIBS}" "" "libavdevice/avdevice.h" "avdevice_register_all();" ; then
+            cnf_write "no"
+            ENABLE_LIBAVDEVICE=0
+        else
+            cnf_write "yes"
+            LIBAV_CFLAGS="${LIBAV_CFLAGS} ${LIBAVDEVICE_CFLAGS}"
+            LIBAV_LIBS="${LIBAV_LIBS} ${LIBAVDEVICE_LIBS}"
+        fi
+    fi
 fi
 
 if [ $ENABLE_VAPOURSYNTH -ne 0 ]; then
@@ -722,6 +744,7 @@ write_enc_config "#define ENABLE_AVISYNTH_READER        $ENABLE_AVISYNTH"
 write_enc_config "#define ENABLE_VAPOURSYNTH_READER     $ENABLE_VAPOURSYNTH"
 write_enc_config "#define ENABLE_AVSW_READER            $ENABLE_AVSW_READER" 
 write_enc_config "#define ENABLE_SM_READER              0"
+write_enc_config "#define ENABLE_LIBAVDEVICE            $ENABLE_LIBAVDEVICE"
 write_enc_config "#define ENABLE_CUSTOM_VPP             1"
 write_enc_config "#define ENABLE_LIBASS_SUBBURN         $ENABLE_LIBASS"
 write_enc_config "#define ENABLE_OPENCL                 1"
