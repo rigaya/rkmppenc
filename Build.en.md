@@ -68,7 +68,7 @@ rm librga-dev_2.2.0-1_arm64.deb
 ### 5. Install required libraries
 
 ```Shell
-sudo apt install libvdpau1 libva-x11-2 libvulkan-dev libx11-dev
+sudo apt install libvdpau1 libva-x11-2 libx11-dev
 
 sudo apt install ffmpeg \
   libavcodec-extra libavcodec-dev libavutil-dev libavformat-dev libswresample-dev libavfilter-dev libavdevice-dev \
