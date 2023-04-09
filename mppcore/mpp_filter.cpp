@@ -233,7 +233,7 @@ RGY_ERR RGAFilterCspConv::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp *
 
     const int acquire_fence_fd = *sync;
     *sync = 0;
-    sts = err_to_rgy(imcvtcolor(src, dst, csp_rgy_to_rkrga(pInputFrame->csp()), csp_rgy_to_rkrga(pOutFrame->csp()), IM_COLOR_SPACE_DEFAULT/* m_cvt_mode*/, 1));
+    sts = err_to_rgy(imcvtcolor(src, dst, csp_rgy_to_rkrga(pInputFrame->csp()), csp_rgy_to_rkrga(pOutFrame->csp()), m_cvt_mode, acquire_fence_fd, sync));
     if (sts != RGY_ERR_NONE) {
         AddMessage(RGY_LOG_ERROR, _T("Failed to run imcvtcolor: %s"), get_err_mes(sts));
         return sts;
