@@ -83,3 +83,21 @@ cd rkmppenc
 ./configure
 make
 ```
+
+### 7. Add required permissions
+To run rkmppenc, additional permissions will be required.
+
+Save below as file "99-rk-device-permissions.rules".
+```
+KERNEL=="mpp_service", MODE="0660", GROUP="video" RUN+="/usr/bin/create-chromium-vda-vea-devices.sh"
+KERNEL=="rga", MODE="0660", GROUP="video"
+KERNEL=="system-dma32", MODE="0666", GROUP="video"
+KERNEL=="system-uncached", MODE="0666", GROUP="video"
+KERNEL=="system-uncached-dma32", MODE="0666", GROUP="video" RUN+="/usr/bin/chmod a+rw /dev/dma_heap"
+```
+
+Set file as udev rules, and reboot the system.
+```
+sudo mv 99-rk-device-permissions.rules /usr/lib/udev/rules.d/
+sudo reboot
+```
