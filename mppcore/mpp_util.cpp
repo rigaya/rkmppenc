@@ -78,10 +78,10 @@ static const auto RGY_CSP_TO_MPP = make_array<std::pair<RGY_CSP, MppFrameFormat>
     std::make_pair(RGY_CSP_YUV444_12, MPP_FMT_BUTT),
     std::make_pair(RGY_CSP_YUV444_14, MPP_FMT_BUTT),
     std::make_pair(RGY_CSP_YUV444_16, MPP_FMT_BUTT),
-    std::make_pair(RGY_CSP_RGB24R,    MPP_FMT_BUTT),
-    std::make_pair(RGY_CSP_RGB32R,    MPP_FMT_BUTT),
-    std::make_pair(RGY_CSP_RGB24,     MPP_FMT_BUTT),
-    std::make_pair(RGY_CSP_RGB32,     MPP_FMT_BUTT),
+    std::make_pair(RGY_CSP_BGR24,     MPP_FMT_BGR888),
+    std::make_pair(RGY_CSP_BGR32,     MPP_FMT_ABGR8888),
+    std::make_pair(RGY_CSP_RGB24,     MPP_FMT_RGB888),
+    std::make_pair(RGY_CSP_RGB32,     MPP_FMT_RGBA8888),
     std::make_pair(RGY_CSP_YC48,      MPP_FMT_BUTT)
     );
 
@@ -112,10 +112,10 @@ static const auto RGY_CSP_TO_RKRGA = make_array<std::pair<RGY_CSP, RgaSURF_FORMA
     std::make_pair(RGY_CSP_YUV444_12, RK_FORMAT_UNKNOWN),
     std::make_pair(RGY_CSP_YUV444_14, RK_FORMAT_UNKNOWN),
     std::make_pair(RGY_CSP_YUV444_16, RK_FORMAT_UNKNOWN),
-    std::make_pair(RGY_CSP_RGB24R,    RK_FORMAT_UNKNOWN),
-    std::make_pair(RGY_CSP_RGB32R,    RK_FORMAT_UNKNOWN),
-    std::make_pair(RGY_CSP_RGB24,     RK_FORMAT_UNKNOWN),
-    std::make_pair(RGY_CSP_RGB32,     RK_FORMAT_UNKNOWN),
+    std::make_pair(RGY_CSP_BGR24,     RK_FORMAT_BGR_888),
+    std::make_pair(RGY_CSP_BGR32,     RK_FORMAT_ABGR_8888),
+    std::make_pair(RGY_CSP_RGB24,     RK_FORMAT_RGB_888),
+    std::make_pair(RGY_CSP_RGB32,     RK_FORMAT_RGBA_8888),
     std::make_pair(RGY_CSP_YC48,      RK_FORMAT_UNKNOWN)
     );
 

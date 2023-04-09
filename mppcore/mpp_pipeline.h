@@ -84,6 +84,7 @@ enum class VppType : int {
     IEP_MAX,
 
     RGA_MIN = IEP_MAX,
+    RGA_CSPCONV,
     RGA_RESIZE,
     RGA_MAX,
 

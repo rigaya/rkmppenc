@@ -407,21 +407,35 @@ static RGYFrameInfo setMPPBufferInfo(const RGY_CSP csp,
     info.csp = csp;
     info.width = width;
     info.height = height;
+    info.ptr[0] = base;
+    info.pitch[0] = x_stride;
     switch (csp) {
     case RGY_CSP_NV12:
-        info.ptr[0] = base;
+    case RGY_CSP_NV16:
+    case RGY_CSP_NV24:
+    case RGY_CSP_P010:
+    case RGY_CSP_P210:
         info.ptr[1] = base + x_stride * y_stride;
-        info.pitch[0] = x_stride;
         info.pitch[1] = x_stride;
         break;
     case RGY_CSP_YV12:
-        info.ptr[0] = base;
         info.ptr[1] = base + (x_stride >> 1) * y_stride;
         info.ptr[2] = base + (x_stride >> 1) * (info.height >> 1);
-        info.pitch[0] = x_stride;
         info.pitch[1] = x_stride >> 1;
         info.pitch[2] = x_stride >> 1;
         break;
+    case RGY_CSP_YUV444:
+    case RGY_CSP_YUV444_09:
+    case RGY_CSP_YUV444_10:
+    case RGY_CSP_YUV444_12:
+    case RGY_CSP_YUV444_14:
+    case RGY_CSP_YUV444_16:
+    case RGY_CSP_RGB:
+    case RGY_CSP_GBR:
+        info.ptr[1] = base + x_stride * y_stride;
+        info.ptr[2] = base + x_stride * y_stride * 2;
+        info.pitch[1] = x_stride;
+        info.pitch[2] = x_stride;
     default:
         break;
     }

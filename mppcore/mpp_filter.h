@@ -62,6 +62,9 @@ protected:
     virtual RGY_ERR run_filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) {
         return RGY_ERR_UNSUPPORTED;
     }
+
+    rga_buffer_handle_t getRGABufferHandle(RGYFrameMpp *frame);
+
     void AddMessage(RGYLogLevel log_level, const tstring &str) {
         if (m_pLog == nullptr || log_level < m_pLog->getLogLevel(RGY_LOGT_VPP)) {
             return;
@@ -99,6 +102,20 @@ protected:
     FILTER_PATHTHROUGH_FRAMEINFO m_pathThrough;
 };
 
+class RGAFilterCspConv : public RGAFilter {
+public:
+    RGAFilterCspConv();
+    virtual ~RGAFilterCspConv();
+    virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
+protected:
+    virtual RGY_ERR run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, int *sync) override;
+    virtual RGY_ERR run_filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) override;
+    RGY_ERR checkParams(const RGYFilterParam *param);  
+    virtual void close() override;
+
+    int m_cvt_mode;
+};
+
 class RGAFilterResize : public RGAFilter {
 public:
     RGAFilterResize();
@@ -109,8 +126,6 @@ protected:
     virtual RGY_ERR run_filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) override;
     RGY_ERR checkParams(const RGYFilterParam *param);  
     virtual void close() override;
-
-    rga_buffer_handle_t getRGABufferHandle(RGYFrameMpp *frame);
 };
 
 class RGYFilterParamDeinterlaceIEP : public RGYFilterParam {

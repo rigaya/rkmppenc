@@ -365,6 +365,9 @@ RGY_ERR MPPCore::initPerfMonitor(MPPParam *prm) {
 }
 
 RGY_CSP MPPCore::GetEncoderCSP(const MPPParam *inputParam) const {
+#if 1
+    return RGY_CSP_NV12;
+#else
     const int bitdepth = GetEncoderBitdepth(inputParam);
     if (bitdepth <= 0) {
         return RGY_CSP_NA;
@@ -375,6 +378,7 @@ RGY_CSP MPPCore::GetEncoderCSP(const MPPParam *inputParam) const {
     } else {
         return (yuv444) ? RGY_CSP_YUV444 : RGY_CSP_NV12;
     }
+#endif
 }
 
 int MPPCore::GetEncoderBitdepth(const MPPParam *inputParam) const {
@@ -1093,7 +1097,13 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     std::vector<VppType> filterPipeline;
     filterPipeline.reserve((size_t)VppType::CL_MAX);
 
-    if (cspConvRequired || cropRequired)   filterPipeline.push_back(VppType::CL_CROP);
+    if (cspConvRequired || cropRequired) {
+        if (cspConvRequired && !cropRequired && RGY_CSP_CHROMA_FORMAT[inputParam->input.csp] == RGY_CHROMAFMT_RGB_PACKED) {
+            filterPipeline.push_back(VppType::RGA_CSPCONV);
+        } else {
+            filterPipeline.push_back(VppType::CL_CROP);
+        }
+    }
     if (inputParam->vpp.colorspace.enable) {
 #if 0
         bool requireOpenCL = inputParam->vpp.colorspace.hdr2sdr.tonemap != HDR2SDR_DISABLED || inputParam->vpp.colorspace.lut3d.table_file.length() > 0;
@@ -1184,6 +1194,18 @@ RGY_ERR MPPCore::AddFilterRGAIEP(std::vector<std::unique_ptr<RGAFilter>>&filters
     RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *inputParam, const sInputCrop *crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo) {
     std::unique_ptr<RGAFilter> filter;
     switch (vppType) {
+    case VppType::RGA_CSPCONV: {
+        filter = std::make_unique<RGAFilterCspConv>();
+        auto param = std::make_shared<RGYFilterParamCrop>();
+        param->matrix = vuiInfo.matrix;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameOut.csp = GetEncoderCSP(inputParam);
+        param->frameIn.mem_type = RGY_MEM_TYPE_MPP;
+        param->frameOut.mem_type = RGY_MEM_TYPE_MPP;
+        param->baseFps = m_encFps;
+        m_pLastFilterParam = param;
+        } break;
     case VppType::RGA_RESIZE: {
         filter = std::make_unique<RGAFilterResize>();
         auto param = std::make_shared<RGYFilterParamResize>();
@@ -1788,9 +1810,9 @@ RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
                                   MPP_ENC_PREP_CFG_CHANGE_FORMAT;
     m_enccfg.prep.width         = m_encWidth;
     m_enccfg.prep.height        = m_encHeight;
-    m_enccfg.prep.hor_stride    = mpp_frame_pitch(RGY_CSP_NV12, m_encWidth);
+    m_enccfg.prep.hor_stride    = mpp_frame_pitch(GetEncoderCSP(prm), m_encWidth);
     m_enccfg.prep.ver_stride    = m_encHeight;
-    m_enccfg.prep.format        = csp_rgy_to_enc(RGY_CSP_NV12);
+    m_enccfg.prep.format        = csp_rgy_to_enc(GetEncoderCSP(prm));
     m_enccfg.prep.rotation      = MPP_ENC_ROT_0;
 
     m_enccfg.prep.color         = (MppFrameColorSpace)m_encVUI.matrix;
