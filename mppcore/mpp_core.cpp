@@ -2419,10 +2419,19 @@ RGY_ERR MPPCore::run2() {
     std::deque<PipelineTaskData> dataqueue;
     {
         auto checkContinue = [&checkAbort](RGY_ERR& err) {
-            if (checkAbort() || stdInAbort()) { err = RGY_ERR_ABORTED; return false; }
+            //if (checkAbort() || stdInAbort()) { err = RGY_ERR_ABORTED; return false; }
             return err >= RGY_ERR_NONE || err == RGY_ERR_MORE_DATA || err == RGY_ERR_MORE_SURFACE;
         };
         while (checkContinue(err)) {
+            if (checkAbort() || stdInAbort()) {
+                PrintMes(RGY_LOG_ERROR, _T("\nEncoding aborted.\n"), get_err_mes(err));
+                // 先頭のタスクに中断指示を送る
+                if (!m_pipelineTasks.front()->abort()) { // 中断指示を受け取ってくれなかったら強制break
+                    PrintMes(setloglevel(err), _T("Break in task %s: %s.\n"),
+                        m_pipelineTasks.front()->print().c_str(), get_err_mes(err));
+                    break;
+                }
+            }
             if (dataqueue.empty()) {
                 speedCtrl.wait(m_pipelineTasks.front()->outputFrames());
                 dataqueue.push_back(PipelineTaskData(0)); // デコード実行用
@@ -2484,7 +2493,7 @@ RGY_ERR MPPCore::run2() {
             task->setOutputMaxQueueSize(0); //flushのため
         }
         auto checkContinue = [&checkAbort](RGY_ERR& err) {
-            if (checkAbort()) { err = RGY_ERR_ABORTED; return false; }
+            //if (checkAbort()) { err = RGY_ERR_ABORTED; return false; }
             return err >= RGY_ERR_NONE || err == RGY_ERR_MORE_SURFACE;
         };
         for (size_t flushedTaskSend = 0, flushedTaskGet = 0; flushedTaskGet < m_pipelineTasks.size(); ) { // taskを前方からひとつづつflushしていく
@@ -2535,6 +2544,10 @@ RGY_ERR MPPCore::run2() {
                 }
             }
         }
+    }
+
+    if (checkAbort() || stdInAbort()) {
+        err = RGY_ERR_ABORTED;
     }
 
     if (m_videoQualityMetric) {

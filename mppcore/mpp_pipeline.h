@@ -516,6 +516,7 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() = 0;
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() = 0;
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) = 0;
+    virtual bool abort() { return false; }; // 中断指示を受け取ったらtrueを返す
     virtual RGY_ERR getOutputFrameInfo(RGYFrameInfo& info) { info = RGYFrameInfo(); return RGY_ERR_NONE; }
     virtual std::vector<std::unique_ptr<PipelineTaskOutput>> getOutput(const bool sync) {
         std::vector<std::unique_ptr<PipelineTaskOutput>> output;
@@ -677,9 +678,10 @@ public:
 class PipelineTaskInput : public PipelineTask {
     RGYInput *m_input;
     std::shared_ptr<RGYOpenCLContext> m_cl;
+    bool m_abort;
 public:
     PipelineTaskInput(int outMaxQueueSize, RGYInput *input, std::shared_ptr<RGYOpenCLContext> cl, std::shared_ptr<RGYLog> log)
-        : PipelineTask(PipelineTaskType::INPUT, outMaxQueueSize, log), m_input(input), m_cl(cl) {
+        : PipelineTask(PipelineTaskType::INPUT, outMaxQueueSize, log), m_input(input), m_cl(cl), m_abort(false) {
 
     };
     virtual ~PipelineTaskInput() {};
@@ -689,6 +691,7 @@ public:
         RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
         return std::make_pair(info, m_outMaxQueueSize);
     };
+    virtual bool abort() { m_abort = true; return true; }; // 中断指示を受け取ったらtrueを返す
     RGY_ERR LoadNextFrameCL() {
         auto surfWork = getWorkSurf();
         if (surfWork == nullptr) {
@@ -752,6 +755,9 @@ public:
         return err;
     }
     virtual RGY_ERR sendFrame([[maybe_unused]] std::unique_ptr<PipelineTaskOutput>& frame) override {
+        if (m_abort) {
+            return RGY_ERR_MORE_BITSTREAM; // EOF を PipelineTaskMFXDecode のreturnコードに合わせる
+        }
         if (workSurfaceType() == PipelineTaskSurfaceType::CL) {
             return LoadNextFrameCL();
         }
@@ -782,13 +788,14 @@ protected:
     RGYQueueMPMP<FrameData> m_dataFlag;
     bool m_decInBitStreamEOS; // デコーダへの入力Bitstream側でEOSを検知
     bool m_decOutFrameEOS;    // デコーダからの出力Frame側でEOSを検知
+    bool m_abort;
     int m_decOutFrames;
 public:
     PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, bool adjustTimestamp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
         m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_adjustTimestamp(adjustTimestamp),
         m_firstBitstreamTimestamp(-1), m_firstFrameTimestamp(-1), m_queueTimestamp(), m_queueTimestampWrap(), m_queueHDR10plusMetadata(), m_dataFlag(),
-        m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_decOutFrames(0) {
+        m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_abort(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
         m_dataFlag.init();
     };
@@ -801,6 +808,7 @@ public:
         m_decInputBitstream.clear();
     };
     void setDec(MPPContext *dec) { m_dec = dec; };
+    virtual bool abort() { m_abort = true; return true; }; // 中断指示を受け取ったらtrueを返す
 
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
@@ -956,8 +964,14 @@ public:
             PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(ret));
             return ret;
         }
-        //この関数がMFX_ERR_NONE以外を返せば、入力ビットストリームは終了
-        ret = m_input->GetNextBitstream(&m_decInputBitstream); 
+        if (m_abort) {
+            ret = RGY_ERR_MORE_BITSTREAM;
+            m_decInputBitstream.setSize(0);
+            m_decInputBitstream.setOffset(0);
+        } else {
+            //この関数がMFX_ERR_NONE以外を返せば、入力ビットストリームは終了
+            ret = m_input->GetNextBitstream(&m_decInputBitstream);
+        }
         if (ret == RGY_ERR_MORE_BITSTREAM) { //入力ビットストリームは終了
             if (m_decInBitStreamEOS) { // すでにeosを送信していた場合
                 PrintMes(RGY_LOG_DEBUG, _T("Already sent null packet.\n"));
@@ -1402,7 +1416,6 @@ public:
         }
     };
     virtual ~PipelineTaskAudio() {};
-
     virtual bool isPassThrough() const override { return true; }
 
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
@@ -1609,6 +1622,9 @@ public:
         }
     };
     virtual ~PipelineTaskMPPEncode() {
+        m_outQeueue.clear();
+        m_workSurfs.clear();
+        m_queueFrameList.clear();
         for (auto& buf : m_buffer) {
             if (buf.frame) {
                 mpp_buffer_put(buf.frame);
@@ -1623,7 +1639,6 @@ public:
             mpp_buffer_group_put(m_frameGrp);
             m_frameGrp = nullptr;
         }
-        m_outQeueue.clear(); // m_bitStreamOutが解放されるよう前にこちらを解放する
     };
     void setEnc(MPPContext *encode) { m_encoder = encode; };
 
