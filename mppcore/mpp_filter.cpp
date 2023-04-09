@@ -507,6 +507,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
       || prm->mode == IEPDeinterlaceMode::BOB_I2) {
         prm->baseFps *= 2;
     }
+    prm->frameOut.picstruct = RGY_PICSTRUCT_FRAME;
 
     m_eventThreadStart = CreateEventUnique(nullptr, false, false, nullptr);
     AddMessage(RGY_LOG_DEBUG, _T("Create m_eventThreadStart.\n"));
