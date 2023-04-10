@@ -2730,7 +2730,8 @@ void RGYInputAvcodec::GetAudioDataPacketsWhenNoVideoRead(int inputFrame) {
         while (!m_Demux.qStreamPktL1.empty()) {
             auto pkt2 = m_Demux.qStreamPktL1.front();
             AVDemuxStream *pStream2 = getPacketStreamData(pkt2);
-            const double pkt2timeSec = pkt2->pts * (double)pStream2->stream->time_base.num / (double)pStream2->stream->time_base.den;
+            const auto firstPts = pStream2->pktSample->pts;
+            const double pkt2timeSec = (pkt2->pts - firstPts) * (double)pStream2->stream->time_base.num / (double)pStream2->stream->time_base.den;
             if (pkt2timeSec > vidEstDurationSec + 5.0) {
                 break;
             }
