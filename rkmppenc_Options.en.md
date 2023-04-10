@@ -940,7 +940,7 @@ Mux an external audio file specified.
   Example1: --audio-source "<audio_file>":copy
   Example2: --audio-source "<audio_file>":codec=aac
   Example3: --audio-source "<audio_file>":1?codec=aac;bitrate=256:2?codec=aac;bitrate=192;metadata=language=jpn
-  Example3: --audio-source default:format=alsa:codec=aac;bitrate=256
+  Example3: --audio-source hw:1:format=alsa,codec=aac
   ```
 
 ### --chapter &lt;string&gt;

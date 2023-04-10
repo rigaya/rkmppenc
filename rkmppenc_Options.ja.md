@@ -877,7 +877,7 @@ tsなどでエラーが出るなどしてうまく動作しない場合は、[--
   例1: --audio-source "<audio_file>":copy
   例2: --audio-source "<audio_file>":codec=aac
   例3: --audio-source "<audio_file>":1?codec=aac;bitrate=256:2?codec=aac;bitrate=192;metadata=language=jpn
-  例4: --audio-source default:format=alsa:codec=aac;bitrate=256
+  例4: --audio-source hw:1:format=alsa,codec=aac
   ```
 
 ### --chapter &lt;string&gt;
