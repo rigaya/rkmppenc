@@ -104,6 +104,10 @@ int parse_print_options(const TCHAR *option_name, const TCHAR *arg1, const RGYPa
         show_environment_info();
         return 1;
     }
+    if (0 == _tcscmp(option_name, _T("check-mppinfo"))) {
+        _ftprintf(stdout, _T("%s\n"), getMppInfo().c_str());
+        return 1;
+    }
     if (0 == _tcscmp(option_name, _T("check-rgainfo"))) {
         _ftprintf(stdout, _T("%s\n"), getRGAInfo().c_str());
         return 1;

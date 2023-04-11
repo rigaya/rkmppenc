@@ -17,6 +17,8 @@
   - [-v, --version](#-v---version)
   - [--option-list](#--option-list)
   - [--check-hw](#--check-hw)
+  - [--check-mppinfo](#--check-mppinfo)
+  - [--check-rgainfo](#--check-rgainfo)
   - [--check-clinfo](#--check-clinfo)
   - [--check-codecs, --check-decoders, --check-encoders](#--check-codecs---check-decoders---check-encoders)
   - [--check-profiles \<string\>](#--check-profiles-string)
@@ -212,6 +214,12 @@ remuxer.exe -i "<video mp4file>" -i "<m4a(ALAC in mp4)file>" -o "<muxed mp4 file
 
 ### --check-hw
 エンコーダの使用可否の表示
+
+### --check-mppinfo
+Mppライブラリに関する情報を表示
+
+### --check-rgainfo
+RGAライブラリに関する情報を表示
 
 ### --check-clinfo
 OpenCLの情報を表示

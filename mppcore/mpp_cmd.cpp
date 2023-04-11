@@ -114,7 +114,6 @@ tstring encoder_help() {
         _T("\n")
         _T("Example:\n")
         _T("  rkmppenc -i \"<infilename>\" -o \"<outfilename>\"\n")
-        _T("  avs2pipemod -y4mp \"<avsfile>\" | rkmppenc --y4m -i - -o \"<outfilename>\"\n")
         ,
         (ENABLE_AVSW_READER) ? _T("Also, ") : _T(""),
         (ENABLE_AVI_READER)         ? _T("avi, ") : _T(""),
@@ -129,6 +128,8 @@ tstring encoder_help() {
 #if 0
         _T("   --check-features             check features of support.\n")
 #endif
+        _T("   --check-mppinfo              check mpp info\n")
+        _T("   --check-rgainfo              check rga info\n")
         _T("   --check-clinfo               check OpenCL info\n")
 #if ENABLE_AVSW_READER
         _T("   --check-avversion            show dll version\n")
@@ -145,7 +146,10 @@ tstring encoder_help() {
         _T("\n"));
     str += strsprintf(_T("\n")
         _T("Basic Encoding Options: \n")
-        _T("-d,--device <int>               set device id to use, default = 0\n"));
+#if 0
+        _T("-d,--device <int>               set device id to use, default = 0\n")
+#endif
+    );
     str += gen_cmd_help_input();
     str += strsprintf(_T("\n")
         _T("-c,--codec <string>             set encode codec\n")

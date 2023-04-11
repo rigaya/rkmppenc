@@ -32,3 +32,4 @@
 DeviceCodecCsp getMPPDecoderSupport();
 std::vector<RGY_CODEC> getMPPEncoderSupport();
 tstring getRGAInfo();
+tstring getMppInfo();

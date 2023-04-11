@@ -18,6 +18,8 @@
   - [-v, --version](#-v---version)
   - [--option-list](#--option-list)
   - [--check-hw](#--check-hw)
+  - [--check-mppinfo](#--check-mppinfo)
+  - [--check-rgainfo](#--check-rgainfo)
   - [--check-clinfo](#--check-clinfo)
   - [--check-codecs, --check-decoders, --check-encoders](#--check-codecs---check-decoders---check-encoders)
   - [--check-profiles \<string\>](#--check-profiles-string)
@@ -248,6 +250,12 @@ Show option list.
 
 ### --check-hw
 Check whether the specified device is able to run hw encode.
+
+### --check-mppinfo
+Show Mpp information.
+
+### --check-rgainfo
+Show RGA information.
 
 ### --check-clinfo
 Show OpenCL information.
