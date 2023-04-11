@@ -387,7 +387,6 @@ RGAFilterDeinterlaceIEP::RGAFilterDeinterlaceIEP() :
     m_frameCountIn(0),
     m_frameCountOut(0),
     m_prevOutFrameDuration(0),
-    m_timeElapsed(0.0),
     m_threadWorker(),
     m_eventThreadStart(unique_event(nullptr, CloseEvent)),
     m_eventThreadFin(unique_event(nullptr, CloseEvent)),

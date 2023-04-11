@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -172,8 +172,6 @@ protected:
     int64_t m_frameCountIn;
     int64_t m_frameCountOut;
     int64_t m_prevOutFrameDuration;
-
-    double m_timeElapsed;
 
     std::unique_ptr<std::thread> m_threadWorker;
     unique_event m_eventThreadStart; // main -> worker
