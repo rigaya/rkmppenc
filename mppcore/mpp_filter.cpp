@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -115,6 +115,128 @@ RGY_ERR RGAFilter::filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFr
 rga_buffer_handle_t RGAFilter::getRGABufferHandle(RGYFrameMpp *frame) {
     const auto fd = mpp_buffer_get_fd(mpp_frame_get_buffer(frame->mpp()));
     return importbuffer_fd(fd, frame->pitch(0) * frame->height() * RGY_CSP_PLANES[frame->csp()]);
+}
+
+RGAFilterCrop::RGAFilterCrop() :
+    RGAFilter() {
+    m_name = _T("Crop(rga)");
+}
+
+RGAFilterCrop::~RGAFilterCrop() {
+    close();
+}
+
+void RGAFilterCrop::close() {
+
+}
+
+RGY_ERR RGAFilterCrop::checkParams(const RGYFilterParam *param) {
+    auto prm = dynamic_cast<const RGYFilterParamCrop*>(param);
+    if (prm == nullptr) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid param.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+    //パラメータチェック
+    if (prm->frameOut.height <= 0 || prm->frameOut.width <= 0) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid parameter.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+    return RGY_ERR_NONE;
+}
+
+RGY_ERR RGAFilterCrop::init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) {
+    m_pLog = pPrintMes;
+
+    auto err = checkParams(param.get());
+    if (err != RGY_ERR_NONE) {
+        return err;
+    }
+    auto prm = std::dynamic_pointer_cast<RGYFilterParamCrop>(param);
+    if (!prm) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid parameter type.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+
+    prm->frameOut.height = prm->frameIn.height - prm->crop.e.bottom - prm->crop.e.up;
+    prm->frameOut.width = prm->frameIn.width - prm->crop.e.left - prm->crop.e.right;
+    setFilterInfo(strsprintf(_T("crop(rga): %d,%d,%d,%d"),
+        prm->crop.e.left, prm->crop.e.up, prm->crop.e.right, prm->crop.e.bottom));
+
+    //コピーを保存
+    m_param = param;
+    return err;
+}
+
+RGY_ERR RGAFilterCrop::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, int *sync) {
+    RGY_ERR sts = RGY_ERR_NONE;
+    if (pInputFrame == nullptr) {
+        return sts;
+    }
+
+    *pOutputFrameNum = 1;
+    RGYFrameMpp *const pOutFrame = ppOutputFrames[0];
+    auto prm = std::dynamic_pointer_cast<RGYFilterParamCrop>(m_param);
+    if (!prm) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid parameter type.\n"));
+        return RGY_ERR_INVALID_PARAM;
+    }
+
+    if (csp_rgy_to_rkrga(pInputFrame->csp()) == RK_FORMAT_UNKNOWN) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid input memory format: %s.\n"), RGY_CSP_NAMES[pInputFrame->csp()]);
+        return RGY_ERR_INVALID_FORMAT;
+    }
+
+    if (csp_rgy_to_rkrga(pOutFrame->csp()) == RK_FORMAT_UNKNOWN) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid output memory format: %s.\n"), RGY_CSP_NAMES[pOutFrame->csp()]);
+        return RGY_ERR_INVALID_FORMAT;
+    }
+
+    rga_buffer_handle_t src_handle = getRGABufferHandle(pInputFrame);
+    rga_buffer_handle_t dst_handle = getRGABufferHandle(pOutFrame);
+
+    // この指定方法では、うまく動作しない
+    rga_buffer_t src = wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
+        pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
+    rga_buffer_t dst = wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
+        pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
+
+    // こちらを使用すべき
+    //rga_buffer_t src = wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp()));
+    //rga_buffer_t dst = wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp()));
+    if (src.width == 0 || dst.width == 0) {
+        AddMessage(RGY_LOG_ERROR, _T("Invalid in/out memory.\n"));
+        return RGY_ERR_INVALID_FORMAT;
+    }
+
+    sts = err_to_rgy(imcheck(src, dst, {}, {}));
+    if (sts != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("Check error! %s"), get_err_mes(sts));
+        return sts;
+    }
+    im_rect crop_rect;
+    crop_rect.x = prm->crop.e.left;
+    crop_rect.y = prm->crop.e.up;
+    crop_rect.width = prm->frameOut.width;
+    crop_rect.height = prm->frameOut.height;
+
+    const int acquire_fence_fd = *sync;
+    *sync = 0;
+    sts = err_to_rgy(imcrop(src, dst, crop_rect, 0, sync));
+    if (sts != RGY_ERR_NONE) {
+        AddMessage(RGY_LOG_ERROR, _T("Failed to run imcrop: %s"), get_err_mes(sts));
+        return sts;
+    }
+    //if (src_handle) {
+    //    releasebuffer_handle(src_handle);
+    //}
+    //if (dst_handle) {
+    //    releasebuffer_handle(dst_handle);
+    //}
+    return sts;
+}
+
+RGY_ERR RGAFilterCrop::run_filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFrames, int *pOutputFrameNum, unique_event& sync) {
+    return RGY_ERR_UNSUPPORTED;
 }
 
 RGAFilterCspConv::RGAFilterCspConv() :

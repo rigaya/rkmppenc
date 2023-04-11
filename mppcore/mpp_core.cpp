@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -1100,6 +1100,8 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (cspConvRequired || cropRequired) {
         if (cspConvRequired && !cropRequired && RGY_CSP_CHROMA_FORMAT[inputParam->input.csp] == RGY_CHROMAFMT_RGB_PACKED) {
             filterPipeline.push_back(VppType::RGA_CSPCONV);
+        } else if (cropRequired && !cspConvRequired) {
+            filterPipeline.push_back(VppType::RGA_CROP);
         } else {
             filterPipeline.push_back(VppType::CL_CROP);
         }
@@ -1194,6 +1196,20 @@ RGY_ERR MPPCore::AddFilterRGAIEP(std::vector<std::unique_ptr<RGAFilter>>&filters
     RGYFrameInfo & inputFrame, const VppType vppType, const MPPParam *inputParam, const sInputCrop *crop, const std::pair<int, int> resize, VideoVUIInfo& vuiInfo) {
     std::unique_ptr<RGAFilter> filter;
     switch (vppType) {
+    case VppType::RGA_CROP: {
+        filter = std::make_unique<RGAFilterCrop>();
+        auto param = std::make_shared<RGYFilterParamCrop>();
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameIn.mem_type = RGY_MEM_TYPE_MPP;
+        param->frameOut.mem_type = RGY_MEM_TYPE_MPP;
+        if (crop) {
+            param->crop = *crop;
+            crop = nullptr;
+        }
+        param->baseFps = m_encFps;
+        m_pLastFilterParam = param;
+        } break;
     case VppType::RGA_CSPCONV: {
         filter = std::make_unique<RGAFilterCspConv>();
         auto param = std::make_shared<RGYFilterParamCrop>();
