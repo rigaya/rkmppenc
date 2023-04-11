@@ -176,12 +176,12 @@ std::vector<RGYFrameData *> RGYBitstream::getFrameDataList() {
 RGYFrameMpp::RGYFrameMpp() : mppframe(createMPPFrameEmpty()), duration_(0), flags_(RGY_FRAME_FLAG_NONE), frameDataList() {
 };
 
-RGYFrameMpp::RGYFrameMpp(const RGYFrameInfo &frame, MppBufferGroup frmGroup) :
+RGYFrameMpp::RGYFrameMpp(const RGYFrameInfo &frame, MppBufferGroup frmGroup, const int x_stride, const int y_stride) :
     mppframe(createMPPFrameEmpty()),
     duration_(0),
     flags_(RGY_FRAME_FLAG_NONE),
     frameDataList() {
-    allocate(frame, frmGroup);
+    allocate(frame, frmGroup, x_stride, y_stride);
 };
 
 RGYFrameMpp::RGYFrameMpp(MppFrame mppframe, uint64_t duration__, RGY_FRAME_FLAGS flags__, std::vector<std::shared_ptr<RGYFrameData>> dataList) :
@@ -197,56 +197,12 @@ RGYFrameMpp::~RGYFrameMpp() {
     frameDataList.clear();
 }
 
-int mpp_frame_pitch(RGY_CSP csp, const int width) {
-
-    int pixsize = (RGY_CSP_BIT_DEPTH[csp] + 7) / 8;
-    switch (csp) {
-    case RGY_CSP_RGB24R:
-    case RGY_CSP_RGB24:
-    case RGY_CSP_BGR24:
-    case RGY_CSP_YC48:
-        pixsize *= 3;
-        break;
-    case RGY_CSP_RGB32R:
-    case RGY_CSP_RGB32:
-    case RGY_CSP_BGR32:
-        pixsize *= 4;
-        break;
-    case RGY_CSP_AYUV:
-    case RGY_CSP_AYUV_16:
-        pixsize *= 4;
-        break;
-    case RGY_CSP_YUY2:
-    case RGY_CSP_Y210:
-    case RGY_CSP_Y216:
-    case RGY_CSP_Y410:
-        pixsize *= 2;
-        break;
-    case RGY_CSP_Y416:
-        pixsize *= 4;
-        break;
-    default:
-        break;
-    }
-
-    const int widthByte = width * pixsize;
-    const int image_pitch_alignment = 64;
-    const int memPitch = ALIGN(widthByte, image_pitch_alignment);
-    return memPitch;
-}
-
-int mpp_frame_size(const RGYFrameInfo &frame) {
-    const int memPitch = mpp_frame_pitch(frame.csp, frame.width);
-    const int frameSize = memPitch * frame.height * RGY_CSP_PLANES[frame.csp];
-    return frameSize;
-}
-
-RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup) {
+RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup, const int x_stride, const int y_stride) {
     if (!frmGroup) {
         return RGY_ERR_NULL_PTR;
     }
     mppframe = createMPPFrame();
-    const int frameSize = mpp_frame_size(frame);
+    const int frameSize = mpp_frame_size(frame, y_stride);
     MppBuffer mppbuffer = nullptr;
     auto ret = err_to_rgy(mpp_buffer_get(frmGroup, &mppbuffer, frameSize));
     if (ret != RGY_ERR_NONE) {
@@ -256,8 +212,8 @@ RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup
     mpp_frame_set_fmt(mppframe.get(), csp_rgy_to_enc(frame.csp));
     mpp_frame_set_width(mppframe.get(), frame.width);
     mpp_frame_set_height(mppframe.get(), frame.height);
-    mpp_frame_set_hor_stride(mppframe.get(), mpp_frame_pitch(frame.csp, frame.width));
-    mpp_frame_set_ver_stride(mppframe.get(), frame.height);
+    mpp_frame_set_hor_stride(mppframe.get(), (x_stride) ? x_stride : mpp_frame_pitch(frame.csp, frame.width));
+    mpp_frame_set_ver_stride(mppframe.get(), (y_stride) ? y_stride : frame.height);
     mpp_frame_set_offset_x(mppframe.get(), 0);
     mpp_frame_set_offset_y(mppframe.get(), 0);
     mpp_frame_set_mode(mppframe.get(), picstruct_rgy_to_enc(frame.picstruct));

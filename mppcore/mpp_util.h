@@ -375,8 +375,49 @@ static inline RGYBitstream RGYBitstreamInit() {
 static_assert(std::is_pod<RGYBitstream>::value == true, "RGYBitstream should be POD type.");
 #endif
 
-int mpp_frame_pitch(RGY_CSP csp, const int width);
-int mpp_frame_size(const RGYFrameInfo &frame);
+static int mpp_frame_pitch(RGY_CSP csp, const int width) {
+
+    int pixsize = (RGY_CSP_BIT_DEPTH[csp] + 7) / 8;
+    switch (csp) {
+    case RGY_CSP_RGB24R:
+    case RGY_CSP_RGB24:
+    case RGY_CSP_BGR24:
+    case RGY_CSP_YC48:
+        pixsize *= 3;
+        break;
+    case RGY_CSP_RGB32R:
+    case RGY_CSP_RGB32:
+    case RGY_CSP_BGR32:
+        pixsize *= 4;
+        break;
+    case RGY_CSP_AYUV:
+    case RGY_CSP_AYUV_16:
+        pixsize *= 4;
+        break;
+    case RGY_CSP_YUY2:
+    case RGY_CSP_Y210:
+    case RGY_CSP_Y216:
+    case RGY_CSP_Y410:
+        pixsize *= 2;
+        break;
+    case RGY_CSP_Y416:
+        pixsize *= 4;
+        break;
+    default:
+        break;
+    }
+
+    const int widthByte = width * pixsize;
+    const int image_pitch_alignment = 64;
+    const int memPitch = ALIGN(widthByte, image_pitch_alignment);
+    return memPitch;
+}
+
+static int mpp_frame_size(const RGYFrameInfo &frame, const int x_stride = 0, const int y_stride = 0) {
+    const int memPitch = (x_stride) ? frame.pitch[0] : mpp_frame_pitch(frame.csp, frame.width);
+    const int frameSize = memPitch * ((y_stride) ? y_stride : frame.height) * RGY_CSP_PLANES[frame.csp];
+    return frameSize;
+}
 
 template<typename T>
 struct RGYMPPDeleter {
@@ -467,14 +508,17 @@ static RGYFrameInfo infoMPP(MppFrame mppframe) {
 struct RGYFrameMpp : public RGYFrame {
 public:
     RGYFrameMpp();
-    RGYFrameMpp(const RGYFrameInfo &frame, MppBufferGroup frmGroup);
+    RGYFrameMpp(const RGYFrameInfo &frame, MppBufferGroup frmGroup, const int x_stride = 0, const int y_stride = 0);
     RGYFrameMpp(MppFrame mppframe, uint64_t duration__, RGY_FRAME_FLAGS flags__ = RGY_FRAME_FLAG_NONE, std::vector<std::shared_ptr<RGYFrameData>> dataList = {});
     virtual ~RGYFrameMpp();
-    virtual RGY_ERR allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup);
+    virtual RGY_ERR allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup, const int x_stride = 0, const int y_stride = 0);
 
     MppFrame mpp() { return mppframe.get(); }
     MppFrame releaseMpp() { return mppframe.release();}
     RGYFrameInfo getInfoCopy() const { return getInfo(); }
+
+    int x_stride() const { return mpp_frame_get_hor_stride(mppframe.get()); }
+    int y_stride() const { return mpp_frame_get_ver_stride(mppframe.get()); }
 
     virtual bool isempty() const { return !mppframe; }
     virtual void setTimestamp(uint64_t timestamp) override { mpp_frame_set_pts(mppframe.get(), timestamp); }

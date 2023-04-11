@@ -657,16 +657,16 @@ public:
         return PipelineTaskSurface();
     }
 
-    std::unique_ptr<RGYFrameMpp> getNewWorkSurfMpp(const RGYFrameInfo &frame) {
+    std::unique_ptr<RGYFrameMpp> getNewWorkSurfMpp(const RGYFrameInfo &frame, const int x_stride = 0, const int y_stride = 0) {
         if (!m_frameGrp) {
             auto sts = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
             if (sts != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(sts));
                 return std::make_unique<RGYFrameMpp>();
             }
-            mpp_buffer_group_limit_config(m_frameGrp, mpp_frame_size(frame), 32);
+            mpp_buffer_group_limit_config(m_frameGrp, mpp_frame_size(frame, x_stride, y_stride), 32);
         }
-        return std::make_unique<RGYFrameMpp>(frame, m_frameGrp);
+        return std::make_unique<RGYFrameMpp>(frame, m_frameGrp, x_stride, y_stride);
     }
 
     void setOutputMaxQueueSize(int size) { m_outMaxQueueSize = size; }
@@ -2110,13 +2110,15 @@ protected:
     std::shared_ptr<RGYOpenCLContext> m_cl;
     std::unique_ptr<RGYConvertCSP> m_convert;
     std::unique_ptr<RGYFrameMpp> m_inputFrameTmp;
+    RGYFrameInfo m_inputFrameInfo;
+    int m_stride_x, m_stride_y;
     int m_vppOutFrames;
     std::unordered_map<int64_t, std::vector<std::shared_ptr<RGYFrameData>>> m_metadatalist;
     std::deque<std::unique_ptr<PipelineTaskOutput>> m_prevInputFrame; //前回投入されたフレーム、完了通知を待ってから解放するため、参照を保持する
 public:
     PipelineTaskIEP(std::vector<std::unique_ptr<RGAFilter>>& vppfilter, std::shared_ptr<RGYOpenCLContext>& cl, int threadCsp, RGYParamThread threadParamCsp, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
         PipelineTask(PipelineTaskType::MPPIEP, outMaxQueueSize, log), m_vpFilters(vppfilter), m_cl(cl),
-        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_inputFrameTmp(), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame() {
+        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_inputFrameTmp(), m_inputFrameInfo(), m_stride_x(0), m_stride_y(0), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame() {
 
     };
     virtual ~PipelineTaskIEP() {
@@ -2204,14 +2206,18 @@ public:
             //ここでinput frameの参照を m_prevInputFrame で保持するようにして、OpenCLによるフレームの処理が完了しているかを確認できるようにする
             //これを行わないとこのフレームが再度使われてしまうことになる
             m_prevInputFrame.push_back(std::move(frame));
+            m_inputFrameInfo = filterframes.front().first->getInfoCopy();
+            m_stride_x = filterframes.front().first->x_stride();
+            m_stride_y = filterframes.front().first->y_stride();
         }
+
 
         //エンコードバッファのポインタを渡す
         int nOutFrames = 1;
         RGYFrameMpp *ptrOutInfo[2] = { 0 }; // 最大で2フレーム出力がある
         std::vector<std::unique_ptr<RGYFrameMpp>> surfOut;
         for (size_t i = 0; i < _countof(ptrOutInfo); i++) {
-            auto surfVppOut = getNewWorkSurfMpp(m_vpFilters.front()->GetFilterParam()->frameOut);
+            auto surfVppOut = getNewWorkSurfMpp(m_inputFrameInfo, m_stride_x, m_stride_y); // IEPはx_stride, y_strideが入出力で同じでないとおかしなことになる
             if (surfVppOut == nullptr) {
                 PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
                 return RGY_ERR_NOT_ENOUGH_BUFFER;
