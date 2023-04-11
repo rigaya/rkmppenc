@@ -11,9 +11,10 @@
 wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp1_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
 rm librockchip-mpp1_1.5.0-1_arm64.deb
-wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp-dev_1.5.0-1_arm64.deb
-sudo apt install ./librockchip-mpp-dev_1.5.0-1_arm64.deb
-rm librockchip-mpp-dev_1.5.0-1_arm64.deb
+
+wget https://github.com/tsukumijima/rockchip-multimedia-config/releases/download/v1.0.1-1/rockchip-multimedia-config_1.0.1-1_all.deb
+sudo apt install ./rockchip-multimedia-config_1.0.1-1_all.deb
+rm rockchip-multimedia-config_1.0.1-1_all.deb
 ```
 
 ### 2. librgaのインストール
@@ -21,13 +22,13 @@ rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga2_2.2.0-1_arm64.deb
 sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
-wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga-dev_2.2.0-1_arm64.deb
-sudo apt install ./librga-dev_2.2.0-1_arm64.deb
-rm librga-dev_2.2.0-1_arm64.deb
 ```
 
-### 3. OpenCLのインストール
+### 3. OpenCLのインストール (オプション)
 
+OpenCLフィルタ(```--vpp-deinterlace``` 以外のvppフィルタ) を使用する場合、OpenCLのインストールが必要です。使用しない場合は、OpenCLのインストールは必要ありません。
+
+<details><summary>OpenCLのインストール方法</summary>
 ここではRK3588 SoC内蔵のMali G610 MP4 GPUでのインストール例を示します。対象SoCによってインストールすべきものは変わるかと思います。
 
 ```Shell
@@ -47,25 +48,9 @@ sudo sh -c 'echo /usr/lib/libmali-valhall-g610-g6p0-wayland-gbm.so > /etc/OpenCL
 sudo apt install clinfo
 clinfo
 ```
+</details>
 
-### 4. 必要な権限の付与
-
-rkmppencを実行するため、追加で権限が必要になります。下記をファイル "99-rk-device-permissions.rules" として保存します。
-```
-KERNEL=="mpp_service", MODE="0660", GROUP="video" RUN+="/usr/bin/create-chromium-vda-vea-devices.sh"
-KERNEL=="rga", MODE="0660", GROUP="video"
-KERNEL=="system-dma32", MODE="0666", GROUP="video"
-KERNEL=="system-uncached", MODE="0666", GROUP="video"
-KERNEL=="system-uncached-dma32", MODE="0666", GROUP="video" RUN+="/usr/bin/chmod a+rw /dev/dma_heap"
-```
-
-作成したファイルを udev rules として配置し、再起動します。
-```
-sudo mv 99-rk-device-permissions.rules /usr/lib/udev/rules.d/
-sudo reboot
-```
-
-### 5. rkmppencのインストール
+### 4. rkmppencのインストール
 
 rkmppencを[こちら](https://github.com/rigaya/rkmppenc/releases)からダウンロードし、インストールします。
 

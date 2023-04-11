@@ -50,9 +50,14 @@ clinfo
 wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp1_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
 rm librockchip-mpp1_1.5.0-1_arm64.deb
+
 wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp-dev_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp-dev_1.5.0-1_arm64.deb
 rm librockchip-mpp-dev_1.5.0-1_arm64.deb
+
+wget https://github.com/tsukumijima/rockchip-multimedia-config/releases/download/v1.0.1-1/rockchip-multimedia-config_1.0.1-1_all.deb
+sudo apt install ./rockchip-multimedia-config_1.0.1-1_all.deb
+rm rockchip-multimedia-config_1.0.1-1_all.deb
 ```
 
 ### 4. librgaのインストール
@@ -82,21 +87,4 @@ git clone https://github.com/rigaya/rkmppenc --recursive
 cd rkmppenc
 ./configure
 make
-```
-
-### 7. 必要な権限の付与
-
-rkmppencを実行するには、追加で権限が必要になります。下記をファイル "99-rk-device-permissions.rules" として保存します。
-```
-KERNEL=="mpp_service", MODE="0660", GROUP="video" RUN+="/usr/bin/create-chromium-vda-vea-devices.sh"
-KERNEL=="rga", MODE="0660", GROUP="video"
-KERNEL=="system-dma32", MODE="0666", GROUP="video"
-KERNEL=="system-uncached", MODE="0666", GROUP="video"
-KERNEL=="system-uncached-dma32", MODE="0666", GROUP="video" RUN+="/usr/bin/chmod a+rw /dev/dma_heap"
-```
-
-作成したファイルを udev rules として配置し、再起動します。
-```
-sudo mv 99-rk-device-permissions.rules /usr/lib/udev/rules.d/
-sudo reboot
 ```
