@@ -5,8 +5,10 @@ by rigaya
 
 **[日本語版はこちら＞＞](./Readme.ja.md)**  
 
-This software is meant to investigate performance and image quality of hw encoder on rockchip SoCs, which is used on SBC such as Orange Pi, Nano Pi, and Radxa ROCK.
+This software is meant to investigate performance and image quality of hw encoder on rockchip SoCs, which is used on SBCs such as Orange Pi, Nano Pi, and Radxa ROCK.
 
+Example of 1080p transcoding using hw encoder and decoder in ROCK 5B (RK3588 SoC).
+![rkmppenc_encode_sample](./resource/rkmppenc_0_00_1080p_encode.webp)
 
 ## Downloads & update history
 [github releases](https://github.com/rigaya/rkmppenc/releases)  
@@ -44,7 +46,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
   - H.264 / AVC
   - HEVC
   - MPEG2
-- Resize filter by NPU (via librga im2d API)
+- Resize filter by 2d hw accerelator (via librga im2d API)
 - HW deinterlace filter (via mpp iep v2 API)
 - OpenCL filters
 - Supports various formats such as avs, vpy, y4m, and raw
