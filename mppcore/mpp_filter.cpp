@@ -655,7 +655,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::workerThreadFunc() {
         std::vector<RGYFrameMpp*> dst;
         {
             std::lock_guard<std::mutex> lock(m_mtxBufDst);
-            if (!m_mppBufDst.empty()) {
+            if (!(bufEmpty = m_mppBufDst.empty())) {
                 dst.push_back(m_mppBufDst.front().mpp);
                 eventThreadFinSync = m_mppBufDst.front().handle;
                 frameCountOut = m_mppBufDst.front().outFrame;
@@ -669,7 +669,6 @@ RGY_ERR RGAFilterDeinterlaceIEP::workerThreadFunc() {
                     dst.push_back(m_mppBufDst.front().mpp);
                     m_mppBufDst.pop_front();
                 }
-                bufEmpty = m_mppBufDst.empty();
             }
         }
         if (dst.size() > 0) {
