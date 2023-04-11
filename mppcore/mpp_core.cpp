@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -2019,7 +2019,7 @@ RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const bool checkVppPerforma
         PrintMes(RGY_LOG_ERROR, _T("Failed to find OpenCL platforms.\n"));
         return RGY_ERR_DEVICE_LOST;
     }
-    PrintMes(RGY_LOG_DEBUG, _T("Created Intel OpenCL platform.\n"));
+    PrintMes(RGY_LOG_DEBUG, _T("Created OpenCL platform.\n"));
 
     std::shared_ptr<RGYOpenCLPlatform> selectedPlatform;
     tstring clErrMessage;
