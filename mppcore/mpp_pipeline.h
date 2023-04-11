@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -1803,6 +1803,30 @@ public:
 
             if (auto inFrameMpp = surfIn.mpp(); inFrameMpp != nullptr) {
                 mppframe = inFrameMpp->releaseMpp(); // 中身がMppFrameの場合はそのまま使用する
+                //メモリの確保方法が、エンコーダの設定と一致しているかを確認する
+                if (mpp_frame_get_width(mppframe)     != (RK_U32)m_encParams.prep.width
+                || mpp_frame_get_height(mppframe)     != (RK_U32)m_encParams.prep.height
+                || mpp_frame_get_hor_stride(mppframe) != (RK_U32)m_encParams.prep.hor_stride
+                || mpp_frame_get_ver_stride(mppframe) != (RK_U32)m_encParams.prep.ver_stride
+                || mpp_frame_get_fmt(mppframe)        != m_encParams.prep.format) {
+                    m_encParams.prep.change     = MPP_ENC_PREP_CFG_CHANGE_INPUT | MPP_ENC_PREP_CFG_CHANGE_FORMAT;
+                    m_encParams.prep.width      = mpp_frame_get_width(mppframe);
+                    m_encParams.prep.height     = mpp_frame_get_height(mppframe);
+                    m_encParams.prep.hor_stride = mpp_frame_get_hor_stride(mppframe);
+                    m_encParams.prep.ver_stride = mpp_frame_get_ver_stride(mppframe);
+                    m_encParams.prep.format     = mpp_frame_get_fmt(mppframe);
+                    
+                    auto ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_PREP_CFG, &m_encParams.prep));
+                    if (ret != RGY_ERR_NONE) {
+                        PrintMes(RGY_LOG_ERROR, _T("Failed to reset prep cfg to encoder: %dx%d %s [%d:%d]: %s.\n"), 
+                            m_encParams.prep.width, m_encParams.prep.height, RGY_CSP_NAMES[csp_enc_to_rgy(m_encParams.prep.format)],
+                            m_encParams.prep.hor_stride, m_encParams.prep.ver_stride, get_err_mes(ret));
+                        return ret;
+                    }
+                    PrintMes(RGY_LOG_DEBUG, _T("Reset prep cfg to encoder: %dx%d %s [%d:%d].\n"),
+                        m_encParams.prep.width, m_encParams.prep.height, RGY_CSP_NAMES[csp_enc_to_rgy(m_encParams.prep.format)],
+                        m_encParams.prep.hor_stride, m_encParams.prep.ver_stride);
+                }
             } else {
                 auto err = err_to_rgy(mpp_frame_init(&mppframe));
                 if (err != RGY_ERR_NONE) {
