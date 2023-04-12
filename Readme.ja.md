@@ -44,10 +44,12 @@ Debian/Ubuntu系
 - 最大ビットレートの指定
 - 最大GOP長の指定
 - avs, vpy, y4m, rawなど各種形式に対応
-- HWデコード (8bitのみ対応)
+- HWデコード
   - H.264
   - HEVC
   - MPEG2
+  - VP9
+  - AV1
 - HW 2Dアクセラレータによるリサイズフィルタ(librga im2d API使用)
 - HWインタレ解除フィルタ (mpp iep v2 API使用)
 - OpenCLフィルタ

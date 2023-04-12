@@ -25,6 +25,7 @@
 //
 // ------------------------------------------------------------------------------------------
 
+#include <set>
 #include "rgy_avutil.h"
 #include "rk_mpi.h"
 #include "mpp_util.h"
@@ -34,12 +35,41 @@
 #include "mpp_soc.h"
 #include "mpp_platform.h"
 
+// mpp/osal/mpp_soc.cpp より
+#define CODING_TO_IDX(type)   \
+    ((RK_U32)(type) >= (RK_U32)MPP_VIDEO_CodingKhronosExtensions) ? \
+    ((RK_U32)(-1)) : \
+    ((RK_U32)(type) >= (RK_U32)MPP_VIDEO_CodingVC1) ? \
+    ((RK_U32)(type) - (RK_U32)MPP_VIDEO_CodingVC1 + 16) : \
+    ((RK_U32)(type) - (RK_U32)MPP_VIDEO_CodingUnused)
+
 DeviceCodecCsp getMPPDecoderSupport() {
     CodecCsp codecCsp;
-    for (size_t ic = 0; ic < _countof(HW_DECODE_LIST); ic++) {
-        const auto codec = HW_DECODE_LIST[ic].rgy_codec;
-        if (err_to_rgy(mpp_check_support_format(MPP_CTX_DEC, codec_rgy_to_dec(codec))) == RGY_ERR_NONE) {
-            codecCsp[codec] = { RGY_CSP_YV12 };
+    if (const auto soc_info = mpp_get_soc_info(); soc_info != nullptr) {
+        for (size_t ic = 0; ic < _countof(HW_DECODE_LIST); ic++) {
+            const auto codec = HW_DECODE_LIST[ic].rgy_codec;
+            std::set<RGY_CSP> csps;
+            for (size_t i = 0; i < _countof(soc_info->dec_caps); i++) {
+                const MppDecHwCap *cap = soc_info->dec_caps[i];
+                const int codec_idx = CODING_TO_IDX(codec_rgy_to_dec(codec));
+                if ((cap->cap_coding & (RK_U32)(1 << codec_idx))) {
+                    csps.insert(RGY_CSP_NV12);
+                    csps.insert(RGY_CSP_YV12);
+                    if (cap->cap_10bit) {
+                        csps.insert(RGY_CSP_YV12_10);
+                    }
+                }
+            }
+            if (csps.size() > 0) {
+                codecCsp[codec] = std::vector<RGY_CSP>(csps.begin(), csps.end());
+            }
+        }
+    } else {
+        for (size_t ic = 0; ic < _countof(HW_DECODE_LIST); ic++) {
+            const auto codec = HW_DECODE_LIST[ic].rgy_codec;
+            if (err_to_rgy(mpp_check_support_format(MPP_CTX_DEC, codec_rgy_to_dec(codec))) == RGY_ERR_NONE) {
+                codecCsp[codec] = { RGY_CSP_NV12, RGY_CSP_YV12 };
+            }
         }
     }
     DeviceCodecCsp HWDecCodecCsp;
@@ -140,11 +170,15 @@ tstring getMppInfo() {
     }
     str += "\n";
     str += "HW Decode       :";
-    for (auto codec : { RGY_CODEC_H264, RGY_CODEC_HEVC, RGY_CODEC_MPEG2, RGY_CODEC_AV1 }) {
-        if (mpp_check_soc_cap(MPP_CTX_DEC, codec_rgy_to_dec(codec))) {
-            str += " " + CodecToStr(codec);
+    auto HWDecCodecCsp = getMPPDecoderSupport();
+    if (!HWDecCodecCsp.empty()) {
+        for (auto& codec_csp : HWDecCodecCsp[0].second) {
+            str += " " + CodecToStr(codec_csp.first);
+            if (std::find(codec_csp.second.begin(), codec_csp.second.end(), RGY_CSP_YV12_10) != codec_csp.second.end()) {
+                str += "(10bit)";
+            }
         }
+        str += "\n";
     }
-    str += "\n";
     return char_to_tstring(str);
 }

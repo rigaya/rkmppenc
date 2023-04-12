@@ -42,10 +42,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
    - CQP       (fixed quantization)
    - VBR       (Variable bitrate)
    - CBR       (Constant bitrate)
-- Supports hw decoding (currently 8bit only)
+- Supports hw decoding
   - H.264 / AVC
   - HEVC
   - MPEG2
+  - VP9
+  - AV1
 - Resize filter by 2d hw accerelator (via librga im2d API)
 - HW deinterlace filter (via mpp iep v2 API)
 - OpenCL filters

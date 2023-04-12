@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -1096,8 +1096,14 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
 std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputParam, const bool cspConvRequired, const bool cropRequired, const RGY_VPP_RESIZE_TYPE resizeRequired) {
     std::vector<VppType> filterPipeline;
     filterPipeline.reserve((size_t)VppType::CL_MAX);
-
-    if (cspConvRequired || cropRequired) {
+    if (m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN) { // hwデコードの場合
+        if (cropRequired) {
+            filterPipeline.push_back(VppType::RGA_CROP);
+        }
+        if (cspConvRequired) {
+            filterPipeline.push_back(VppType::RGA_CSPCONV);
+        }
+    } else if (cspConvRequired || cropRequired) {
         if (cspConvRequired && !cropRequired && RGY_CSP_CHROMA_FORMAT[inputParam->input.csp] == RGY_CHROMAFMT_RGB_PACKED) {
             filterPipeline.push_back(VppType::RGA_CSPCONV);
         } else if (cropRequired && !cspConvRequired) {

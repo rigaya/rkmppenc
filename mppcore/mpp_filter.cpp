@@ -113,8 +113,9 @@ RGY_ERR RGAFilter::filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **ppOutputFr
 }
 
 rga_buffer_handle_t RGAFilter::getRGABufferHandle(RGYFrameMpp *frame) {
-    const auto fd = mpp_buffer_get_fd(mpp_frame_get_buffer(frame->mpp()));
-    return importbuffer_fd(fd, frame->pitch(0) * frame->height() * RGY_CSP_PLANES[frame->csp()]);
+    auto buffer = mpp_frame_get_buffer(frame->mpp());
+    const auto fd = mpp_buffer_get_fd(buffer);
+    return importbuffer_fd(fd, mpp_buffer_get_size(buffer));
 }
 
 RGAFilterCrop::RGAFilterCrop() :
@@ -194,15 +195,14 @@ RGY_ERR RGAFilterCrop::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **pp
     rga_buffer_handle_t src_handle = getRGABufferHandle(pInputFrame);
     rga_buffer_handle_t dst_handle = getRGABufferHandle(pOutFrame);
 
-    // この指定方法では、うまく動作しない
-    rga_buffer_t src = wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
-        pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
-    rga_buffer_t dst = wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
-        pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
-
-    // こちらを使用すべき
-    //rga_buffer_t src = wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp()));
-    //rga_buffer_t dst = wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp()));
+    rga_buffer_t src = RGY_CSP_CHROMA_FORMAT[pInputFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
+        ? wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
+        : wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
+            pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
+    rga_buffer_t dst = RGY_CSP_CHROMA_FORMAT[pOutFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
+        ? wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
+        : wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
+            pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
     if (src.width == 0 || dst.width == 0) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid in/out memory.\n"));
         return RGY_ERR_INVALID_FORMAT;
@@ -333,15 +333,14 @@ RGY_ERR RGAFilterCspConv::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp *
     rga_buffer_handle_t src_handle = getRGABufferHandle(pInputFrame);
     rga_buffer_handle_t dst_handle = getRGABufferHandle(pOutFrame);
 
-    // この指定方法では、うまく動作しない
-    //rga_buffer_t src = wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
-    //    pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
-    //rga_buffer_t dst = wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
-    //    pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
-
-    // こちらを使用すべき
-    rga_buffer_t src = wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp()));
-    rga_buffer_t dst = wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp()));
+    rga_buffer_t src = RGY_CSP_CHROMA_FORMAT[pInputFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
+        ? wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
+        : wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
+            pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
+    rga_buffer_t dst = RGY_CSP_CHROMA_FORMAT[pOutFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
+        ? wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
+        : wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
+            pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
     if (src.width == 0 || dst.width == 0) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid in/out memory.\n"));
         return RGY_ERR_INVALID_FORMAT;
