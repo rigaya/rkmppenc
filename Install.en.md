@@ -60,3 +60,17 @@ clinfo
 ```Shell
 sudo apt install ./rkmppenc-x.xx-1_arm64.deb
 ```
+
+You can test using ```rkmppenc --check-mppinfo```.
+
+Below is example when it works fine at RK3588. (might differ depending on your environment)
+
+```Shell
+rigaya@rock-5b:~$ rkmppenc --check-mppinfo
+SoC name        : radxa,rock-5b rockchip,rk3588
+Mpp service     : yes [mpp_service_v1] (okay)
+Mpp kernel      : 5.10
+2D accerelation : iepv2(okay) rga(okay)
+HW Encode       : H.264/AVC H.265/HEVC
+HW Decode       : H.264/AVC(10bit) H.265/HEVC(10bit) MPEG2 VP9(10bit) AV1
+```

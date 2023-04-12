@@ -65,6 +65,7 @@ rm rockchip-multimedia-config_1.0.1-1_all.deb
 wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga2_2.2.0-1_arm64.deb
 sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
+
 wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga-dev_2.2.0-1_arm64.deb
 sudo apt install ./librga-dev_2.2.0-1_arm64.deb
 rm librga-dev_2.2.0-1_arm64.deb
@@ -87,4 +88,16 @@ git clone https://github.com/rigaya/rkmppenc --recursive
 cd rkmppenc
 ./configure
 make
+```
+
+```./rkmppenc --check-mppinfo```で動作可能なチェックします。
+下記はRK3588の例です。環境により違いはあるかもしれませんが、このような感じで表示されれば問題ありません。
+
+```Shell
+SoC name        : radxa,rock-5b rockchip,rk3588
+Mpp service     : yes [mpp_service_v1] (okay)
+Mpp kernel      : 5.10
+2D accerelation : iepv2(okay) rga(okay)
+HW Encode       : H.264/AVC H.265/HEVC
+HW Decode       : H.264/AVC(10bit) H.265/HEVC(10bit) MPEG2 VP9(10bit) AV1
 ```
