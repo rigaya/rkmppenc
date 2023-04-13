@@ -1603,8 +1603,6 @@ protected:
     };
     std::array<MPPBufferPair, BUF_COUNT> m_buffer;
     std::deque<MppBuffer> m_queueFrameList;
-    bool m_gotExtraData;
-    std::vector<uint8_t> m_extradata;
     RGYListRef<RGYBitstream> m_bitStreamOut;
     RGYHDR10Plus *m_hdr10plus;
     bool m_hdr10plusMetadataCopy;
@@ -1616,7 +1614,7 @@ public:
         int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPENC, outMaxQueueSize, log),
         m_encoder(enc), m_encCodec(encCodec), m_encParams(encParams), m_timecode(timecode), m_encTimestamp(encTimestamp), m_outputTimebase(outputTimebase),
-        m_frameGrp(nullptr), m_buffer(), m_queueFrameList(), m_gotExtraData(false), m_extradata(),
+        m_frameGrp(nullptr), m_buffer(), m_queueFrameList(),
         m_bitStreamOut(), m_hdr10plus(hdr10plus), m_hdr10plusMetadataCopy(hdr10plusMetadataCopy), m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)) {
         for (auto& buf : m_buffer) {
             buf.frame = nullptr;
@@ -1709,13 +1707,7 @@ public:
         }
         const auto pts = mpp_packet_get_pts(packet);
         const auto pktval = m_encTimestamp->get(pts);
-        if (m_extradata.size() > 0) {
-            output->copy(m_extradata.data(), m_extradata.size(), pts, 0, pktval.duration);
-            output->append((uint8_t *)mpp_packet_get_pos(packet), pktLength);
-            m_extradata.clear();
-        } else {
-            output->copy((uint8_t *)mpp_packet_get_pos(packet), pktLength, pts, 0, pktval.duration);
-        }
+        output->copy((uint8_t *)mpp_packet_get_pos(packet), pktLength, pts, 0, pktval.duration);
 
         if (mpp_packet_has_meta(packet)) {
             auto meta = mpp_packet_get_meta(packet);
@@ -1755,7 +1747,7 @@ public:
                 metadatalist = dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf().frame()->dataList();
             }
         }
-
+#if 0
         if (!m_gotExtraData) { // 初回のみ取得する
             std::vector<char> extradata(16 * 1024, 0);
             MppPacket packet = nullptr;
@@ -1777,6 +1769,7 @@ public:
             mpp_packet_deinit(&packet);
             m_gotExtraData = true;
         }
+#endif
 
         MppFrame mppframe = nullptr;
         if (!frame || !dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf()) { // 終了フラグ
