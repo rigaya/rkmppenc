@@ -305,7 +305,7 @@ RGY_ERR RGYOutputRaw::Init(const TCHAR *strFileName, const VideoInfo *pVideoOutp
                 av_dict_set(&bsfPrm, "level", tchar_to_string(level_str).c_str(), 0);
                 AddMessage(RGY_LOG_DEBUG, _T("set level %s by %s filter\n"), level_str, bsf_tname.c_str());
             }
-            if (ENCODER_NVENC) {
+            if ((ENCODER_NVENC || ENCODER_MPP) && pVideoOutputInfo->sar[0] * pVideoOutputInfo->sar[1] > 0) {
                 char sar[128];
                 sprintf_s(sar, "%d/%d", pVideoOutputInfo->sar[0], pVideoOutputInfo->sar[1]);
                 av_dict_set(&bsfPrm, "sample_aspect_ratio", sar, 0);
@@ -415,7 +415,7 @@ RGY_ERR RGYOutputRaw::WriteNextFrame(RGYBitstream *pBitstream) {
                 nal_type = NALU_H264_SPS;
                 nal_list = parse_nal_h264(pBitstream->data(), pBitstream->size());
             }
-            auto sps_nal = std::find_if(nal_list.begin(), nal_list.end(), [](nal_info info) { return info.type == NALU_HEVC_SPS; });
+            auto sps_nal = std::find_if(nal_list.begin(), nal_list.end(), [nal_type](nal_info info) { return info.type == nal_type; });
             if (sps_nal != nal_list.end()) {
                 AVPacket *pkt = m_pkt.get();
                 av_new_packet(pkt, (int)sps_nal->size);
