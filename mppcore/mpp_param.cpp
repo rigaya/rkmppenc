@@ -64,7 +64,7 @@ MPPParam::MPPParam() :
     gopLen(MPP_DEFAULT_GOP_LEN),
     par() {
     codecParam[RGY_CODEC_H264].level   = 51;
-    codecParam[RGY_CODEC_H264].profile = 100;
+    codecParam[RGY_CODEC_H264].profile = list_avc_profile[mpp_avc_profile_default_idx].value;
 
     codecParam[RGY_CODEC_HEVC].level   = 0;
     codecParam[RGY_CODEC_HEVC].profile = 1; // main

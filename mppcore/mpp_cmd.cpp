@@ -172,7 +172,7 @@ tstring encoder_help() {
           { _T("HEVC"),  list_hevc_level,  0 }
         });
     str += PrintMultipleListOptions(_T("--profile <string>"), _T("set codec profile"),
-        { { _T("H.264"), list_avc_profile,   2 },
+        { { _T("H.264"), list_avc_profile,   mpp_avc_profile_default_idx },
           { _T("HEVC"),  list_hevc_profile,  0 }
         });
     str += PrintMultipleListOptions(_T("--tier <string>"), _T("set codec tier"),

@@ -66,6 +66,10 @@ const CX_DESC list_avc_profile[] = {
     { NULL, 0 }
 };
 
+// high profile は constraint_set3 = 1 になるため、デフォルトにするのは避ける
+// https://github.com/rockchip-linux/mpp/blob/develop/mpp/codec/enc/h264/h264e_sps.c#L99
+static const int mpp_avc_profile_default_idx = 1;
+
 const CX_DESC list_avc_level[] = {
     { _T("auto"), 0   },
     { _T("1"),    10  },
