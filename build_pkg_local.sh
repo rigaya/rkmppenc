@@ -17,7 +17,7 @@ docker build -t build_${TARGET_EXE}_${TARGET_OS} -f docker/docker_${TARGET_OS} .
 RUN_NAME=build_pkg_${TARGET_EXE}_${TARGET_OS}
 docker run -dit --rm -v ${OUTPUT_DIR}:/output -u "$(id -u):$(id -g)" --name ${RUN_NAME} build_${TARGET_EXE}_${TARGET_OS}
 
-docker exec ${RUN_NAME} ./configure --extra-cxxflags="-I./AviSynthPlus/avs_core/include -I./vapoursynth/include"
+docker exec ${RUN_NAME} ./configure --libav-static --extra-cxxflags="-I./AviSynthPlus/avs_core/include -I./vapoursynth/include" --enable-flto
 docker exec ${RUN_NAME} make -j${NPROC}
 docker exec ${RUN_NAME} ./${TARGET_EXE} --version
 docker exec ${RUN_NAME} ./check_options.py

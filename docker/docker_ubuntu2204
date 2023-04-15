@@ -10,43 +10,62 @@ RUN apt-get update \
       wget \
       git \
       opencl-headers \
-      libvdpau1 \
-      libva-x11-2 \
-      libx11-dev \
       build-essential \
       cmake \
       libtool \
       pkg-config \
-      libavcodec58 \
-      libavcodec-dev \
-      libavutil56 \
-      libavutil-dev \
-      libavformat58 \
-      libavformat-dev \
-      libswresample3 \
-      libswresample-dev \
-      libavfilter7 \
-      libavfilter-dev \
-      libavdevice58 \
-      libavdevice-dev \
       libass9 \
       libass-dev \
+      libv4l-dev \
+      libvpx-dev \
+      libmp3lame-dev \
+      libbluray-dev \
+      libopus-dev \
+      libsoxr-dev \
+      libspeex-dev \
+      libtwolame-dev \
+      libvorbis-dev \
+      libssl-dev \
+      libxml2-dev \
+      libasound2-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 RUN wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp1_1.5.0-1_arm64.deb && \
-    sudo apt-get install -y ./librockchip-mpp1_1.5.0-1_arm64.deb && \
+    apt-get install -y ./librockchip-mpp1_1.5.0-1_arm64.deb && \
     rm librockchip-mpp1_1.5.0-1_arm64.deb && \
     wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp-dev_1.5.0-1_arm64.deb && \
-    sudo apt-get install -y ./librockchip-mpp-dev_1.5.0-1_arm64.deb && \
+    apt-get install -y ./librockchip-mpp-dev_1.5.0-1_arm64.deb && \
     rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 
 RUN wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga2_2.2.0-1_arm64.deb && \
-    sudo apt-get install -y ./librga2_2.2.0-1_arm64.deb && \
+    apt-get install -y ./librga2_2.2.0-1_arm64.deb && \
     rm librga2_2.2.0-1_arm64.deb && \
     wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga-dev_2.2.0-1_arm64.deb && \
-    sudo apt-get install -y ./librga-dev_2.2.0-1_arm64.deb && \
+    apt-get install -y ./librga-dev_2.2.0-1_arm64.deb && \
     rm librga-dev_2.2.0-1_arm64.deb
+
+RUN wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavutil-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libswresample-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libswscale-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavcodec-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavformat-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavfilter-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavdevice-dev_6.0-1_arm64.deb && \
+    apt-get install -y ./libavutil-dev_6.0-1_arm64.deb && \
+    apt-get install -y ./libswresample-dev_6.0-1_arm64.deb && \
+    apt-get install -y ./libavcodec-dev_6.0-1_arm64.deb && \
+    apt-get install -y ./libswscale-dev_6.0-1_arm64.deb && \
+    apt-get install -y ./libavformat-dev_6.0-1_arm64.deb && \
+    apt-get install -y ./libavfilter-dev_6.0-1_arm64.deb && \
+    apt-get install -y ./libavdevice-dev_6.0-1_arm64.deb && \
+    rm libavutil-dev_6.0-1_arm64.deb && \
+    rm libswresample-dev_6.0-1_arm64.deb && \
+    rm libavcodec-dev_6.0-1_arm64.deb && \
+    rm libswscale-dev_6.0-1_arm64.deb && \
+    rm libavformat-dev_6.0-1_arm64.deb && \
+    rm libavfilter-dev_6.0-1_arm64.deb && \
+    rm libavdevice-dev_6.0-1_arm64.deb
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
