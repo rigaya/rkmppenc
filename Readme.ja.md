@@ -56,10 +56,24 @@ Debian/Ubuntu系
 - ソースファイルからの音声抽出や音声エンコード
 - mp4,mkv,tsなどの多彩なコンテナに映像・音声をmuxしながら出力
 
+## Radxa ROCK 5B の HDMI In の活用
+
+Radxa ROCK 5B (RK3588) HDMI In は、ffmpeg 6.0 時点ではサポートされない v4l2 multi-planar API を使用するとともに、いくつかのv4l2の呼び出しに応答しないため、通常ffmpegでキャプチャすることができません。
+
+rkmppencでは、v4l2 multi-planar APIへの対応と、v4l2の呼び出し関連のエラー回避を行った[ffmpeg](https://github.com/rigaya/FFmpeg)を使用することで、HDMI Inのキャプチャに対応していて、下記のようにしてキャプチャすることができます。
+
+```
+rkmppenc --input-format v4l2 -i /dev/video0 \
+  --input-option channel:0 --input-option ignore_input_error:1 --input-option ts:abs \
+  --audio-source "hw:<n>:format=alsa,codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
+  -o out.ts
+```
 
 ## ソースコードについて
 - MITライセンスです。
 - 本ソフトウェアでは、
+  [mpp](https://github.com/rockchip-linux/mpp),
+  [librga](https://github.com/airockchip/librga),
   [ffmpeg](https://ffmpeg.org/),
   [tinyxml2](http://www.grinninglizard.com/tinyxml2/),
   [dtl](https://github.com/cubicdaiya/dtl),

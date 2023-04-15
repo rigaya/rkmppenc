@@ -55,9 +55,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 - Supports demux/muxing using libavformat
 - Supports decode using libavcodec
 
+## Using Radxa ROCK 5B HDMI In
+
+Radxa ROCK 5B (RK3588) HDMI In uses v4l2 multi-planar API, and does not respond to some v4l2 API queries. Therefore, it cannot be captured by ffmpeg 6.0.
+
+rkmppenc uses [ffmpeg with modification](https://github.com/rigaya/FFmpeg) to support v4l2 multi-planar API, and workarounds to avoid errors. For example, HDMI In can be captured by following command line.
+
+```
+rkmppenc --input-format v4l2 -i /dev/video0 \
+  --input-option channel:0 --input-option ignore_input_error:1 --input-option ts:abs \
+  --audio-source "hw:<n>:format=alsa,codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
+  -o out.ts
+```
+
 ## rkmppenc source code
 - MIT license.
 - This software depends on
+  [mpp](https://github.com/rockchip-linux/mpp),
+  [librga](https://github.com/airockchip/librga),
   [ffmpeg](https://ffmpeg.org/),
   [tinyxml2](http://www.grinninglizard.com/tinyxml2/),
   [dtl](https://github.com/cubicdaiya/dtl),
