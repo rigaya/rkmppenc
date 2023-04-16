@@ -836,14 +836,14 @@ tsなどでエラーが出るなどしてうまく動作しない場合は、[--
 ### --audio-source &lt;string&gt;[:{&lt;int&gt;?}[;&lt;param1&gt;=&lt;value1&gt;]...]...
 外部音声ファイルをmuxする。
 
-- **ファイルのパラメータ** 
+- **ファイルのパラメータ**
   - format=&lt;string&gt;  
     入力ファイルのフォーマットを指定する。
 
   - input_opt=&lt;string&gt;  
     入力ファイル用のオプションを指定する。
 
-- **トラックのパラメータ** 
+- **トラックのパラメータ**
   - copy  
     音声トラックをそのままコピーする。
   
@@ -885,7 +885,7 @@ tsなどでエラーが出るなどしてうまく動作しない場合は、[--
   例1: --audio-source "<audio_file>":copy
   例2: --audio-source "<audio_file>":codec=aac
   例3: --audio-source "<audio_file>":1?codec=aac;bitrate=256:2?codec=aac;bitrate=192;metadata=language=jpn
-  例4: --audio-source hw:1:format=alsa,codec=aac
+  例4: --audio-source "hw:1:format=alsa,codec=aac;bitrate=256"
   ```
 
 ### --chapter &lt;string&gt;
@@ -968,14 +968,14 @@ nero形式、apple形式、matroska形式に対応する。--chapter-copyとは�
 ### --sub-source &lt;string&gt;[:{&lt;int&gt;?}[;&lt;param1&gt;=&lt;value1&gt;]...]...
 指定のファイルから字幕を読み込みmuxする。
 
-- **ファイルのパラメータ** 
+- **ファイルのパラメータ**
   - format=&lt;string&gt;  
     入力ファイルのフォーマットを指定する。
 
   - input_opt=&lt;string&gt;  
     入力ファイル用のオプションを指定する。
 
-- **トラックのパラメータ** 
+- **トラックのパラメータ**
   - disposition=&lt;string&gt;  
     字幕のdispositionを指定する。
     
