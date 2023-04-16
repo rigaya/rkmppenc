@@ -2151,7 +2151,7 @@ static const ConvertCSP funcList[] = {
     FUNC_AVX2( RGY_CSP_YUV444,    RGY_CSP_NV12,      false, convert_yuv444_to_nv12_p_avx2,       convert_yuv444_to_nv12_i,    AVX2|AVX )
     FUNC__C_(  RGY_CSP_YUV444,    RGY_CSP_NV12,      false, convert_yuv444_to_nv12_p,            convert_yuv444_to_nv12_i,    NONE )
     FUNC_AVX2( RGY_CSP_YUV444,    RGY_CSP_P010,      false, convert_yuv444_to_p010_p_avx2,       convert_yuv444_to_p010_i,    AVX2|AVX )
-    FUNC__C_(  RGY_CSP_YUV444,    RGY_CSP_P010,      false, convert_yuv444_to_p010_p,            convert_yuv444_to_p010_i,    NONE )    
+    FUNC__C_(  RGY_CSP_YUV444,    RGY_CSP_P010,      false, convert_yuv444_to_p010_p,            convert_yuv444_to_p010_i,    NONE )
     FUNC_AVX2( RGY_CSP_YUV444_16, RGY_CSP_NV12,      false, convert_yuv444_16_to_nv12_p_avx2,    convert_yuv444_16_to_nv12_i, AVX2|AVX )
     FUNC__C_(  RGY_CSP_YUV444_16, RGY_CSP_NV12,      false, convert_yuv444_16_to_nv12_p,         convert_yuv444_16_to_nv12_i, NONE )
     FUNC_AVX2( RGY_CSP_YUV444_14, RGY_CSP_NV12,      false, convert_yuv444_14_to_nv12_p_avx2,    convert_yuv444_14_to_nv12_i, AVX2|AVX )
