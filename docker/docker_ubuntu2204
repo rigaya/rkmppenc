@@ -16,7 +16,6 @@ RUN apt-get update \
       pkg-config \
       libass9 \
       libass-dev \
-      libv4l-dev \
       libvpx-dev \
       libmp3lame-dev \
       libbluray-dev \
@@ -45,13 +44,13 @@ RUN wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b
     apt-get install -y ./librga-dev_2.2.0-1_arm64.deb && \
     rm librga-dev_2.2.0-1_arm64.deb
 
-RUN wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavutil-dev_6.0-1_arm64.deb && \
-    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libswresample-dev_6.0-1_arm64.deb && \
-    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libswscale-dev_6.0-1_arm64.deb && \
-    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavcodec-dev_6.0-1_arm64.deb && \
-    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavformat-dev_6.0-1_arm64.deb && \
-    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavfilter-dev_6.0-1_arm64.deb && \
-    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-1724a5c600d064e88a3d5b98dc67f144f0343f2b/libavdevice-dev_6.0-1_arm64.deb && \
+RUN wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde3096511277cdb4a4b0b4f46e53/libavutil-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde3096511277cdb4a4b0b4f46e53/libswresample-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde3096511277cdb4a4b0b4f46e53/libswscale-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde3096511277cdb4a4b0b4f46e53/libavcodec-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde3096511277cdb4a4b0b4f46e53/libavformat-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde3096511277cdb4a4b0b4f46e53/libavfilter-dev_6.0-1_arm64.deb && \
+    wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde3096511277cdb4a4b0b4f46e53/libavdevice-dev_6.0-1_arm64.deb && \
     apt-get install -y ./libavutil-dev_6.0-1_arm64.deb && \
     apt-get install -y ./libswresample-dev_6.0-1_arm64.deb && \
     apt-get install -y ./libavcodec-dev_6.0-1_arm64.deb && \
