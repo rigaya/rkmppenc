@@ -55,9 +55,9 @@ wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c6
 sudo apt install ./librockchip-mpp-dev_1.5.0-1_arm64.deb
 rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 
-wget https://github.com/tsukumijima/rockchip-multimedia-config/releases/download/v1.0.1-1/rockchip-multimedia-config_1.0.1-1_all.deb
-sudo apt install ./rockchip-multimedia-config_1.0.1-1_all.deb
-rm rockchip-multimedia-config_1.0.1-1_all.deb
+wget https://github.com/tsukumijima/rockchip-multimedia-config/releases/download/v1.0.2-1/rockchip-multimedia-config_1.0.2-1_all.deb
+sudo apt install ./rockchip-multimedia-config_1.0.2-1_all.deb
+rm rockchip-multimedia-config_1.0.2-1_all.deb
 ```
 
 ### 4. librgaのインストール
