@@ -1596,6 +1596,7 @@ protected:
     RGYTimecode *m_timecode;
     RGYTimestamp *m_encTimestamp;
     rgy_rational<int> m_outputTimebase;
+    bool m_sentEOSFrame;
     MppBufferGroup m_frameGrp;
     struct MPPBufferPair {
         MppBuffer frame;
@@ -1614,7 +1615,7 @@ public:
         int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPENC, outMaxQueueSize, log),
         m_encoder(enc), m_encCodec(encCodec), m_encParams(encParams), m_timecode(timecode), m_encTimestamp(encTimestamp), m_outputTimebase(outputTimebase),
-        m_frameGrp(nullptr), m_buffer(), m_queueFrameList(),
+        m_sentEOSFrame(false), m_frameGrp(nullptr), m_buffer(), m_queueFrameList(),
         m_bitStreamOut(), m_hdr10plus(hdr10plus), m_hdr10plusMetadataCopy(hdr10plusMetadataCopy), m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)) {
         for (auto& buf : m_buffer) {
             buf.frame = nullptr;
@@ -1685,6 +1686,7 @@ public:
     std::tuple<RGY_ERR, std::shared_ptr<RGYBitstream>> getOutputBitstream() {
         MppPacket packet = nullptr;
         auto err = err_to_rgy(m_encoder->mpi->encode_get_packet(m_encoder->ctx, &packet));
+        PrintMes(m_sentEOSFrame ? RGY_LOG_DEBUG : RGY_LOG_TRACE, _T("encode_get_packet: %s, %s.\n"), packet ? _T("yes") : _T("null"), get_err_mes(err));
         if (err == RGY_ERR_MPP_ERR_TIMEOUT || !packet) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             return { RGY_ERR_MORE_SURFACE, nullptr };
@@ -1701,6 +1703,9 @@ public:
             return { RGY_ERR_NULL_PTR, nullptr };
         }
         const bool eos = mpp_packet_get_eos(packet);
+        if (eos) {
+            PrintMes(RGY_LOG_DEBUG, _T("Got EOS packet.\n"));
+        }
         const auto pktLength = mpp_packet_get_length(packet);
         if (pktLength == 0) {
             return { eos ? RGY_ERR_MORE_DATA : RGY_ERR_NONE, nullptr };
@@ -1771,6 +1776,7 @@ public:
         }
 #endif
 
+        bool mppframeeos = false;
         MppFrame mppframe = nullptr;
         if (!frame || !dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf()) { // 終了フラグ
             auto err = err_to_rgy(mpp_frame_init(&mppframe));
@@ -1785,6 +1791,8 @@ public:
             mpp_frame_set_fmt(mppframe, m_encParams.prep.format);
             mpp_frame_set_buffer(mppframe, nullptr);
             mpp_frame_set_eos(mppframe, 1);
+            mppframeeos = true;
+            PrintMes(RGY_LOG_DEBUG, _T("Send EOS frame\n"));
         } else {
             auto& surfIn = dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf();
             auto surfInFrame = surfIn.frame();
@@ -1919,9 +1927,12 @@ public:
 
             if (!sendFrame) {
                 err = err_to_rgy(m_encoder->mpi->encode_put_frame(m_encoder->ctx, mppframe));
-                PrintMes(RGY_LOG_TRACE, _T("encode_put_frame %d: %d.\n"), m_inFrames, err);
+                PrintMes(mppframeeos ? RGY_LOG_DEBUG : RGY_LOG_TRACE, _T("encode_put_frame%s %d: %s.\n"), mppframeeos ? _T("(eos)") : _T(""), m_inFrames, get_err_mes(err));
                 if (err == RGY_ERR_NONE) {
                     sendFrame = true;
+                    if (mppframeeos) {
+                        m_sentEOSFrame = true;
+                    }
                 } else {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));}
                 }
