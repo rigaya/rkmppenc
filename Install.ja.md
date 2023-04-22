@@ -34,6 +34,7 @@ OpenCLフィルタ(```--vpp-deinterlace``` 以外のvppフィルタ) を使用�
 ```Shell
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/lib/aarch64-linux-gnu/libmali-valhall-g610-g6p0-wayland-gbm.so
 sudo install libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
+sudo apt install libwayland-server0
 
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/firmware/g610/mali_csffw.bin
 sudo mv mali_csffw.bin /lib/firmware

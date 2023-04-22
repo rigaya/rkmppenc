@@ -37,6 +37,7 @@ Here shows examples for installing OpenCL modules for Mali G610 MP4 GPU in RK358
 ```Shell
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/lib/aarch64-linux-gnu/libmali-valhall-g610-g6p0-wayland-gbm.so
 sudo install libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
+sudo apt install libwayland-server0
 
 wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/firmware/g610/mali_csffw.bin
 sudo mv mali_csffw.bin /lib/firmware
