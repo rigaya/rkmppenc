@@ -153,6 +153,9 @@ public:
     RGY_CSP csp() const {
         return getInfo().csp;
     }
+    RGY_MEM_TYPE mem_type() const {
+        return getInfo().mem_type;
+    }
     int width() const {
         return getInfo().width;
     }
