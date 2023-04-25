@@ -49,6 +49,8 @@ MAP_PAIR_0_1_PROTO(picstruct, rgy, RGY_PICSTRUCT, enc, uint32_t);
 MAP_PAIR_0_1_PROTO(loglevel, rgy, int, enc, int);
 MAP_PAIR_0_1_PROTO(interp, rgy, RGY_VPP_RESIZE_ALGO, rga, IM_SCALE_MODE);
 
+uint32_t setMppH264ForceConstraintFlags(const std::array<std::pair<bool, bool>, 6>& constraint_flags);
+
 struct MPPCfg {
     MppEncCfg       cfg;
     MppEncPrepCfg   prep;

@@ -149,6 +149,21 @@ static const auto RGY_INTERP_TO_RGA = make_array<std::pair<RGY_VPP_RESIZE_ALGO, 
     );
 MAP_PAIR_0_1(interp, rgy, RGY_VPP_RESIZE_ALGO, rga, IM_SCALE_MODE, RGY_INTERP_TO_RGA, RGY_VPP_RESIZE_UNKNOWN, (IM_SCALE_MODE)-1);
 
+uint32_t setMppH264ForceConstraintFlags(const std::array<std::pair<bool, bool>, 6>& constraint_flags) {
+    uint32_t force = 0x00;
+    uint32_t flags = 0x00;
+    for (uint32_t i = 0; i < constraint_flags.size(); i++) {
+        uint32_t setbit = 1 << i;
+        if (constraint_flags[i].first) {
+            force |= setbit;
+            if (constraint_flags[i].second) {
+                flags |= setbit;
+            }
+        }
+    }
+    return (force << 16) | flags;
+}
+
 void RGYBitstream::addFrameData(RGYFrameData *frameData) {
     if (frameData != nullptr) {
         frameDataNum++;

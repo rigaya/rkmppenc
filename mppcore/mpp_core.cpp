@@ -1924,6 +1924,20 @@ RGY_ERR MPPCore::initEncoderCodec(const MPPParam *prm) {
         m_enccfg.codec.h264.entropy_coding_mode_ex = m_enccfg.codec.h264.entropy_coding_mode; // 実質的には ex のほうが効いている
         m_enccfg.codec.h264.cabac_init_idc         = 0;
         m_enccfg.codec.h264.transform8x8_mode      = (m_enccfg.codec.h264.profile == get_cx_value(list_avc_profile, _T("high"))) ? 1 : 0;
+        // high profile は デフォルトで constraint_set3 = 1 となぜかなってしまうので、これを上書きする
+        // https://github.com/rockchip-linux/mpp/blob/develop/mpp/codec/enc/h264/h264e_sps.c#L99
+        if (m_enccfg.codec.h264.profile == get_cx_value(list_avc_profile, _T("high"))) {
+            m_enccfg.codec.h264.change |= MPP_ENC_H264_CFG_CHANGE_CONSTRAINT_SET;
+            m_enccfg.codec.h264.constraint_set = setMppH264ForceConstraintFlags(
+                std::array<std::pair<bool, bool>, 6>
+                {std::pair<bool, bool>{ true, false },  // constraint_set0
+                 std::pair<bool, bool>{ true, false },  // constraint_set1
+                 std::pair<bool, bool>{ true, false },  // constraint_set2
+                 std::pair<bool, bool>{ true, false },  // constraint_set3
+                 std::pair<bool, bool>{ true, false },  // constraint_set4
+                 std::pair<bool, bool>{ true, false }}  // constraint_set5
+            );
+        }
     } break;
     case RGY_CODEC_HEVC: {
         m_enccfg.codec.h265.change = MPP_ENC_H265_CFG_PROFILE_LEVEL_TILER_CHANGE;
