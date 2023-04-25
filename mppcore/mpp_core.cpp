@@ -1920,10 +1920,10 @@ RGY_ERR MPPCore::initEncoderCodec(const MPPParam *prm) {
                                      MPP_ENC_H264_CFG_CHANGE_TRANS_8x8;
         m_enccfg.codec.h264.profile = prm->codecParam[RGY_CODEC_H264].profile;
         m_enccfg.codec.h264.level   = prm->codecParam[RGY_CODEC_H264].level;
-        m_enccfg.codec.h264.entropy_coding_mode =
-            (m_enccfg.codec.h264.profile == 100) ? 1 : 0;
-        m_enccfg.codec.h264.cabac_init_idc      = 0;
-        m_enccfg.codec.h264.transform8x8_mode   = 1;
+        m_enccfg.codec.h264.entropy_coding_mode    = (m_enccfg.codec.h264.profile == get_cx_value(list_avc_profile, _T("baseline"))) ? 0 : 1;
+        m_enccfg.codec.h264.entropy_coding_mode_ex = m_enccfg.codec.h264.entropy_coding_mode; // 実質的には ex のほうが効いている
+        m_enccfg.codec.h264.cabac_init_idc         = 0;
+        m_enccfg.codec.h264.transform8x8_mode      = 1;
     } break;
     case RGY_CODEC_HEVC: {
         m_enccfg.codec.h265.change = MPP_ENC_H265_CFG_PROFILE_LEVEL_TILER_CHANGE;
