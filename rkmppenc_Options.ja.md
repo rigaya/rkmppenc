@@ -322,7 +322,7 @@ avformat + hw decoderを使用して読み込む。
 | H.265/HEVC | ○ |
 | VP8        | × |
 | VP9        | ○ |
-| VC-1       | ○ |
+| VC-1       | × |
 | WMV3/WMV9  | × |
 
 ### --crop &lt;int&gt;,&lt;int&gt;,&lt;int&gt;,&lt;int&gt;
