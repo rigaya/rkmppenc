@@ -920,19 +920,12 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
 
     m_vpFilters.clear();
 
-    const auto VCE_AMF_GPU_IMAGE = RGY_MEM_TYPE_GPU_IMAGE;
-
-    //OpenCLが使用できない場合
-    if (!m_cl && cspConvRequired) {
-        PrintMes(RGY_LOG_ERROR, _T("Cannot continue as OpenCL is disabled, but csp conversion required!\n"));
-        return RGY_ERR_UNSUPPORTED;
-    }
-
     std::vector<VppType> filterPipeline = InitFiltersCreateVppList(inputParam, cspConvRequired, cropRequired, resizeRequired);
     if (filterPipeline.size() == 0) {
         PrintMes(RGY_LOG_DEBUG, _T("No filters required.\n"));
         return RGY_ERR_NONE;
     }
+    //OpenCLが使用できない場合
     const auto clfilterCount = std::count_if(filterPipeline.begin(), filterPipeline.end(), [](VppType type) { return getVppFilterType(type) == VppFilterType::FILTER_OPENCL; });
     if (!m_cl && clfilterCount > 0) {
         PrintMes(RGY_LOG_ERROR, _T("Cannot continue as OpenCL is disabled, but OpenCL filter required!\n"));
