@@ -8,7 +8,7 @@
 ### 1. Rockchip MPPのインストール
 
 ```Shell
-wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-4b8799c38aad5c64481eec89ba8f3f0c64176e42/librockchip-mpp1_1.5.0-1_arm64.deb
+wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-54f7257/librockchip-mpp1_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
 rm librockchip-mpp1_1.5.0-1_arm64.deb
 
@@ -19,7 +19,7 @@ rm rockchip-multimedia-config_1.0.2-1_all.deb
 
 ### 2. librgaのインストール
 ```Shell
-wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-2827b00b884001e6da2c82d91cdace4fa473b5e2/librga2_2.2.0-1_arm64.deb
+wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-1-fb93eed/librga2_2.2.0-1_arm64.deb
 sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
 ```
