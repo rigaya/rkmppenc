@@ -75,6 +75,8 @@
   - [--dhdr10-info copy \[HEVC\]](#--dhdr10-info-copy-hevc)
   - [--dolby-vision-profile \<float\> \[HEVC\]](#--dolby-vision-profile-float-hevc)
   - [--dolby-vision-rpu \<string\> \[HEVC\]](#--dolby-vision-rpu-string-hevc)
+  - [--repeat-headers](#--repeat-headers)
+  - [--no-repeat-headers](#--no-repeat-headers)
 - [入出力 / 音声 / 字幕などのオプション](#入出力--音声--字幕などのオプション)
   - [--input-analyze \<float\>](#--input-analyze-float)
   - [--input-probesize \<int\>](#--input-probesize-int)
@@ -525,6 +527,11 @@ avhw読み込みでは、フレームの並び替えにタイムスタンプを�
 
 MediaInfoによるDolby Vision情報の検出を可能とするには、[tsMuxeR](https://github.com/justdan96/tsMuxer/releases) (nightly版) による再muxが必要です。
 
+### --repeat-headers
+ヘッダを定期的に挿入する。
+
+### --no-repeat-headers
+ヘッダの定期的な挿入を無効化する。ただし、他のPPSの定期的な挿入を必要とするオプションを使用した場合、本オプションは無視される。
 
 ## 入出力 / 音声 / 字幕などのオプション
 

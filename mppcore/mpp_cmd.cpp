@@ -162,7 +162,8 @@ tstring encoder_help() {
         _T("   --qp-max <int>               set max qp\n")
         _T("   --qp-min <int>               set min qp\n")
         _T("   --max-bitrate <int>          set max bitrate (kbps) (default: %d)\n")
-        _T("   --gop-len <int>              set length of gop (default: auto)\n"),
+        _T("   --gop-len <int>              set length of gop (default: auto)\n")
+        _T("   --repeat-headers             enable repeated insertion of headers.\n"),
         MPP_DEFAULT_MAX_BITRATE,
         MPP_DEFAULT_QP_I, MPP_DEFAULT_QP_P
     );
@@ -431,6 +432,15 @@ int parse_one_option(const TCHAR *option_name, const TCHAR* strInput[], int& i, 
             return 1;
         }
         pParams->gopLen = value;
+        return 0;
+    }
+    if (0 == _tcscmp(option_name, _T("repeat-headers"))) {
+        pParams->repeatHeaders = true;
+        return 0;
+    }
+    if (0 == _tcscmp(option_name, _T("no-repeat-pps"))
+        || 0 == _tcscmp(option_name, _T("no-repeat-headers"))) {
+        pParams->repeatHeaders = false;
         return 0;
     }
     if (IS_OPTION("avhw-params")) {
@@ -818,6 +828,7 @@ tstring gen_cmd(const MPPParam *pParams, bool save_disabled_prm) {
     //    OPT_LST_AV1(_T("--level"), _T(""), level, list_av1_level);
     //    OPT_LST_AV1(_T("--profile"), _T(""), profile, list_av1_profile);
     //}
+    OPT_BOOL(_T("--repeat-headers"), _T("--no-repeat-headers"), repeatHeaders);
 
     cmd << gen_cmd(&pParams->common, &encPrmDefault.common, save_disabled_prm);
 

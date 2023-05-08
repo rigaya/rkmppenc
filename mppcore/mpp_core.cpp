@@ -2013,15 +2013,17 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
         return ret;
     }
 
-    auto sei_mode = MPP_ENC_SEI_MODE_DISABLE;
-    ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_SEI_CFG, &sei_mode));
-    if (ret != RGY_ERR_NONE) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to set sei cfg on MPI: %s.\n"), get_err_mes(ret));
-        return ret;
+    {
+        auto sei_mode = MPP_ENC_SEI_MODE_DISABLE;
+        ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_SEI_CFG, &sei_mode));
+        if (ret != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to set sei cfg on MPI: %s.\n"), get_err_mes(ret));
+            return ret;
+        }
     }
 
     if (prm->codec == RGY_CODEC_H264 || prm->codec == RGY_CODEC_HEVC) {
-        auto header_mode = MPP_ENC_HEADER_MODE_EACH_IDR;
+        auto header_mode = (prm->repeatHeaders) ? MPP_ENC_HEADER_MODE_EACH_IDR : MPP_ENC_HEADER_MODE_DEFAULT;
         ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_HEADER_MODE, &header_mode));
         if (ret != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to set header mode failed ret: %s\n"), get_err_mes(ret));

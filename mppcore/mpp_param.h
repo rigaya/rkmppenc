@@ -281,6 +281,7 @@ struct MPPParam {
     int     qpMax;
     int     qpMin;
     int     gopLen;
+    bool    repeatHeaders;
 
     int     par[2];
 
