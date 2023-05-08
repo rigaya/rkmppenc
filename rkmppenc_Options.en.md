@@ -77,8 +77,6 @@
   - [--dhdr10-info copy \[HEVC\]](#--dhdr10-info-copy-hevc)
   - [--dolby-vision-profile \<float\>](#--dolby-vision-profile-float)
   - [--dolby-vision-rpu \<string\>](#--dolby-vision-rpu-string)
-  - [--ssim](#--ssim)
-  - [--psnr](#--psnr)
 - [IO / Audio / Subtitle Options](#io--audio--subtitle-options)
   - [--input-analyze \<float\>](#--input-analyze-float)
   - [--input-probesize \<int\>](#--input-probesize-int)
@@ -576,12 +574,6 @@ Interleave Dolby Vision RPU metadata from the specified file into the output fil
 
 Currently, the Dolby Vision info in the re-encoded file will not be detected by MediaInfo. In order to be able to detect the Dolby Vision info by MediaInfo, you will need to re-mux the output file by [tsMuxeR](https://github.com/justdan96/tsMuxer/releases) (nightly).
 
-
-### --ssim
-Calculate ssim of the encoded video.
-
-### --psnr
-Calculate psnr of the encoded video.
 
 ## IO / Audio / Subtitle Options
 

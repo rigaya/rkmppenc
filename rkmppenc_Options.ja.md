@@ -75,8 +75,6 @@
   - [--dhdr10-info copy \[HEVC\]](#--dhdr10-info-copy-hevc)
   - [--dolby-vision-profile \<float\> \[HEVC\]](#--dolby-vision-profile-float-hevc)
   - [--dolby-vision-rpu \<string\> \[HEVC\]](#--dolby-vision-rpu-string-hevc)
-  - [--ssim](#--ssim)
-  - [--psnr](#--psnr)
 - [入出力 / 音声 / 字幕などのオプション](#入出力--音声--字幕などのオプション)
   - [--input-analyze \<float\>](#--input-analyze-float)
   - [--input-probesize \<int\>](#--input-probesize-int)
@@ -527,11 +525,6 @@ avhw読み込みでは、フレームの並び替えにタイムスタンプを�
 
 MediaInfoによるDolby Vision情報の検出を可能とするには、[tsMuxeR](https://github.com/justdan96/tsMuxer/releases) (nightly版) による再muxが必要です。
 
-### --ssim
-エンコード結果のSSIMを計算。
-
-### --psnr
-エンコード結果のPSNRを計算。
 
 ## 入出力 / 音声 / 字幕などのオプション
 
