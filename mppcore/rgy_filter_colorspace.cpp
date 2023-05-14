@@ -54,6 +54,7 @@ static const auto primXYList = make_array<std::pair<CspColorprim, mat3x3>>(
     make_pair(RGY_PRIM_ST170_M,   mat3x3(0.630, 0.340, 0.0,   0.310, 0.595, 0.0,   0.155, 0.070, 0.0) ),
     make_pair(RGY_PRIM_ST240_M,   mat3x3(0.630, 0.340, 0.0,   0.310, 0.595, 0.0,   0.155, 0.070, 0.0) ),
     make_pair(RGY_PRIM_ST431_2,   mat3x3(0.680, 0.320, 0.0,   0.265, 0.690, 0.0,   0.150, 0.060, 0.0) ),
+    make_pair(RGY_PRIM_ST432_1,   mat3x3(0.680, 0.320, 0.0,   0.265, 0.690, 0.0,   0.150, 0.060, 0.0) ), // RGY_PRIM_ST431_2 と同じ
     make_pair(RGY_PRIM_EBU3213_E, mat3x3(0.630, 0.340, 0.0,   0.295, 0.605, 0.0,   0.155, 0.077, 0.0) )
 );
 
@@ -1450,7 +1451,16 @@ RGY_ERR ColorspaceOpCtrl::setHDR2SDR(const VideoVUIInfo &in, const VideoVUIInfo 
     if (csp_to2.matrix == RGY_MATRIX_UNSPECIFIED) {
         csp_to2 = csp_to2.to(RGY_MATRIX_BT709).to(RGY_TRANSFER_BT709).to(RGY_PRIM_BT709);
     }
-    const auto csp_from2 = csp_to2.to(RGY_PRIM_BT2020).to(RGY_TRANSFER_LINEAR).to(RGY_MATRIX_RGB);
+    auto csp_from2 = csp_to1;
+    if (csp_from2.matrix == RGY_MATRIX_UNSPECIFIED) {
+        csp_from2 = csp_from2.to(RGY_MATRIX_RGB);
+    }
+    if (csp_from2.transfer == RGY_TRANSFER_UNSPECIFIED) {
+        csp_from2 = csp_from2.to(RGY_TRANSFER_LINEAR);
+    }
+    if (csp_from2.transfer == RGY_PRIM_UNSPECIFIED) {
+        csp_from2 = csp_from2.to(RGY_PRIM_BT2020);
+    }
     CHECK(setPath(csp_from2, csp_to2, sdr_source_peak, approx_gamma, scene_ref, height));
     return RGY_ERR_NONE;
 }
