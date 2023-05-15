@@ -65,7 +65,7 @@ rkmppencでは、v4l2 multi-planar APIへの対応と、v4l2の呼び出し関�
 ```
 rkmppenc --input-format v4l2 -i /dev/video0 \
   --input-option channel:0 --input-option ignore_input_error:1 --input-option ts:abs \
-  --audio-source "hw:<n>:format=alsa,codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
+  --audio-source "hw:<n>:format=alsa/codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
   -o out.ts
 ```
 

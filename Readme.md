@@ -64,7 +64,7 @@ rkmppenc uses [ffmpeg with modification](https://github.com/rigaya/FFmpeg) to su
 ```
 rkmppenc --input-format v4l2 -i /dev/video0 \
   --input-option channel:0 --input-option ignore_input_error:1 --input-option ts:abs \
-  --audio-source "hw:<n>:format=alsa,codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
+  --audio-source "hw:<n>:format=alsa/codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
   -o out.ts
 ```
 
