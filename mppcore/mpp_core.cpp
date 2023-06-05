@@ -2158,7 +2158,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
         if (m_trimParam.list.size() > 0) {
             m_pipelineTasks.push_back(std::make_unique<PipelineTaskTrim>(m_trimParam, m_pFileReader.get(), srcTimebase, 0, m_pLog));
         }
-        m_pipelineTasks.push_back(std::make_unique<PipelineTaskCheckPTS>(srcTimebase, srcTimebase, m_outputTimebase, outFrameDuration, m_nAVSyncMode, VppAfsRffAware(), (pReader) ? pReader->GetFramePosList() : nullptr, m_pLog));
+        m_pipelineTasks.push_back(std::make_unique<PipelineTaskCheckPTS>(srcTimebase, srcTimebase, m_outputTimebase, outFrameDuration, m_nAVSyncMode, VppAfsRffAware() && m_pFileReader->vppAware(), (pReader) ? pReader->GetFramePosList() : nullptr, m_pLog));
     }
 
     for (auto& filterBlock : m_vpFilters) {
