@@ -1097,7 +1097,9 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
             filterPipeline.push_back(VppType::RGA_CSPCONV);
         }
     } else if (cspConvRequired || cropRequired) {
-        if (cspConvRequired && !cropRequired && RGY_CSP_CHROMA_FORMAT[inputParam->input.csp] == RGY_CHROMAFMT_RGB_PACKED) {
+        if (cspConvRequired && !cropRequired
+            && (RGY_CSP_CHROMA_FORMAT[inputParam->input.csp] == RGY_CHROMAFMT_RGB_PACKED
+               || csp_rgy_to_enc(inputParam->input.csp) != MPP_FMT_BUTT)) {
             filterPipeline.push_back(VppType::RGA_CSPCONV);
         } else if (cropRequired && !cspConvRequired) {
             filterPipeline.push_back(VppType::RGA_CROP);
