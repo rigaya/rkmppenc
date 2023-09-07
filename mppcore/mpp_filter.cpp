@@ -226,12 +226,12 @@ RGY_ERR RGAFilterCrop::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **pp
         AddMessage(RGY_LOG_ERROR, _T("Failed to run imcrop: %s"), get_err_mes(sts));
         return sts;
     }
-    //if (src_handle) {
-    //    releasebuffer_handle(src_handle);
-    //}
-    //if (dst_handle) {
-    //    releasebuffer_handle(dst_handle);
-    //}
+    if (src_handle) {
+        releasebuffer_handle(src_handle);
+    }
+    if (dst_handle) {
+        releasebuffer_handle(dst_handle);
+    }
     return sts;
 }
 
@@ -359,12 +359,12 @@ RGY_ERR RGAFilterCspConv::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp *
         AddMessage(RGY_LOG_ERROR, _T("Failed to run imcvtcolor: %s"), get_err_mes(sts));
         return sts;
     }
-    //if (src_handle) {
-    //    releasebuffer_handle(src_handle);
-    //}
-    //if (dst_handle) {
-    //    releasebuffer_handle(dst_handle);
-    //}
+    if (src_handle) {
+        releasebuffer_handle(src_handle);
+    }
+    if (dst_handle) {
+        releasebuffer_handle(dst_handle);
+    }
     return sts;
 }
 
@@ -481,12 +481,12 @@ RGY_ERR RGAFilterResize::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **
         AddMessage(RGY_LOG_ERROR, _T("Failed to run imresize: %s"), get_err_mes(sts));
         return sts;
     }
-    //if (src_handle) {
-    //    releasebuffer_handle(src_handle);
-    //}
-    //if (dst_handle) {
-    //    releasebuffer_handle(dst_handle);
-    //}
+    if (src_handle) {
+        releasebuffer_handle(src_handle);
+    }
+    if (dst_handle) {
+        releasebuffer_handle(dst_handle);
+    }
     return sts;
 }
 
