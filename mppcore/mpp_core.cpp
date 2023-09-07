@@ -1780,6 +1780,7 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         param->frameOut = inputFrame;
         param->frameOut.width = m_encWidth;
         param->frameOut.height = m_encHeight;
+        param->encoderCsp = GetEncoderCSP(inputParam);
         param->baseFps = m_encFps;
         param->bOutOverwrite = false;
         auto sts = filter->init(param, m_pLog);
