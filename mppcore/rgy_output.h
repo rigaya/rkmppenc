@@ -142,7 +142,7 @@ public:
         if (pos == m_frame.end()) {
             return RGYTimestampMapVal();
         }
-        auto ret = pos->second;
+        auto& ret = pos->second;
         clean(ret.inputFrameId);
         return ret;
     }
@@ -152,7 +152,7 @@ public:
         if (pos == m_frame.end()) {
             return RGYTimestampMapVal();
         }
-        auto ret = pos->second;
+        auto& ret = pos->second;
         clean(ret.inputFrameId);
         return ret;
     }
