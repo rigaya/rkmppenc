@@ -4151,17 +4151,12 @@ int parse_one_common_option(const TCHAR *option_name, const TCHAR *strInput[], i
         return 0;
     }
     if (IS_OPTION("audio-stream")) {
-        //ここで、av_get_channel_layout()を使うため、チェックする必要がある
-        if (!check_avcodec_dll()) {
-            _ftprintf(stderr, _T("%s\n--audio-stream could not be used.\n"), error_mes_avcodec_dll_not_found().c_str());
-            return 1;
-        }
 
         try {
             auto ret = set_audio_prm([](AudioSelect *pAudioSelect, int trackId, const TCHAR *prmstr) {
-                if (trackId != 0 || (pAudioSelect->streamChannelSelect[0] == 0 && pAudioSelect->streamChannelOut[0] == 0)) {
+                if (trackId != 0 || (pAudioSelect->streamChannelSelect[0].empty() && pAudioSelect->streamChannelOut[0].empty())) {
                     auto streamSelectList = split(tchar_to_string(prmstr), ",");
-                    if (streamSelectList.size() > _countof(pAudioSelect->streamChannelSelect)) {
+                    if (streamSelectList.size() > pAudioSelect->streamChannelSelect.size()) {
                         return 1;
                     }
                     static const char *DELIM = ":";
@@ -4169,15 +4164,14 @@ int parse_one_common_option(const TCHAR *option_name, const TCHAR *strInput[], i
                         auto selectPtr = streamSelectList[j].c_str();
                         auto selectDelimPos = strstr(selectPtr, DELIM);
                         if (selectDelimPos == nullptr) {
-                            auto channelLayout = av_get_channel_layout(selectPtr);
-                            pAudioSelect->streamChannelSelect[j] = channelLayout;
+                            pAudioSelect->streamChannelSelect[j] = selectPtr;
                             pAudioSelect->streamChannelOut[j]    = RGY_CHANNEL_AUTO; //自動
                         } else if (selectPtr == selectDelimPos) {
                             pAudioSelect->streamChannelSelect[j] = RGY_CHANNEL_AUTO;
-                            pAudioSelect->streamChannelOut[j]    = av_get_channel_layout(selectDelimPos + strlen(DELIM));
+                            pAudioSelect->streamChannelOut[j]    = selectDelimPos + strlen(DELIM);
                         } else {
-                            pAudioSelect->streamChannelSelect[j] = av_get_channel_layout(streamSelectList[j].substr(0, selectDelimPos - selectPtr).c_str());
-                            pAudioSelect->streamChannelOut[j]    = av_get_channel_layout(selectDelimPos + strlen(DELIM));
+                            pAudioSelect->streamChannelSelect[j] = streamSelectList[j].substr(0, selectDelimPos - selectPtr);
+                            pAudioSelect->streamChannelOut[j]    = selectDelimPos + strlen(DELIM);
                         }
                     }
                 }
