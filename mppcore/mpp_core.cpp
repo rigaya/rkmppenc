@@ -1913,7 +1913,9 @@ RGY_ERR MPPCore::initEncoderCodec(const MPPParam *prm) {
     case RGY_CODEC_H264: {
         m_enccfg.codec.h264.change = MPP_ENC_H264_CFG_CHANGE_PROFILE |
                                      MPP_ENC_H264_CFG_CHANGE_ENTROPY |
-                                     MPP_ENC_H264_CFG_CHANGE_TRANS_8x8;
+                                     MPP_ENC_H264_CFG_CHANGE_TRANS_8x8 |
+                                     MPP_ENC_H264_CFG_CHANGE_CHROMA_QP |
+                                     MPP_ENC_H264_CFG_CHANGE_DEBLOCKING;
         m_enccfg.codec.h264.profile = prm->codecParam[RGY_CODEC_H264].profile;
         m_enccfg.codec.h264.level   = prm->codecParam[RGY_CODEC_H264].level;
         m_enccfg.codec.h264.entropy_coding_mode    = (m_enccfg.codec.h264.profile == get_cx_value(list_avc_profile, _T("baseline"))) ? 0 : 1;
@@ -1934,12 +1936,20 @@ RGY_ERR MPPCore::initEncoderCodec(const MPPParam *prm) {
                  std::pair<bool, bool>{ true, false }}  // constraint_set5
             );
         }
+        m_enccfg.codec.h264.chroma_cb_qp_offset  = prm->chromaQPOffset;
+        m_enccfg.codec.h264.chroma_cr_qp_offset  = prm->chromaQPOffset;
+        m_enccfg.codec.h264.deblock_disable      = prm->disableDeblock ? 1 : 0;
+        m_enccfg.codec.h264.deblock_offset_alpha = prm->deblockAlpha;
+        m_enccfg.codec.h264.deblock_offset_beta  = prm->deblockBeta;
     } break;
     case RGY_CODEC_HEVC: {
-        m_enccfg.codec.h265.change = MPP_ENC_H265_CFG_PROFILE_LEVEL_TILER_CHANGE;
+        m_enccfg.codec.h265.change = MPP_ENC_H265_CFG_PROFILE_LEVEL_TILER_CHANGE |
+                                     MPP_ENC_H265_CFG_TRANS_CHANGE;
         m_enccfg.codec.h265.profile = prm->codecParam[RGY_CODEC_HEVC].profile;
         m_enccfg.codec.h265.level   = prm->codecParam[RGY_CODEC_HEVC].level;
         m_enccfg.codec.h265.tier    = prm->codecParam[RGY_CODEC_HEVC].tier;
+        m_enccfg.codec.h265.trans_cfg.cb_qp_offset = prm->chromaQPOffset;
+        m_enccfg.codec.h265.trans_cfg.cr_qp_offset = prm->chromaQPOffset;
     } break;
     default:
         PrintMes(RGY_LOG_DEBUG, _T("Unknown codec %s.\n"), CodecToStr(prm->codec).c_str());

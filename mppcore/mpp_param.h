@@ -281,9 +281,15 @@ struct MPPParam {
     int     qpMax;
     int     qpMin;
     int     gopLen;
+    int     chromaQPOffset;
     bool    repeatHeaders;
 
     int     par[2];
+
+    // H.264
+    bool    disableDeblock;
+    int     deblockAlpha;
+    int     deblockBeta;
 
     MPPParam();
     ~MPPParam();

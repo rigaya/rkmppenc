@@ -57,6 +57,9 @@
   - [--qp-min \<int\> or \<int\>:\<int\>:\<int\>](#--qp-min-int-or-intintint)
   - [--qp-max \<int\> or \<int\>:\<int\>:\<int\>](#--qp-max-int-or-intintint)
   - [--gop-len \<int\>](#--gop-len-int)
+  - [--chroma-qp-offset \<int\>](#--chroma-qp-offset-int)
+  - [--no-deblock \[H.264\]](#--no-deblock-h264)
+  - [--deblock \<int\>:\<int\> \[H.264\]](#--deblock-intint-h264)
   - [--level \<string\>](#--level-string)
   - [--profile \<string\>](#--profile-string)
   - [--tier \<string\>](#--tier-string)
@@ -421,6 +424,15 @@ VBVバッファサイズ(kbps単位)。
 
 ### --gop-len &lt;int&gt;
 最大GOP長。
+
+### --chroma-qp-offset &lt;int&gt;
+色差のQPオフセット。
+
+### --no-deblock [H.264]
+デブロックフィルタを無効化する。
+
+### --deblock &lt;int&gt;:&lt;int&gt; [H.264]
+デブロックフィルタを有効化し、&lt;alpha&gt;:&lt;beta&gt;を指定する。
 
 ### --level &lt;string&gt;
 エンコードするコーデックのLevelを指定する。指定しない場合は自動的に決定される。
