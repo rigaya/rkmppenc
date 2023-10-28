@@ -37,10 +37,10 @@ RUN wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-88cfb8b/l
     apt-get install -y ./librockchip-mpp-dev_1.5.0-1_arm64.deb && \
     rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 
-RUN wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-1-f8c78f8/librga2_2.2.0-1_arm64.deb && \
+RUN wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-1-127dfee/librga2_2.2.0-1_arm64.deb && \
     apt-get install -y ./librga2_2.2.0-1_arm64.deb && \
     rm librga2_2.2.0-1_arm64.deb && \
-    wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-1-f8c78f8/librga-dev_2.2.0-1_arm64.deb && \
+    wget https://github.com/tsukumijima/librga/releases/download/v2.2.0-1-127dfee/librga-dev_2.2.0-1_arm64.deb && \
     apt-get install -y ./librga-dev_2.2.0-1_arm64.deb && \
     rm librga-dev_2.2.0-1_arm64.deb
 
