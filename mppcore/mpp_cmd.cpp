@@ -437,12 +437,12 @@ int parse_one_option(const TCHAR *option_name, const TCHAR* strInput[], int& i, 
         pParams->gopLen = value;
         return 0;
     }
-    if (0 == _tcscmp(option_name, _T("repeat-headers"))) {
+    if (IS_OPTION("repeat-headers")) {
         pParams->repeatHeaders = true;
         return 0;
     }
-    if (0 == _tcscmp(option_name, _T("no-repeat-pps"))
-        || 0 == _tcscmp(option_name, _T("no-repeat-headers"))) {
+    if (IS_OPTION("no-repeat-pps")
+        || IS_OPTION("no-repeat-headers")) {
         pParams->repeatHeaders = false;
         return 0;
     }
@@ -456,7 +456,7 @@ int parse_one_option(const TCHAR *option_name, const TCHAR* strInput[], int& i, 
         pParams->chromaQPOffset = value;
         return 0;
     }
-    if (IS_OPTION(option_name, _T("no-deblock"))) {
+    if (IS_OPTION("no-deblock")) {
         pParams->disableDeblock = true;
         return 0;
     }
