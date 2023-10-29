@@ -1,9 +1,9 @@
 
 # Install rkmppenc
 
-- Linux (Ubuntu 20.04)
+- Linux (Ubuntu 20.04/22.04)
 
-## Ubuntu 20.04
+## Ubuntu 20.04/22.04
 
 ### 1. Install Rockchip MPP
 
@@ -24,7 +24,12 @@ sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
 ```
 
-### 3. Install OpenCL modules (optional)
+### 3. Add user to video group
+```Shell
+sudo gpasswd -a `id -u -n` video
+```
+
+### 4. Install OpenCL modules (optional)
 
 OpenCL is required for vpp filters except ```--vpp-deinterlace```. If not using these filters install of OpenCL will not be required.
 
@@ -45,7 +50,7 @@ clinfo
 ```
 </details>
 
-### 4. Install rkmppenc
+### 5. Install rkmppenc
 
 [Download rkmppenc](https://github.com/rigaya/rkmppenc/releases) and install the deb package. 
 

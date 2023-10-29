@@ -1,9 +1,9 @@
 
 # rkmppencのインストール
 
-- Linux (Ubuntu 20.04)
+- Linux (Ubuntu 20.04/22.04)
 
-## Ubuntu 20.04
+## Ubuntu 20.04/22.04
 
 ### 1. Rockchip MPPのインストール
 
@@ -24,7 +24,12 @@ sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
 ```
 
-### 3. OpenCLのインストール (オプション)
+### 3. ユーザーのvideo groupへの追加
+```Shell
+sudo gpasswd -a `id -u -n` video
+```
+
+### 4. OpenCLのインストール (オプション)
 
 OpenCLフィルタ(```--vpp-deinterlace``` 以外のvppフィルタ) を使用する場合、OpenCLのインストールが必要です。使用しない場合は、OpenCLのインストールは必要ありません。
 
@@ -45,7 +50,7 @@ clinfo
 ```
 </details>
 
-### 4. rkmppencのインストール
+### 5. rkmppencのインストール
 
 rkmppencを[こちら](https://github.com/rigaya/rkmppenc/releases)からダウンロードし、インストールします。
 

@@ -1,9 +1,9 @@
 
 # rkmppencのビルド
 
-- [Linux (Ubuntu 20.04)](./Build.ja.md#linux-ubuntu-2004)
+- [Linux (Ubuntu 20.04/22.04)](./Build.ja.md#linux-ubuntu-2004-2204)
 
-## Ubuntu 20.04
+## Ubuntu 20.04/22.04
 
 ### 0. ビルドに必要なもの
 
@@ -71,7 +71,12 @@ sudo apt install ./librga-dev_2.2.0-1_arm64.deb
 rm librga-dev_2.2.0-1_arm64.deb
 ```
 
-### 5. ビルドに必要なライブラリのインストール
+### 5. ユーザーのvideo groupへの追加
+```Shell
+sudo gpasswd -a `id -u -n` video
+```
+
+### 6. ビルドに必要なライブラリのインストール
 
 ```Shell
 sudo apt install libvdpau1 libva-x11-2 libx11-dev
@@ -82,7 +87,7 @@ sudo apt install ffmpeg \
   opencl-headers
 ```
 
-### 6. rkmppencのビルド
+### 7. rkmppencのビルド
 ```Shell
 git clone https://github.com/rigaya/rkmppenc --recursive
 cd rkmppenc
