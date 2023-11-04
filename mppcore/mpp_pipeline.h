@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -1094,6 +1094,12 @@ protected:
         const auto inputFrameInfo = m_input->GetInputFrameInfo();
         if (inputFrameInfo.picstruct != RGY_PICSTRUCT_AUTO) {
             outSurf->setPicstruct(inputFrameInfo.picstruct);
+        } else if (mode & MPP_FRAME_FLAG_TOP_FIRST) {
+            outSurf->setPicstruct(RGY_PICSTRUCT_FRAME_TFF);
+        } else if (mode & MPP_FRAME_FLAG_BOT_FIRST) {
+            outSurf->setPicstruct(RGY_PICSTRUCT_FRAME_BFF);
+        } else {
+            outSurf->setPicstruct(RGY_PICSTRUCT_FRAME);
         }
         outSurf->clearDataList();
         if (auto data = getMetadata(RGY_FRAME_DATA_HDR10PLUS, outSurf->timestamp()); data) {
