@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 //     rkmppenc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
@@ -1083,6 +1083,12 @@ protected:
                 flags |= RGY_FRAME_FLAG_RFF;
             }
             duration = frameData.duration;
+        }
+        if (mode & MPP_FRAME_FLAG_TOP_FIRST) {
+            flags |= RGY_FRAME_FLAG_RFF_TFF;
+        }
+        if (mode & MPP_FRAME_FLAG_BOT_FIRST) {
+            flags |= RGY_FRAME_FLAG_RFF_BFF;
         }
 
         std::unique_ptr<RGYFrame> outSurf = std::make_unique<RGYFrameMpp>(mppframe, duration, flags);

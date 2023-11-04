@@ -920,12 +920,6 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
             PrintMes(RGY_LOG_ERROR, _T("vpp-rff cannot be used with trim.\n"));
             return RGY_ERR_UNSUPPORTED;
         }
-        auto pAVCodecReader = std::dynamic_pointer_cast<RGYInputAvcodec>(m_pFileReader);
-        if (pAVCodecReader == nullptr
-            || m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN) {
-            PrintMes(RGY_LOG_ERROR, _T("vpp-rff can only be used with avsw reader.\n"));
-            return RGY_ERR_UNSUPPORTED;
-        }
     }
 
     //VUI情報
@@ -1318,7 +1312,7 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         param->timebase = m_outputTimebase;
         param->outFilename = inputParam->common.outputFilename;
         param->bOutOverwrite = true;
-        auto sts = filter->init(param, m_pQSVLog);
+        auto sts = filter->init(param, m_pLog);
         if (sts != RGY_ERR_NONE) {
             return sts;
         }
