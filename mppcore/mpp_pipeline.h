@@ -2411,12 +2411,7 @@ public:
             }
             filterframes.pop_front();
 
-            auto err = surfVppOut.cl()->queueMapBuffer(m_cl->queue(), CL_MAP_READ); // CPUが読み込むためにMapする
-            if (err != RGY_ERR_NONE) {
-                PrintMes(RGY_LOG_ERROR, _T("Failed to map buffer: %s.\n"), get_err_mes(err));
-                return err;
-            }
-            if (true) {
+            if (true) { // surfVppOutInfo に設定された情報をqueueMapBufferを呼ぶ前に設定する必要がある
                 surfVppOut.frame()->setDuration(surfVppOutInfo.duration);
                 surfVppOut.frame()->setTimestamp(surfVppOutInfo.timestamp);
                 surfVppOut.frame()->setInputFrameId(surfVppOutInfo.inputFrameId);
@@ -2424,6 +2419,13 @@ public:
                 surfVppOut.frame()->setFlags(surfVppOutInfo.flags);
                 surfVppOut.frame()->setDataList(surfVppOutInfo.dataList);
             }
+
+            auto err = surfVppOut.cl()->queueMapBuffer(m_cl->queue(), CL_MAP_READ); // CPUが読み込むためにMapする
+            if (err != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Failed to map buffer: %s.\n"), get_err_mes(err));
+                return err;
+            }
+            PrintMes(RGY_LOG_TRACE, _T("out frame: %10lld, %10lld.\n"), surfVppOut.frame()->timestamp(), surfVppOut.cl()->mappedHost()->timestamp());
 
             auto outputSurf = std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame);
             // outputSurf が待機すべきeventとして、queueMapBufferのeventを登録する
