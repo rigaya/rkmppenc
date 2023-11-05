@@ -174,7 +174,7 @@ protected:
     std::unique_ptr<RGYFrameMpp>& getBufSrc(const int64_t idx) { return m_mppBufSrc[idx % m_mppBufSrc.size()]; }
  
     std::unique_ptr<iep_com_ctx, decltype(&put_iep_ctx)> m_iepCtx;
-    IEP2_DIL_MODE m_dilMode;
+    IEPDeinterlaceMode m_mode;
     bool m_isTFF;
     RGYFrameInfo m_mppBufInfo;
     std::vector<std::unique_ptr<RGYFrameMpp>> m_mppBufSrc;

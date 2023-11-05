@@ -499,7 +499,7 @@ int RGAFilterDeinterlaceIEP::maxAsyncCount = 6;
 RGAFilterDeinterlaceIEP::RGAFilterDeinterlaceIEP() :
     RGAFilter(),
     m_iepCtx(std::unique_ptr<iep_com_ctx, decltype(&rockchip_iep2_api_release_ctx)>(nullptr, rockchip_iep2_api_release_ctx)),
-    m_dilMode(IEP2_DIL_MODE_DISABLE),
+    m_mode(IEPDeinterlaceMode::DISABLED),
     m_isTFF(true),
     m_mppBufInfo(),
     m_mppBufSrc(),
@@ -599,32 +599,23 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
     m_isTFF = (prm->picstruct & RGY_PICSTRUCT_TFF) != 0;
     m_frameCountIn = 0;
     m_frameCountOut = 0;
-    
-    switch (prm->mode) {
+    m_mode = prm->mode;
+    switch (m_mode) {
     case IEPDeinterlaceMode::NORMAL_I5:
-        m_dilMode = (m_isTFF) ? IEP2_DIL_MODE_I5O1T : IEP2_DIL_MODE_I5O1B;
+    case IEPDeinterlaceMode::BOB_I5:
         m_mppBufSrc.resize(3+RGAFilterDeinterlaceIEP::maxAsyncCount);
         break;
     case IEPDeinterlaceMode::NORMAL_I2:
-        m_dilMode = (m_isTFF) ? IEP2_DIL_MODE_I1O1T : IEP2_DIL_MODE_I1O1B;
-        m_mppBufSrc.resize(1+RGAFilterDeinterlaceIEP::maxAsyncCount);
-        break;
-    case IEPDeinterlaceMode::BOB_I5:
-        m_dilMode = IEP2_DIL_MODE_I5O2;
-        m_mppBufSrc.resize(3+RGAFilterDeinterlaceIEP::maxAsyncCount);
-        break;
     case IEPDeinterlaceMode::BOB_I2:
-        m_dilMode = IEP2_DIL_MODE_I2O2;
         m_mppBufSrc.resize(1+RGAFilterDeinterlaceIEP::maxAsyncCount);
         break;
     default:
         AddMessage(RGY_LOG_ERROR, _T("Unknown deinterlace mode.\n"));
         return RGY_ERR_UNSUPPORTED;
     }
-    AddMessage(RGY_LOG_DEBUG, _T("Selected deinterlace mode: %s %s.\n"), getDILModeName(m_dilMode), m_isTFF ? _T("TFF") : _T("BFF"));
 
-    if ( prm->mode == IEPDeinterlaceMode::BOB_I5
-      || prm->mode == IEPDeinterlaceMode::BOB_I2) {
+    if ( m_mode == IEPDeinterlaceMode::BOB_I5
+      || m_mode == IEPDeinterlaceMode::BOB_I2) {
         prm->baseFps *= 2;
     }
     prm->frameOut.picstruct = RGY_PICSTRUCT_FRAME;
@@ -683,10 +674,9 @@ RGY_ERR RGAFilterDeinterlaceIEP::run_filter_iep(RGYFrameMpp *pInputFrame, RGYFra
         }
     }
     if (m_frameCountIn < 2
-        && (m_dilMode == IEP2_DIL_MODE_I5O2
-         || m_dilMode == IEP2_DIL_MODE_I5O1T
-         || m_dilMode == IEP2_DIL_MODE_I5O1B
-         || m_dilMode == IEP2_DIL_MODE_I2O2)) {
+        && (m_mode == IEPDeinterlaceMode::BOB_I5
+         || m_mode == IEPDeinterlaceMode::BOB_I2
+         || m_mode == IEPDeinterlaceMode::NORMAL_I5)) {
         *pOutputFrameNum = 0;
         return RGY_ERR_NONE; // 出力なし
     }
@@ -714,8 +704,8 @@ RGY_ERR RGAFilterDeinterlaceIEP::run_filter_iep(RGYFrameMpp *pInputFrame, RGYFra
     
 
     *pOutputFrameNum = 1;
-    if (m_dilMode == IEP2_DIL_MODE_I5O2
-     || m_dilMode == IEP2_DIL_MODE_I2O2) {
+    if (m_mode == IEPDeinterlaceMode::BOB_I5
+     || m_mode == IEPDeinterlaceMode::BOB_I2) {
         *pOutputFrameNum = 2;
     }
     for (;;) {
@@ -781,8 +771,8 @@ RGY_ERR RGAFilterDeinterlaceIEP::workerThreadFunc() {
                 eventThreadFinSync = m_mppBufDst.front().handle;
                 frameCountOut = m_mppBufDst.front().outFrame;
                 m_mppBufDst.pop_front();
-                if (m_dilMode == IEP2_DIL_MODE_I5O2
-                ||  m_dilMode == IEP2_DIL_MODE_I2O2) {
+                if (m_mode == IEPDeinterlaceMode::BOB_I5
+                ||  m_mode == IEPDeinterlaceMode::BOB_I2) {
                     if (m_mppBufDst.empty()) {
                         AddMessage(RGY_LOG_ERROR, _T("No dst buf for second frame!\n"));
                         return RGY_ERR_UNKNOWN;
@@ -793,24 +783,22 @@ RGY_ERR RGAFilterDeinterlaceIEP::workerThreadFunc() {
             }
         }
         if (dst.size() > 0) {
-            if (m_dilMode == IEP2_DIL_MODE_I5O2
-            || m_dilMode == IEP2_DIL_MODE_I5O1T
-            || m_dilMode == IEP2_DIL_MODE_I5O1B) {
+            if (m_mode == IEPDeinterlaceMode::BOB_I5
+            ||  m_mode == IEPDeinterlaceMode::NORMAL_I5) {
                 sts = runFilter(dst, { getBufSrc(std::max<int64_t>(0, frameCountOut-1)).get(),
                                        getBufSrc(frameCountOut + 0).get(),
                                        getBufSrc(std::min(frameCountOut + 1, m_frameCountIn-1)).get() });
                 if (sts != RGY_ERR_NONE) {
                     return sts;
                 }
-            } else if (m_dilMode == IEP2_DIL_MODE_I2O2
-                    || m_dilMode == IEP2_DIL_MODE_I1O1T
-                    || m_dilMode == IEP2_DIL_MODE_I1O1B) {
+            } else if (m_mode == IEPDeinterlaceMode::BOB_I2
+                    || m_mode == IEPDeinterlaceMode::NORMAL_I2) {
                 sts = runFilter(dst, { getBufSrc(frameCountOut).get() });
                 if (sts != RGY_ERR_NONE) {
                     return sts;
                 }
             } else {
-                AddMessage(RGY_LOG_ERROR, _T("Unknown dil mode: %d.\n"), m_dilMode);
+                AddMessage(RGY_LOG_ERROR, _T("Unknown mode: %d.\n"), m_mode);
                 return RGY_ERR_UNSUPPORTED;
             }
 
@@ -849,35 +837,72 @@ RGY_ERR RGAFilterDeinterlaceIEP::setImage(RGYFrameMpp *frame, const IepCmd cmd) 
 
 RGY_ERR RGAFilterDeinterlaceIEP::runFilter(std::vector<RGYFrameMpp*> dst, const std::vector<RGYFrameMpp*> src) {
 #define CHECK_SETIMG(x) { if (auto err = (x); err != RGY_ERR_NONE) { AddMessage(RGY_LOG_ERROR, _T("Failed to set image: %s.\n"), get_err_mes(err)); return err; }}
-    if (dst.size() == 1) {
-        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));
-        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DEI_DST1));
-    } else if (dst.size() == 2) {
-        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));
-        CHECK_SETIMG(setImage(dst[1], IEP_CMD_SET_DEI_DST1));
-    } else {
-        AddMessage(RGY_LOG_ERROR, _T("Unknwon dst frame count: %d.\n"), dst.size());
-        return RGY_ERR_UNKNOWN;
-    }
+    bool srcIsTFF = m_isTFF;
     if (src.size() == 1) {
         CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_SRC));      // curr
         CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC1)); // next
         CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC2)); // prev
+        if (src[0]->picstruct() & RGY_PICSTRUCT_TFF) {
+            srcIsTFF = true;
+        } else if (src[0]->picstruct() & RGY_PICSTRUCT_BFF) {
+            srcIsTFF = false;
+        }
     } else if (src.size() == 3) {
         CHECK_SETIMG(setImage(src[1], IEP_CMD_SET_SRC));      // curr
         CHECK_SETIMG(setImage(src[2], IEP_CMD_SET_DEI_SRC1)); // next
         CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC2)); // prev
+        if (src[1]->picstruct() & RGY_PICSTRUCT_TFF) {
+            srcIsTFF = true;
+        } else if (src[1]->picstruct() & RGY_PICSTRUCT_BFF) {
+            srcIsTFF = false;
+        }
     } else {
         AddMessage(RGY_LOG_ERROR, _T("Unknwon src frame count: %d.\n"), src.size());
         return RGY_ERR_UNKNOWN;
     }
+    if (dst.size() == 1) {
+        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));
+        CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DEI_DST1));
+    } else if (dst.size() == 2) {
+        if (srcIsTFF) {
+            CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DST));
+            CHECK_SETIMG(setImage(dst[1], IEP_CMD_SET_DEI_DST1));
+        } else {
+            // BFFの場合は出力順が逆になる
+            // mpp/vproc/mpp_dec_vproc.cpp の dec_vproc_set_dei_v2 で出力時にBFFの場合はdst1->dst0で出力している
+            CHECK_SETIMG(setImage(dst[1], IEP_CMD_SET_DST));
+            CHECK_SETIMG(setImage(dst[0], IEP_CMD_SET_DEI_DST1));
+        }
+    } else {
+        AddMessage(RGY_LOG_ERROR, _T("Unknwon dst frame count: %d.\n"), dst.size());
+        return RGY_ERR_UNKNOWN;
+    }
 #undef CHECK_SETIMG
+
+    auto dilMode = IEP2_DIL_MODE_DISABLE;
+    switch (m_mode) {
+    case IEPDeinterlaceMode::NORMAL_I5:
+        dilMode = (srcIsTFF) ? IEP2_DIL_MODE_I5O1T : IEP2_DIL_MODE_I5O1B;
+        break;
+    case IEPDeinterlaceMode::NORMAL_I2:
+        dilMode = (srcIsTFF) ? IEP2_DIL_MODE_I1O1T : IEP2_DIL_MODE_I1O1B;
+        break;
+    case IEPDeinterlaceMode::BOB_I5:
+        dilMode = IEP2_DIL_MODE_I5O2;
+        break;
+    case IEPDeinterlaceMode::BOB_I2:
+        dilMode = IEP2_DIL_MODE_I2O2;
+        break;
+    default:
+        AddMessage(RGY_LOG_ERROR, _T("Unknown deinterlace mode.\n"));
+        return RGY_ERR_UNSUPPORTED;
+    }
 
     struct iep2_api_params params;
     params.ptype = IEP2_PARAM_TYPE_MODE;
-    params.param.mode.dil_mode = m_dilMode;
+    params.param.mode.dil_mode = dilMode;
     params.param.mode.out_mode = IEP2_OUT_MODE_LINE;
-    params.param.mode.dil_order = m_isTFF ? IEP2_FIELD_ORDER_TFF : IEP2_FIELD_ORDER_BFF;
+    params.param.mode.dil_order = srcIsTFF ? IEP2_FIELD_ORDER_TFF : IEP2_FIELD_ORDER_BFF;
     params.param.mode.ff_mode = IEP2_FF_MODE_FRAME;
     auto err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
     if (err != RGY_ERR_NONE) {
@@ -906,11 +931,6 @@ RGY_ERR RGAFilterDeinterlaceIEP::runFilter(std::vector<RGYFrameMpp*> dst, const 
         AddMessage(RGY_LOG_ERROR, _T("Failed to run filter: %s.\n"), get_err_mes(err));
         return err;
     }
-    AddMessage(RGY_LOG_TRACE, _T("Deinterlace result: dil_order %d, frm_mode %d.\n"), dei_info.dil_order, dei_info.frm_mode ? 1 : 0);
-
-    const int out_order = dei_info.dil_order == IEP2_FIELD_ORDER_BFF ? 1 : 0;
-    if (out_order && dst.size() == 2) {
-        std::swap(dst[0], dst[1]);
-    }
+    //AddMessage(RGY_LOG_INFO, _T("Deinterlace result: dil_order %d, frm_mode %d.\n"), dei_info.dil_order, dei_info.frm_mode ? 1 : 0);
     return RGY_ERR_NONE;
 }
