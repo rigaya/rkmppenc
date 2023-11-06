@@ -946,6 +946,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     sInputCrop *inputCrop = (cropRequired) ? &inputParam->input.crop : nullptr;
     const auto resize = std::make_pair(resizeWidth, resizeHeight);
 
+    std::vector<std::unique_ptr<RGYFilter>> vppOpenCLFilters;
     for (size_t i = 0; i < filterPipeline.size(); i++) {
         const VppFilterType ftype0 = (i >= 1)                      ? getVppFilterType(filterPipeline[i-1]) : VppFilterType::FILTER_NONE;
         const VppFilterType ftype1 =                                 getVppFilterType(filterPipeline[i+0]);
@@ -967,7 +968,6 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
             }
             m_vpFilters.push_back(VppVilterBlock(vppFilters, VppFilterType::FILTER_IEP));
         } else if (ftype1 == VppFilterType::FILTER_OPENCL) {
-            std::vector<std::unique_ptr<RGYFilter>> vppOpenCLFilters;
             if (ftype0 != VppFilterType::FILTER_OPENCL || filterPipeline[i] == VppType::CL_CROP) { // 前のfilterがOpenCLでない場合、変換が必要
                 if (false) { // CPU -> GPU
                     auto filterCrop = std::make_unique<RGYFilterCspCrop>(m_cl);
@@ -1072,9 +1072,10 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
                     //登録
                     vppOpenCLFilters.push_back(std::move(filterCrop));
                 }
+                // ブロックに追加する
+                m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
+                vppOpenCLFilters.clear();
             }
-            // ブロックに追加する
-            m_vpFilters.push_back(VppVilterBlock(vppOpenCLFilters));
         } else {
             PrintMes(RGY_LOG_ERROR, _T("Unsupported vpp filter type.\n"));
             return RGY_ERR_UNSUPPORTED;
