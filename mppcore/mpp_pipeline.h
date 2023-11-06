@@ -603,6 +603,7 @@ public:
             //これでmap/unmapで可能な場合コピーが発生しない
             frames[i] = cl->createFrameBuffer(frame, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR);
         }
+        PrintMes(RGY_LOG_DEBUG, _T("allocWorkSurfaces:   allocated %d frames.\n"), numFrames);
         m_workSurfs.setSurfaces(frames);
         return RGY_ERR_NONE;
     }
@@ -2425,9 +2426,13 @@ public:
                 PrintMes(RGY_LOG_ERROR, _T("Failed to map buffer: %s.\n"), get_err_mes(err));
                 return err;
             }
-            PrintMes(RGY_LOG_TRACE, _T("out frame: %10lld, %10lld.\n"), surfVppOut.frame()->timestamp(), surfVppOut.cl()->mappedHost()->timestamp());
+            PrintMes(RGY_LOG_TRACE, _T("out frame: 0x%08x, %10lld, %10lld.\n"), surfVppOut.cl(), surfVppOut.frame()->timestamp(), surfVppOut.cl()->mappedHost()->timestamp());
 
-            auto outputSurf = std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame);
+            // frameの依存関係の登録は、このステップの最終出力フレームに登録するようにして、使用中に解放されないようにする
+            // なので、filterframes.empty()で最終フレームになっているか確認する
+            // こうしないと、複数のフレームを出力する場合にフレーム内容が途中で上書きされておかしくなる
+            auto outputSurf = (filterframes.empty()) ? std::make_unique<PipelineTaskOutputSurf>(surfVppOut, frame)
+                                                     : std::make_unique<PipelineTaskOutputSurf>(surfVppOut);
             // outputSurf が待機すべきeventとして、queueMapBufferのeventを登録する
             for (auto& event : surfVppOut.cl()->mapEvents()) {
                 outputSurf->addClEvent(event);
