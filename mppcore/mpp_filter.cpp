@@ -494,13 +494,10 @@ RGY_ERR RGAFilterResize::run_filter_iep(RGYFrameMpp *pInputFrame, RGYFrameMpp **
     return RGY_ERR_UNSUPPORTED;
 }
 
-int RGAFilterDeinterlaceIEP::maxAsyncCount = 6;
-
 RGAFilterDeinterlaceIEP::RGAFilterDeinterlaceIEP() :
     RGAFilter(),
     m_iepCtx(std::unique_ptr<iep_com_ctx, decltype(&rockchip_iep2_api_release_ctx)>(nullptr, rockchip_iep2_api_release_ctx)),
     m_mode(IEPDeinterlaceMode::DISABLED),
-    m_isTFF(true),
     m_mppBufInfo(),
     m_mppBufSrc(),
     m_mppBufDst(),
@@ -596,18 +593,17 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
         AddMessage(RGY_LOG_ERROR, _T("Invalid parameter type.\n"));
         return RGY_ERR_INVALID_PARAM;
     }
-    m_isTFF = (prm->picstruct & RGY_PICSTRUCT_TFF) != 0;
     m_frameCountIn = 0;
     m_frameCountOut = 0;
     m_mode = prm->mode;
     switch (m_mode) {
     case IEPDeinterlaceMode::NORMAL_I5:
     case IEPDeinterlaceMode::BOB_I5:
-        m_mppBufSrc.resize(3+RGAFilterDeinterlaceIEP::maxAsyncCount);
+        m_mppBufSrc.resize(3+1);
         break;
     case IEPDeinterlaceMode::NORMAL_I2:
     case IEPDeinterlaceMode::BOB_I2:
-        m_mppBufSrc.resize(1+RGAFilterDeinterlaceIEP::maxAsyncCount);
+        m_mppBufSrc.resize(1+1);
         break;
     default:
         AddMessage(RGY_LOG_ERROR, _T("Unknown deinterlace mode.\n"));
@@ -708,45 +704,39 @@ RGY_ERR RGAFilterDeinterlaceIEP::run_filter_iep(RGYFrameMpp *pInputFrame, RGYFra
      || m_mode == IEPDeinterlaceMode::BOB_I2) {
         *pOutputFrameNum = 2;
     }
-    for (;;) {
-        { // m_mppBufDstにアクセスするのでロック
-            std::lock_guard<std::mutex> lock(m_mtxBufDst);
-            const int bufsize = m_mppBufDst.size();
-            if (bufsize < RGAFilterDeinterlaceIEP::maxAsyncCount) {
-                for (int i = 0; i < *pOutputFrameNum; i++) {
-                    if (ppOutputFrames[i] == nullptr) {
-                        AddMessage(RGY_LOG_ERROR, _T("No output buffer for %d frame.\n"), i);
-                        return RGY_ERR_UNSUPPORTED;
-                    }
-                    const auto timestamp = getBufSrc(m_frameCountOut)->timestamp();
-                    ppOutputFrames[i]->setTimestamp(timestamp);
-                    ppOutputFrames[i]->setInputFrameId(getBufSrc(m_frameCountOut)->inputFrameId());
-                    ppOutputFrames[i]->setFlags(getBufSrc(m_frameCountOut)->flags());
-                    ppOutputFrames[i]->setDataList(getBufSrc(m_frameCountOut)->dataList());
-                    ppOutputFrames[i]->setPicstruct(RGY_PICSTRUCT_FRAME);
-                    if (m_frameCountOut < m_frameCountIn-1) {
-                        const auto duration = getBufSrc(m_frameCountOut+1)->timestamp() - getBufSrc(m_frameCountOut)->timestamp();
-                        if (i > 0) { //bob化の場合
-                            ppOutputFrames[i]->setTimestamp(timestamp + duration / 2);
-                            ppOutputFrames[i]->setDuration(duration - ppOutputFrames[0]->duration());
-                        } else {
-                            ppOutputFrames[i]->setDuration(duration / 2);
-                        }
-                    } else {
-                        ppOutputFrames[i]->setDuration(m_prevOutFrameDuration);
-                        if (i > 0) { //bob化の場合
-                            ppOutputFrames[i]->setTimestamp(timestamp + m_prevOutFrameDuration);
-                        }
-                    }
-                    m_prevOutFrameDuration = ppOutputFrames[i]->duration();
-                    // 処理スレッドに出力先を設定
-                    m_mppBufDst.push_back(IepBufferOutInfo{ ppOutputFrames[i], (i == 0) ? sync.get() : nullptr, m_frameCountOut });
-                }
-                m_frameCountOut++;
-                break;
+    { // m_mppBufDstにアクセスするのでロック
+        std::lock_guard<std::mutex> lock(m_mtxBufDst);
+        const int bufsize = m_mppBufDst.size();
+        for (int i = 0; i < *pOutputFrameNum; i++) {
+            if (ppOutputFrames[i] == nullptr) {
+                AddMessage(RGY_LOG_ERROR, _T("No output buffer for %d frame.\n"), i);
+                return RGY_ERR_UNSUPPORTED;
             }
+            const auto timestamp = getBufSrc(m_frameCountOut)->timestamp();
+            ppOutputFrames[i]->setTimestamp(timestamp);
+            ppOutputFrames[i]->setInputFrameId(getBufSrc(m_frameCountOut)->inputFrameId());
+            ppOutputFrames[i]->setFlags(getBufSrc(m_frameCountOut)->flags());
+            ppOutputFrames[i]->setDataList(getBufSrc(m_frameCountOut)->dataList());
+            ppOutputFrames[i]->setPicstruct(RGY_PICSTRUCT_FRAME);
+            if (m_frameCountOut < m_frameCountIn-1) {
+                const auto duration = getBufSrc(m_frameCountOut+1)->timestamp() - getBufSrc(m_frameCountOut)->timestamp();
+                if (i > 0) { //bob化の場合
+                    ppOutputFrames[i]->setTimestamp(timestamp + duration / 2);
+                    ppOutputFrames[i]->setDuration(duration - ppOutputFrames[0]->duration());
+                } else {
+                    ppOutputFrames[i]->setDuration(duration / 2);
+                }
+            } else {
+                ppOutputFrames[i]->setDuration(m_prevOutFrameDuration);
+                if (i > 0) { //bob化の場合
+                    ppOutputFrames[i]->setTimestamp(timestamp + m_prevOutFrameDuration);
+                }
+            }
+            m_prevOutFrameDuration = ppOutputFrames[i]->duration();
+            // 処理スレッドに出力先を設定
+            m_mppBufDst.push_back(IepBufferOutInfo{ ppOutputFrames[i], (i == 0) ? sync.get() : nullptr, m_frameCountOut });
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        m_frameCountOut++;
     }
     // 処理スレッドに処理開始を通知
     SetEvent(m_eventThreadStart.get());
@@ -837,7 +827,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::setImage(RGYFrameMpp *frame, const IepCmd cmd) 
 
 RGY_ERR RGAFilterDeinterlaceIEP::runFilter(std::vector<RGYFrameMpp*> dst, const std::vector<RGYFrameMpp*> src) {
 #define CHECK_SETIMG(x) { if (auto err = (x); err != RGY_ERR_NONE) { AddMessage(RGY_LOG_ERROR, _T("Failed to set image: %s.\n"), get_err_mes(err)); return err; }}
-    bool srcIsTFF = m_isTFF;
+    bool srcIsTFF = true;
     if (src.size() == 1) {
         CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_SRC));      // curr
         CHECK_SETIMG(setImage(src[0], IEP_CMD_SET_DEI_SRC1)); // next
@@ -909,7 +899,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::runFilter(std::vector<RGYFrameMpp*> dst, const 
         AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace mode: %s.\n"), get_err_mes(err));
         return err;
     }
-    AddMessage(RGY_LOG_TRACE, _T("Set deinterlace mode.\n"));
+    AddMessage(RGY_LOG_TRACE, _T("Set deinterlace mode: %s.\n"), srcIsTFF ? _T("TFF") : _T("BFF"));
 
     params.ptype = IEP2_PARAM_TYPE_COM;
     params.param.com.sfmt = IEP2_FMT_YUV420; // nv12

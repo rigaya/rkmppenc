@@ -2130,7 +2130,6 @@ protected:
     std::vector<std::unique_ptr<RGAFilter>>& m_vpFilters;
     std::shared_ptr<RGYOpenCLContext> m_cl;
     std::unique_ptr<RGYConvertCSP> m_convert;
-    std::unique_ptr<RGYFrameMpp> m_inputFrameTmp;
     RGYFrameInfo m_inputFrameInfo;
     int m_stride_x, m_stride_y;
     int m_vppOutFrames;
@@ -2139,7 +2138,7 @@ protected:
 public:
     PipelineTaskIEP(std::vector<std::unique_ptr<RGAFilter>>& vppfilter, std::shared_ptr<RGYOpenCLContext>& cl, int threadCsp, RGYParamThread threadParamCsp, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
         PipelineTask(PipelineTaskType::MPPIEP, outMaxQueueSize, log), m_vpFilters(vppfilter), m_cl(cl),
-        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_inputFrameTmp(), m_inputFrameInfo(), m_stride_x(0), m_stride_y(0), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame() {
+        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_inputFrameInfo(), m_stride_x(0), m_stride_y(0), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame() {
 
     };
     virtual ~PipelineTaskIEP() {
@@ -2167,6 +2166,7 @@ public:
 
         RGYCLFrame *surfVppInCL = nullptr;
         std::deque<std::pair<RGYFrameMpp*, uint32_t>> filterframes;
+        auto inputFrameTmp = std::make_unique<RGYFrameMpp>();
         bool drain = !frame;
         if (!frame) {
             filterframes.push_back(std::make_pair(nullptr, 0u));
@@ -2185,25 +2185,22 @@ public:
                     return RGY_ERR_UNKNOWN;
                 }
                 const auto mappedHost = surfVppInCL->mappedHost()->frameInfo();
-                if (!m_inputFrameTmp) {
-                    m_inputFrameTmp = std::make_unique<RGYFrameMpp>();
-                    if (!m_frameGrp) {
-                        auto sts = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
-                        if (sts != RGY_ERR_NONE) {
-                            PrintMes(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(sts));
-                            return sts;
-                        }
-                    }
-                    auto err = m_inputFrameTmp->allocate(mappedHost, m_frameGrp);
-                    if (err != RGY_ERR_NONE) {
-                        PrintMes(RGY_LOG_ERROR, _T("Failed to allocate input buffer: %s.\n"), get_err_mes(err));
-                        return err;
+                if (!m_frameGrp) {
+                    auto sts = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
+                    if (sts != RGY_ERR_NONE) {
+                        PrintMes(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(sts));
+                        return sts;
                     }
                 }
+                auto err = inputFrameTmp->allocate(mappedHost, m_frameGrp);
+                if (err != RGY_ERR_NONE) {
+                    PrintMes(RGY_LOG_ERROR, _T("Failed to allocate input buffer: %s.\n"), get_err_mes(err));
+                    return err;
+                }
                 if (m_convert->getFunc() == nullptr) {
-                    if (auto func = m_convert->getFunc(mappedHost.csp, m_inputFrameTmp->csp(), false, RGY_SIMD::SIMD_ALL); func == nullptr) {
+                    if (auto func = m_convert->getFunc(mappedHost.csp, inputFrameTmp->csp(), false, RGY_SIMD::SIMD_ALL); func == nullptr) {
                         PrintMes(RGY_LOG_ERROR, _T("Failed to find conversion for %s -> %s.\n"),
-                            RGY_CSP_NAMES[mappedHost.csp], RGY_CSP_NAMES[m_inputFrameTmp->csp()]);
+                            RGY_CSP_NAMES[mappedHost.csp], RGY_CSP_NAMES[inputFrameTmp->csp()]);
                         return RGY_ERR_UNSUPPORTED;
                     } else {
                         PrintMes(RGY_LOG_DEBUG, _T("Selected conversion for %s -> %s [%s].\n"),
@@ -2212,14 +2209,14 @@ public:
                 }
                 auto crop = initCrop();
                 m_convert->run((mappedHost.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
-                    (void **)m_inputFrameTmp->ptr().data(), (const void **)mappedHost.ptr,
-                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], m_inputFrameTmp->pitch(0),
-                    m_inputFrameTmp->height(), m_inputFrameTmp->height(), crop.c);
+                    (void **)inputFrameTmp->ptr().data(), (const void **)mappedHost.ptr,
+                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], inputFrameTmp->pitch(0),
+                    inputFrameTmp->height(), inputFrameTmp->height(), crop.c);
 
-                m_inputFrameTmp->setPropertyFrom(surfVppInCL);
+                inputFrameTmp->setPropertyFrom(surfVppInCL);
                 surfVppInCL->unmapBuffer();
                 surfVppInCL->resetMappedFrame();
-                filterframes.push_back(std::make_pair(m_inputFrameTmp.get(), 0u));
+                filterframes.push_back(std::make_pair(inputFrameTmp.get(), 0u));
             } else {
                 PrintMes(RGY_LOG_ERROR, _T("Invalid task surface (not mpp).\n"));
                 return RGY_ERR_NULL_PTR;

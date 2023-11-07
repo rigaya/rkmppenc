@@ -154,8 +154,6 @@ public:
     RGAFilterDeinterlaceIEP();
     virtual ~RGAFilterDeinterlaceIEP();
     virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
-
-    static int maxAsyncCount;
 protected:
     struct IepBufferOutInfo {
         RGYFrameMpp *mpp;
@@ -175,7 +173,6 @@ protected:
  
     std::unique_ptr<iep_com_ctx, decltype(&put_iep_ctx)> m_iepCtx;
     IEPDeinterlaceMode m_mode;
-    bool m_isTFF;
     RGYFrameInfo m_mppBufInfo;
     std::vector<std::unique_ptr<RGYFrameMpp>> m_mppBufSrc;
     std::deque<IepBufferOutInfo> m_mppBufDst;

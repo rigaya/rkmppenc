@@ -2217,7 +2217,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
                 m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_IEP) {
             m_pipelineTasks.push_back(std::make_unique<PipelineTaskIEP>(filterBlock.vpprga,
-                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), RGAFilterDeinterlaceIEP::maxAsyncCount, m_pLog));
+                m_cl, prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), 1, m_pLog));
         } else if (filterBlock.type == VppFilterType::FILTER_OPENCL) {
             if (!m_cl) {
                 PrintMes(RGY_LOG_ERROR, _T("OpenCL not enabled, OpenCL filters cannot be used.\n"));
@@ -2347,9 +2347,10 @@ RGY_ERR MPPCore::allocatePiplelineFrames() {
         }
         if (allocateOpenCLFrame) {
             const int requestNumFrames = std::max(1, t0RequestNumFrame + t1RequestNumFrame + asyncdepth + 1);
-            PrintMes(RGY_LOG_DEBUG, _T("AllocFrames: %s-%s, type: CL, %s %dx%d, request %d frames\n"),
+            PrintMes(RGY_LOG_DEBUG, _T("AllocFrames: %s-%s, type: CL, %s %dx%d, request %d frames (%d+%d+%d+1)\n"),
                 t0->print().c_str(), t1->print().c_str(), RGY_CSP_NAMES[allocateFrameInfo.csp],
-                allocateFrameInfo.width, allocateFrameInfo.height, requestNumFrames);
+                allocateFrameInfo.width, allocateFrameInfo.height, requestNumFrames,
+                t0RequestNumFrame, t1RequestNumFrame, asyncdepth, 1);
             auto sts = t0->workSurfacesAllocCL(requestNumFrames, allocateFrameInfo, m_cl.get());
             if (sts != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("AllocFrames:   Failed to allocate frames for %s-%s: %s."), t0->print().c_str(), t1->print().c_str(), get_err_mes(sts));
