@@ -416,6 +416,15 @@ RGY_ERR MPPCore::initInput(MPPParam *inputParam) {
         return RGY_ERR_UNSUPPORTED;
     }
 
+    // インタレ解除が指定され、かつインタレの指定がない場合は、自動的にインタレの情報取得を行う
+    int deinterlacer = 0;
+    if (inputParam->vpp.afs.enable) deinterlacer++;
+    if (inputParam->vpp.nnedi.enable) deinterlacer++;
+    if (inputParam->vpp.yadif.enable) deinterlacer++;
+    if (deinterlacer > 0 && ((inputParam->input.picstruct & RGY_PICSTRUCT_INTERLACED) == 0)) {
+        inputParam->input.picstruct = RGY_PICSTRUCT_AUTO;
+    }
+
     m_poolPkt = std::make_unique<RGYPoolAVPacket>();
     m_poolFrame = std::make_unique<RGYPoolAVFrame>();
 
