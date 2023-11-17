@@ -1360,10 +1360,6 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
     }
     //afs
     if (vppType == VppType::CL_AFS) {
-        if ((inputParam->input.picstruct & (RGY_PICSTRUCT_TFF | RGY_PICSTRUCT_BFF)) == 0) {
-            PrintMes(RGY_LOG_ERROR, _T("Please set input interlace field order (--interlace tff/bff) for vpp-afs.\n"));
-            return RGY_ERR_INVALID_PARAM;
-        }
         unique_ptr<RGYFilter> filter(new RGYFilterAfs(m_cl));
         shared_ptr<RGYFilterParamAfs> param(new RGYFilterParamAfs());
         param->afs = inputParam->vpp.afs;
@@ -1394,10 +1390,6 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
     }
     //nnedi
     if (vppType == VppType::CL_NNEDI) {
-        if ((inputParam->input.picstruct & (RGY_PICSTRUCT_TFF | RGY_PICSTRUCT_BFF)) == 0) {
-            PrintMes(RGY_LOG_ERROR, _T("Please set input interlace field order (--interlace tff/bff) for vpp-nnedi.\n"));
-            return RGY_ERR_INVALID_PARAM;
-        }
         unique_ptr<RGYFilter> filter(new RGYFilterNnedi(m_cl));
         shared_ptr<RGYFilterParamNnedi> param(new RGYFilterParamNnedi());
         param->nnedi = inputParam->vpp.nnedi;
@@ -1421,10 +1413,6 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
     }
     //yadif
     if (vppType == VppType::CL_YADIF) {
-        if ((inputParam->input.picstruct & (RGY_PICSTRUCT_TFF | RGY_PICSTRUCT_BFF)) == 0) {
-            PrintMes(RGY_LOG_ERROR, _T("Please set input interlace field order (--interlace tff/bff) for vpp-yadif.\n"));
-            return RGY_ERR_INVALID_PARAM;
-        }
         unique_ptr<RGYFilter> filter(new RGYFilterYadif(m_cl));
         shared_ptr<RGYFilterParamYadif> param(new RGYFilterParamYadif());
         param->yadif = inputParam->vpp.yadif;
