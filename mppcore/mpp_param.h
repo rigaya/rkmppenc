@@ -275,9 +275,7 @@ struct MPPParam {
     int     bitrate;
     int     maxBitrate;
     int     VBVBufferSize;
-    int     qpI;
-    int     qpP;
-    int     qpB;
+    RGYQPSet qp;
     int     qpMax;
     int     qpMin;
     int     gopLen;

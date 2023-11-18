@@ -329,16 +329,12 @@ int parse_one_option(const TCHAR *option_name, const TCHAR* strInput[], int& i, 
     }
     if (IS_OPTION("cqp")) {
         i++;
-        int qp[3];
-        int ret = parse_qp(qp, strInput[i]);
+        int ret = pParams->qp.parse(strInput[i]);
         if (ret == 0) {
             print_cmd_error_invalid_value(option_name, strInput[i]);
             return 1;
         }
         pParams->rateControl = MPP_ENC_RC_MODE_FIXQP;
-        pParams->qpI = qp[0];
-        pParams->qpP = (ret > 1) ? qp[1] : qp[ret - 1];
-        pParams->qpB = (ret > 2) ? qp[2] : qp[ret - 1];
         return 0;
     }
     if (IS_OPTION("vbr")) {
@@ -817,7 +813,7 @@ tstring gen_cmd(const MPPParam *pParams, bool save_disabled_prm) {
         if (pParams->rateControl == MPP_ENC_RC_MODE_FIXQP) {
             cmd << _T(" --vbr ") << pParams->bitrate;
         } else {
-            OPT_QP(_T("--cqp"), qpI, qpP, qpB, true, true);
+            OPT_QP(_T("--cqp"), qp.qpI, qp.qpP, qp.qpB, true, true);
         }
     }
     cmd << _T(" --preset ") << get_chr_from_value(list_mpp_quality_preset, (pParams->qualityPreset));
@@ -828,7 +824,7 @@ tstring gen_cmd(const MPPParam *pParams, bool save_disabled_prm) {
     } else if (pParams->rateControl == MPP_ENC_RC_MODE_AVBR) {
         cmd << _T(" --avbr ") << pParams->bitrate;
     } else if (pParams->rateControl == MPP_ENC_RC_MODE_FIXQP) {
-        OPT_QP(_T("--cqp"), qpI, qpP, qpB, true, true);
+        OPT_QP(_T("--cqp"), qp.qpI, qp.qpP, qp.qpB, true, true);
     }
     OPT_NUM(_T("--output-depth"), outputDepth);
     if (pParams->rateControl != MPP_ENC_RC_MODE_FIXQP || save_disabled_prm) {

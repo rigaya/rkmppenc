@@ -623,9 +623,7 @@ RGY_ERR MPPCore::checkParam(MPPParam *prm) {
         }
     }
     const int maxQP = (prm->codec == RGY_CODEC_AV1) ? 255 : (prm->outputDepth > 8 ? 63 : 51);
-    prm->qpI       = clamp(prm->qpI,       0, maxQP);
-    prm->qpP       = clamp(prm->qpP,       0, maxQP);
-    prm->qpB       = clamp(prm->qpB,       0, maxQP);
+    prm->qp.applyQPMinMax(0, maxQP);
     prm->qpMax     = clamp(prm->qpMax,     0, maxQP);
     prm->qpMin     = clamp(prm->qpMin,     0, maxQP);
 
@@ -1890,13 +1888,13 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
     m_enccfg.rc.bps_target  = prm->bitrate * 1000;
 
     if (prm->rateControl == MPP_ENC_RC_MODE_FIXQP) {
-        m_enccfg.rc.qp_init     = prm->qpI;
-        m_enccfg.rc.qp_max      = std::max(prm->qpI, prm->qpP);
-        m_enccfg.rc.qp_min      = std::min(prm->qpI, prm->qpP);
-        m_enccfg.rc.qp_max_i    = std::max(prm->qpI, prm->qpP);
-        m_enccfg.rc.qp_min_i    = std::min(prm->qpI, prm->qpP);
-        m_enccfg.rc.qp_delta_ip = prm->qpP - prm->qpI;
-        m_enccfg.rc.qp_delta_vi = prm->qpP - prm->qpI;
+        m_enccfg.rc.qp_init     = prm->qp.qpI;
+        m_enccfg.rc.qp_max      = std::max(prm->qp.qpI, prm->qp.qpP);
+        m_enccfg.rc.qp_min      = std::min(prm->qp.qpI, prm->qp.qpP);
+        m_enccfg.rc.qp_max_i    = std::max(prm->qp.qpI, prm->qp.qpP);
+        m_enccfg.rc.qp_min_i    = std::min(prm->qp.qpI, prm->qp.qpP);
+        m_enccfg.rc.qp_delta_ip = prm->qp.qpP - prm->qp.qpI;
+        m_enccfg.rc.qp_delta_vi = prm->qp.qpP - prm->qp.qpI;
         m_enccfg.rc.quality     = MPP_ENC_RC_QUALITY_CQP;
     } else {
         if (prm->rateControl == MPP_ENC_RC_MODE_VBR && m_enccfg.rc.quality == MPP_ENC_RC_QUALITY_CQP) {
