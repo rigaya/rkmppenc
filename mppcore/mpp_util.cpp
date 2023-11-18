@@ -86,8 +86,16 @@ static const auto RGY_CSP_TO_MPP = make_array<std::pair<RGY_CSP, MppFrameFormat>
     std::make_pair(RGY_CSP_YC48,      MPP_FMT_BUTT)
     );
 
-MAP_PAIR_0_1(csp, rgy, RGY_CSP, enc, MppFrameFormat, RGY_CSP_TO_MPP, RGY_CSP_NA, MPP_FMT_BUTT);
-
+__attribute__((noinline)) MppFrameFormat csp_rgy_to_enc(RGY_CSP var0) {
+    auto ret = std::find_if(RGY_CSP_TO_MPP.begin(), RGY_CSP_TO_MPP.end(), [var0](std::pair<RGY_CSP, MppFrameFormat> a)
+                            { return a.first == var0; });
+    return (ret == RGY_CSP_TO_MPP.end()) ? (MPP_FMT_BUTT) : ret->second;
+}
+__attribute__((noinline)) RGY_CSP csp_enc_to_rgy(MppFrameFormat var1) {
+    auto ret = std::find_if(RGY_CSP_TO_MPP.begin(), RGY_CSP_TO_MPP.end(), [var1](std::pair<RGY_CSP, MppFrameFormat> a)
+                            { return a.second == (var1 & MPP_FRAME_FMT_MASK); });
+    return (ret == RGY_CSP_TO_MPP.end()) ? (RGY_CSP_NA) : ret->first;
+}
 
 static const auto RGY_CSP_TO_RKRGA = make_array<std::pair<RGY_CSP, RgaSURF_FORMAT>>(
     std::make_pair(RGY_CSP_NA,        RK_FORMAT_UNKNOWN),
