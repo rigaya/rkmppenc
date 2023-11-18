@@ -343,7 +343,7 @@ int RGYFAWDecoder::decode(RGYFAWDecoderOutput& output, const uint8_t *input, con
         bufferIn.append(input, inputLength);
         inputDataAppended = true;
 
-        decltype(rgy_memmem_c(nullptr, 0, nullptr, 0)) ret0 = 0, ret1 = 0;
+        decltype(funcMemMemFAWStart1(nullptr, 0)) ret0 = 0, ret1 = 0;
         if ((ret0 = funcMemMemFAWStart1(bufferIn.data(), bufferIn.size())) != RGY_MEMMEM_NOT_FOUND) {
             fawmode = RGYFAWMode::Full;
         } else if ((ret0 = funcMemMem(bufferIn.data(), bufferIn.size(), fawstart2.data(), fawstart2.size())) != RGY_MEMMEM_NOT_FOUND) {
