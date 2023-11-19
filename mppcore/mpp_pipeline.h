@@ -1284,20 +1284,31 @@ public:
             while (ptsDiff >= std::max<int64_t>(1, m_outFrameDuration * 7 / 8)) {
                 PrintMes(RGY_LOG_DEBUG, _T("Insert frame: framepts %lld, estimated next %lld, diff %lld [%.1f]\n"), outPtsSource, m_tsOutEstimated, ptsDiff, ptsDiff / (double)m_outFrameDuration);
                 //水増しが必要
-                PipelineTaskSurface surfVppOut = taskSurf->surf();
-                surfVppOut.frame()->setInputFrameId(taskSurf->surf().frame()->inputFrameId());
-                surfVppOut.frame()->setTimestamp(m_tsOutEstimated);
-                if (ENCODER_VCEENC) {
-                    surfVppOut.frame()->setDuration(outDuration);
+                if (ENCODER_MPP && taskSurf->surf().mpp() != nullptr) {
+                    // mppのフレームをエンコーダに投入すると、そちらで破棄されるので、ここで複製しておく
+                    // createCopyはバッファ自体は参照なので、何度複製してもそれほどメモリ使用量は増えない
+                    std::unique_ptr<RGYFrame> copyFrame = taskSurf->surf().mpp()->createCopy();
+                    copyFrame->setTimestamp(m_tsOutEstimated);
+                    copyFrame->setInputFrameId(taskSurf->surf().frame()->inputFrameId());
+                    copyFrame->setDuration(outDuration);
+                    m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(copyFrame)));
+                } else {
+                    // 同じフレームを2回キューに入れる形にして、コピーコストを低減する
+                    PipelineTaskSurface surfVppOut = taskSurf->surf();
+                    surfVppOut.frame()->setInputFrameId(taskSurf->surf().frame()->inputFrameId());
+                    surfVppOut.frame()->setTimestamp(m_tsOutEstimated);
+                    if (ENCODER_VCEENC) {
+                        surfVppOut.frame()->setDuration(outDuration);
+                    }
+                    //timestampの上書き情報
+                    //surfVppOut内部のmfxSurface1自体は同じデータを指すため、複数のタイムスタンプを持つことができない
+                    //この問題をm_outQeueueのPipelineTaskOutput(これは個別)に与えるPipelineTaskOutputDataCheckPtsの値で、
+                    //PipelineTaskCheckPTS::getOutput時にtimestampを変更するようにする
+                    //そのため、checkptsからgetOutputしたフレームは
+                    //(次にPipelineTaskCheckPTS::getOutputを呼ぶより前に)直ちに後続タスクに投入するよう制御する必要がある
+                    std::unique_ptr<PipelineTaskOutputDataCustom> timestampOverride(new PipelineTaskOutputDataCheckPts(m_tsOutEstimated));
+                    m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfVppOut, timestampOverride));
                 }
-                //timestampの上書き情報
-                //surfVppOut内部のmfxSurface1自体は同じデータを指すため、複数のタイムスタンプを持つことができない
-                //この問題をm_outQeueueのPipelineTaskOutput(これは個別)に与えるPipelineTaskOutputDataCheckPtsの値で、
-                //PipelineTaskCheckPTS::getOutput時にtimestampを変更するようにする
-                //そのため、checkptsからgetOutputしたフレームは
-                //(次にPipelineTaskCheckPTS::getOutputを呼ぶより前に)直ちに後続タスクに投入するよう制御する必要がある
-                std::unique_ptr<PipelineTaskOutputDataCustom> timestampOverride(new PipelineTaskOutputDataCheckPts(m_tsOutEstimated));
-                m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfVppOut, timestampOverride));
                 m_tsOutEstimated += m_outFrameDuration;
                 ptsDiff = outPtsSource - m_tsOutEstimated;
             }
