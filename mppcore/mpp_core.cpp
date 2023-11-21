@@ -142,6 +142,7 @@ MPPCore::MPPCore() :
     m_pipelineDepth(2),
     m_nProcSpeedLimit(0),
     m_nAVSyncMode(RGY_AVSYNC_ASSUME_CFR),
+    m_timestampPassThrough(false),
     m_inputFps(),
     m_encFps(),
     m_outputTimebase(),
@@ -440,6 +441,11 @@ RGY_ERR MPPCore::initInput(MPPParam *inputParam) {
 
     m_inputFps = rgy_rational<int>(inputParam->input.fpsN, inputParam->input.fpsD);
     m_outputTimebase = (inputParam->common.timebase.is_valid()) ? inputParam->common.timebase : m_inputFps.inv() * rgy_rational<int>(1, 4);
+    m_timestampPassThrough = inputParam->common.timestampPassThrough;
+    if (inputParam->common.timestampPassThrough) {
+        PrintMes(RGY_LOG_DEBUG, _T("Switching to VFR mode as --timestamp-paththrough is used.\n"));
+        m_nAVSyncMode = RGY_AVSYNC_VFR;
+    }
     if (inputParam->common.tcfileIn.length() > 0) {
         PrintMes(RGY_LOG_DEBUG, _T("Switching to VFR mode as --tcfile-in is used.\n"));
         m_nAVSyncMode |= RGY_AVSYNC_VFR;
@@ -1605,6 +1611,7 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
             unique_ptr<RGYFilter> filter(new RGYFilterSubburn(m_cl));
             shared_ptr<RGYFilterParamSubburn> param(new RGYFilterParamSubburn());
             param->subburn = subburn;
+            param->timestampPassThrough = m_timestampPassThrough;
 
             auto pAVCodecReader = std::dynamic_pointer_cast<RGYInputAvcodec>(m_pFileReader);
             if (pAVCodecReader != nullptr) {
@@ -2204,7 +2211,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
         if (m_trimParam.list.size() > 0) {
             m_pipelineTasks.push_back(std::make_unique<PipelineTaskTrim>(m_trimParam, m_pFileReader.get(), srcTimebase, 0, m_pLog));
         }
-        m_pipelineTasks.push_back(std::make_unique<PipelineTaskCheckPTS>(srcTimebase, srcTimebase, m_outputTimebase, outFrameDuration, m_nAVSyncMode, VppAfsRffAware() && m_pFileReader->rffAware(), (pReader) ? pReader->GetFramePosList() : nullptr, m_pLog));
+        m_pipelineTasks.push_back(std::make_unique<PipelineTaskCheckPTS>(srcTimebase, srcTimebase, m_outputTimebase, outFrameDuration, m_nAVSyncMode, m_timestampPassThrough, VppAfsRffAware() && m_pFileReader->rffAware(), (pReader) ? pReader->GetFramePosList() : nullptr, m_pLog));
     }
 
     for (auto& filterBlock : m_vpFilters) {
@@ -2427,7 +2434,7 @@ RGY_ERR MPPCore::init(MPPParam *prm) {
         return ret;
     }
 
-    m_encTimestamp = std::make_unique<RGYTimestamp>();
+    m_encTimestamp = std::make_unique<RGYTimestamp>(pParams->common.timestampPathThrough);
 
     if (RGY_ERR_NONE != (ret = initPowerThrottoling(prm))) {
         return ret;
