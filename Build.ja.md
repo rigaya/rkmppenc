@@ -27,10 +27,10 @@ sudo apt install build-essential libtool git cmake
 ここではRK3588 SoC内蔵のMali G610 MP4 GPUでのインストール例を示します。対象SoCによってインストールすべきものは変わるかと思います。
 
 ```Shell
-wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/lib/aarch64-linux-gnu/libmali-valhall-g610-g6p0-wayland-gbm.so
+wget https://github.com/JeffyCN/mirrors/raw/libmali/lib/aarch64-linux-gnu/libmali-valhall-g610-g6p0-wayland-gbm.so
 sudo install libmali-valhall-g610-g6p0-wayland-gbm.so /usr/lib/
 
-wget https://github.com/JeffyCN/rockchip_mirrors/raw/libmali/firmware/g610/mali_csffw.bin
+wget https://github.com/JeffyCN/mirrors/raw/libmali/firmware/g610/mali_csffw.bin
 sudo mv mali_csffw.bin /lib/firmware
 
 sudo mkdir -p /etc/OpenCL/vendors
