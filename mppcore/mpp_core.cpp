@@ -1560,7 +1560,6 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         unique_ptr<RGYFilter> filter(new RGYFilterDenoiseDct(m_cl));
         shared_ptr<RGYFilterParamDenoiseDct> param(new RGYFilterParamDenoiseDct());
         param->dct = inputParam->vpp.dct;
-        param->qpTableRef = nullptr;
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->baseFps = m_encFps;
@@ -1636,7 +1635,9 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
             unique_ptr<RGYFilter> filter(new RGYFilterSubburn(m_cl));
             shared_ptr<RGYFilterParamSubburn> param(new RGYFilterParamSubburn());
             param->subburn = subburn;
-            param->timestampPassThrough = m_timestampPassThrough;
+            if (m_timestampPassThrough) {
+                param->subburn.vid_ts_offset = false;
+            }
 
             auto pAVCodecReader = std::dynamic_pointer_cast<RGYInputAvcodec>(m_pFileReader);
             if (pAVCodecReader != nullptr) {
@@ -2459,7 +2460,7 @@ RGY_ERR MPPCore::init(MPPParam *prm) {
         return ret;
     }
 
-    m_encTimestamp = std::make_unique<RGYTimestamp>(pParams->common.timestampPathThrough);
+    m_encTimestamp = std::make_unique<RGYTimestamp>(prm->common.timestampPassThrough);
 
     if (RGY_ERR_NONE != (ret = initPowerThrottoling(prm))) {
         return ret;

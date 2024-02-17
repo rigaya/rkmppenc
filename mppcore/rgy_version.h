@@ -78,6 +78,7 @@ const char *get_encoder_version();
 #define HW_TIMEBASE 10000000L //AMF_SECOND
 
 #define ENABLE_LIBASS_SUBBURN 0
+#define ENABLE_VPP_SMOOTH_QP_FRAME 0
 
 #if defined(VCE_AUO)
 #define ENCODER_NAME  "rkmppenc"
@@ -114,6 +115,7 @@ const char *get_encoder_version();
 #define ENABLE_VULKAN 0
 #define VULKAN_DEFAULT_DEVICE_ONLY 1
 #define ENABLE_CAPTION2ASS 0
+#define ENABLE_VPP_SMOOTH_QP_FRAME 0
 
 #define ENABLE_KEYFRAME_INSERT 0
 #define ENABLE_AUTO_PICSTRUCT 1

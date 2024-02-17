@@ -28,6 +28,8 @@
 #include "rgy_input.h"
 #include "mpp_param.h"
 #include "mpp_filter.h"
+#include "rgy_event.h"
+#include "rgy_filter_cl.h"
 #include "rga/rga.h"
 #include "rga/im2d.hpp"
 #include "rga/im2d_type.h"
@@ -616,10 +618,10 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
     }
     prm->frameOut.picstruct = RGY_PICSTRUCT_FRAME;
 
-    m_eventThreadStart = CreateEventUnique(nullptr, false, false, nullptr);
+    m_eventThreadStart = CreateEventUnique(nullptr, false, false);
     AddMessage(RGY_LOG_DEBUG, _T("Create m_eventThreadStart.\n"));
     
-    m_eventThreadFin = CreateEventUnique(nullptr, false, false, nullptr);
+    m_eventThreadFin = CreateEventUnique(nullptr, false, false);
     AddMessage(RGY_LOG_DEBUG, _T("Create m_eventThreadFin.\n"));
     
     m_threadWorker = std::make_unique<std::thread>(&RGAFilterDeinterlaceIEP::workerThreadFunc, this);
@@ -694,7 +696,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::run_filter_iep(RGYFrameMpp *pInputFrame, RGYFra
         }
     }
 
-    sync = CreateEventUnique(nullptr, false, false, nullptr);
+    sync = CreateEventUnique(nullptr, false, false);
 
     // 前回のIEPの実行終了を待つ
     
