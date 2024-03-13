@@ -200,11 +200,11 @@ RGY_ERR RGAFilterCrop::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **pp
     rga_buffer_t src = RGY_CSP_CHROMA_FORMAT[pInputFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
         ? wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
         : wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
-            pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
+            pInputFrame->pitch(RGY_PLANE_Y), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
     rga_buffer_t dst = RGY_CSP_CHROMA_FORMAT[pOutFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
         ? wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
         : wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
-            pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
+            pOutFrame->pitch(RGY_PLANE_Y), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
     if (src.width == 0 || dst.width == 0) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid in/out memory.\n"));
         return RGY_ERR_INVALID_FORMAT;
@@ -338,11 +338,11 @@ RGY_ERR RGAFilterCspConv::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp *
     rga_buffer_t src = RGY_CSP_CHROMA_FORMAT[pInputFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
         ? wrapbuffer_handle(src_handle, pInputFrame->width(), pInputFrame->height(), csp_rgy_to_rkrga(pInputFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
         : wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
-            pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
+            pInputFrame->pitch(RGY_PLANE_Y), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
     rga_buffer_t dst = RGY_CSP_CHROMA_FORMAT[pOutFrame->csp()] == RGY_CHROMAFMT_RGB_PACKED
         ? wrapbuffer_handle(dst_handle, pOutFrame->width(), pOutFrame->height(), csp_rgy_to_rkrga(pOutFrame->csp())) //rgb packedの場合はこちらを使用する必要がある
         : wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
-            pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
+            pOutFrame->pitch(RGY_PLANE_Y), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
     if (src.width == 0 || dst.width == 0) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid in/out memory.\n"));
         return RGY_ERR_INVALID_FORMAT;
@@ -461,9 +461,9 @@ RGY_ERR RGAFilterResize::run_filter_rga(RGYFrameMpp *pInputFrame, RGYFrameMpp **
     rga_buffer_handle_t dst_handle = getRGABufferHandle(pOutFrame);
 
     rga_buffer_t src = wrapbuffer_handle_t(src_handle, pInputFrame->width(), pInputFrame->height(),
-        pInputFrame->pitch(0), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
+        pInputFrame->pitch(RGY_PLANE_Y), mpp_frame_get_ver_stride(pInputFrame->mpp()), csp_rgy_to_rkrga(pInputFrame->csp()));
     rga_buffer_t dst = wrapbuffer_handle_t(dst_handle, pOutFrame->width(), pOutFrame->height(),
-        pOutFrame->pitch(0), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
+        pOutFrame->pitch(RGY_PLANE_Y), mpp_frame_get_ver_stride(pOutFrame->mpp()), csp_rgy_to_rkrga(pOutFrame->csp()));
     if (src.width == 0 || dst.width == 0) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid in/out memory.\n"));
         return RGY_ERR_INVALID_FORMAT;
@@ -810,12 +810,12 @@ RGY_ERR RGAFilterDeinterlaceIEP::workerThreadFunc() {
 
 RGY_ERR RGAFilterDeinterlaceIEP::setImage(RGYFrameMpp *frame, const IepCmd cmd) {
     auto fd = mpp_buffer_get_fd(mpp_frame_get_buffer(frame->mpp()));
-    RK_S32 y_size = frame->pitch(0) * mpp_frame_get_ver_stride(frame->mpp());
+    RK_S32 y_size = frame->pitch(RGY_PLANE_Y) * mpp_frame_get_ver_stride(frame->mpp());
     IepImg img;
     img.format = IEP_FORMAT_YCbCr_420_SP;
     img.act_w = frame->width();
     img.act_h = frame->height();
-    img.vir_w = frame->pitch(0);
+    img.vir_w = frame->pitch(RGY_PLANE_Y);
     img.vir_h = mpp_frame_get_ver_stride(frame->mpp());
     img.x_off = 0;
     img.y_off = 0;
@@ -910,7 +910,7 @@ RGY_ERR RGAFilterDeinterlaceIEP::runFilter(std::vector<RGYFrameMpp*> dst, const 
     params.param.com.dswap = IEP2_YUV_SWAP_SP_UV; // nv12
     params.param.com.width = src[0]->width();
     params.param.com.height = src[0]->height();
-    params.param.com.hor_stride = src[0]->pitch(0);
+    params.param.com.hor_stride = src[0]->pitch(RGY_PLANE_Y);
     err = err_to_rgy(m_iepCtx->ops->control(m_iepCtx->priv, IEP_CMD_SET_DEI_CFG, &params));
     if (err != RGY_ERR_NONE) {
         AddMessage(RGY_LOG_ERROR, _T("Failed to set deinterlace params: %s.\n"), get_err_mes(err));

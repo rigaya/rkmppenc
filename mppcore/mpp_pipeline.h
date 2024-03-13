@@ -1992,7 +1992,7 @@ public:
                 auto crop = initCrop();
                 m_convert->run((mappedHost.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
                     (void **)m_inputFrameTmp->ptr().data(), (const void **)mappedHost.ptr,
-                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], m_inputFrameTmp->pitch(0),
+                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], m_inputFrameTmp->pitch(RGY_PLANE_Y),
                     mappedHost.height, m_inputFrameTmp->height(), crop.c);
 
                 m_inputFrameTmp->setPropertyFrom(surfVppInCL);
@@ -2164,7 +2164,7 @@ public:
                 auto crop = initCrop();
                 m_convert->run((mappedHost.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
                     (void **)inputFrameTmp->ptr().data(), (const void **)mappedHost.ptr,
-                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], inputFrameTmp->pitch(0),
+                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], inputFrameTmp->pitch(RGY_PLANE_Y),
                     inputFrameTmp->height(), inputFrameTmp->height(), crop.c);
 
                 inputFrameTmp->setPropertyFrom(surfVppInCL);
