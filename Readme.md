@@ -68,6 +68,29 @@ rkmppenc --input-format v4l2 -i /dev/video0 \
   -o out.ts
 ```
 
+### Video
+
+To change input settings v4l2-ctl is required.
+
+```
+sudo apt install v4l-utils
+```
+
+#### Chaging input resolution
+
+We can check the supported input resolution and fps by ```v4l2-ctl --list-dv-timings```. The run ```v4l2-ctl --set-dv-bt-timings index=<n>``` with the index.
+
+
+### Audio
+
+Device ID can be checked using ```arecord -l```.
+ 
+To use alsa hw, user needs to be added to "audio" group.
+
+```
+sudo gpasswd -a `id -u -n` audio
+```
+
 ## rkmppenc source code
 - MIT license.
 - This software depends on

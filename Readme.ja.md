@@ -69,6 +69,29 @@ rkmppenc --input-format v4l2 -i /dev/video0 \
   -o out.ts
 ```
 
+### 映像
+
+映像の細かい設定を行うには、v4l2-ctlが必要です。
+
+```
+sudo apt install v4l-utils
+```
+
+#### 入力解像度の変更
+
+まず、```v4l2-ctl --list-dv-timings```で対応している解像度/fpsと、対応するindexを確認します。そして、そのindexの値で、```v4l2-ctl --set-dv-bt-timings index=<n>```を実行すると解像度を変更できます。その後、rkmppencを実行すると指定の解像度で読み込むことができます。
+
+
+### 音声
+
+ ```--audio-source```に指定するデバイスIDは```arecord -l```で確認することができます。
+ 
+なお、alsaによる音声読み込みを行うには、"audio" groupへの所属が必要です。
+
+```
+sudo gpasswd -a `id -u -n` audio
+```
+
 ## ソースコードについて
 - MITライセンスです。
 - 本ソフトウェアでは、
