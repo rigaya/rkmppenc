@@ -52,7 +52,7 @@ DeviceCodecCsp getMPPDecoderSupport() {
             for (size_t i = 0; i < _countof(soc_info->dec_caps); i++) {
                 const MppDecHwCap *cap = soc_info->dec_caps[i];
                 const int codec_idx = CODING_TO_IDX(codec_rgy_to_dec(codec));
-                if ((cap->cap_coding & (RK_U32)(1 << codec_idx))) {
+                if (cap && (cap->cap_coding & (RK_U32)(1 << codec_idx))) {
                     csps.insert(RGY_CSP_NV12);
                     csps.insert(RGY_CSP_YV12);
                     if (cap->cap_10bit) {
