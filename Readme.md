@@ -61,10 +61,26 @@ Radxa ROCK 5B (RK3588) HDMI In uses v4l2 multi-planar API, and does not respond 
 
 rkmppenc uses [ffmpeg with modification](https://github.com/rigaya/FFmpeg) to support v4l2 multi-planar API, and workarounds to avoid errors. For example, HDMI In can be captured by following command line.
 
-```
+```bash
+# video settings
+V4L2_DV_TIMINGS_IDX=19
+v4l2-ctl --set-dv-bt-timings index=${V4L2_DV_TIMINGS_IDX}
+# index from v4l2-ctl --list-dv-timings
+# Rock 5B (RK3588) list
+# 10 1920x1080 30fps
+# 14 1920x1080 60fps
+# 17 3840x2160 30fps
+# 19 3840x2160 60fps
+
+# auto select hdmiin auto
+ALSA_DEVICE_ID=`arecord -l | grep rockchiphdmiin | sed -e 's/^card \([0-9]\+\).*/\1/g'`
+echo ALSA_DEVICE_ID=${ALSA_DEVICE_ID}
+
+# add --input-analyze and --input-probesize to minimize startup latency
 rkmppenc --input-format v4l2 -i /dev/video0 \
+  --input-analyze 0.2 --input-probesize 10000 \
   --input-option channel:0 --input-option ignore_input_error:1 --input-option ts:abs \
-  --audio-source "hw:<n>:format=alsa/codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
+  --audio-source "hw:${ALSA_DEVICE_ID}:format=alsa/codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
   -o out.ts
 ```
 
@@ -72,7 +88,7 @@ rkmppenc --input-format v4l2 -i /dev/video0 \
 
 To change input settings v4l2-ctl is required.
 
-```
+```bash
 sudo apt install v4l-utils
 ```
 
@@ -87,7 +103,7 @@ Device ID can be checked using ```arecord -l```.
  
 To use alsa hw, user needs to be added to "audio" group.
 
-```
+```bash
 sudo gpasswd -a `id -u -n` audio
 ```
 

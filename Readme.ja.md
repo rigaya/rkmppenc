@@ -62,10 +62,26 @@ Radxa ROCK 5B (RK3588) HDMI In は、ffmpeg 6.0 時点ではサポートされ�
 
 rkmppencでは、v4l2 multi-planar APIへの対応と、v4l2の呼び出し関連のエラー回避を行った[ffmpeg](https://github.com/rigaya/FFmpeg)を使用することで、HDMI Inのキャプチャに対応していて、下記のようにしてキャプチャすることができます。
 
-```
+```bash
+# video settings
+V4L2_DV_TIMINGS_IDX=19
+v4l2-ctl --set-dv-bt-timings index=${V4L2_DV_TIMINGS_IDX}
+# index from v4l2-ctl --list-dv-timings
+# Rock 5B (RK3588) list
+# 10 1920x1080 30fps
+# 14 1920x1080 60fps
+# 17 3840x2160 30fps
+# 19 3840x2160 60fps
+
+# auto select hdmiin auto
+ALSA_DEVICE_ID=`arecord -l | grep rockchiphdmiin | sed -e 's/^card \([0-9]\+\).*/\1/g'`
+echo ALSA_DEVICE_ID=${ALSA_DEVICE_ID}
+
+# add --input-analyze and --input-probesize to minimize startup latency
 rkmppenc --input-format v4l2 -i /dev/video0 \
+  --input-analyze 0.2 --input-probesize 10000 \
   --input-option channel:0 --input-option ignore_input_error:1 --input-option ts:abs \
-  --audio-source "hw:<n>:format=alsa/codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
+  --audio-source "hw:${ALSA_DEVICE_ID}:format=alsa/codec=aac;enc_prm=aac_coder=twoloop;bitrate=192" \
   -o out.ts
 ```
 
@@ -73,7 +89,7 @@ rkmppenc --input-format v4l2 -i /dev/video0 \
 
 映像の細かい設定を行うには、v4l2-ctlが必要です。
 
-```
+```bash
 sudo apt install v4l-utils
 ```
 
@@ -88,7 +104,7 @@ sudo apt install v4l-utils
  
 なお、alsaによる音声読み込みを行うには、"audio" groupへの所属が必要です。
 
-```
+```bash
 sudo gpasswd -a `id -u -n` audio
 ```
 
