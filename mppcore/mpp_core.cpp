@@ -48,10 +48,12 @@
 #include "rgy_filter_afs.h"
 #include "rgy_filter_nnedi.h"
 #include "rgy_filter_yadif.h"
+#include "rgy_filter_decomb.h"
 #include "rgy_filter_convolution3d.h"
 #include "rgy_filter_rff.h"
 #include "rgy_filter_delogo.h"
 #include "rgy_filter_denoise_dct.h"
+#include "rgy_filter_denoise_fft3d.h"
 #include "rgy_filter_denoise_knn.h"
 #include "rgy_filter_denoise_nlmeans.h"
 #include "rgy_filter_denoise_pmd.h"
@@ -424,6 +426,7 @@ RGY_ERR MPPCore::initInput(MPPParam *inputParam) {
     if (inputParam->vpp.afs.enable) deinterlacer++;
     if (inputParam->vpp.nnedi.enable) deinterlacer++;
     if (inputParam->vpp.yadif.enable) deinterlacer++;
+    if (inputParam->vpp.decomb.enable) deinterlacer++;
     if (deinterlacer > 0 && ((inputParam->input.picstruct & RGY_PICSTRUCT_INTERLACED) == 0)) {
         inputParam->input.picstruct = RGY_PICSTRUCT_AUTO;
     }
@@ -432,7 +435,7 @@ RGY_ERR MPPCore::initInput(MPPParam *inputParam) {
     m_poolFrame = std::make_unique<RGYPoolAVFrame>();
 
     const bool vpp_rff = inputParam->vpp.rff.enable;
-    auto err = initReaders(m_pFileReader, m_AudioReaders, &inputParam->input, inputCspOfRawReader,
+    auto err = initReaders(m_pFileReader, m_AudioReaders, &inputParam->input,  &inputParam->inprm, inputCspOfRawReader,
         m_pStatus, &inputParam->common, &inputParam->ctrl, HWDecCodecCsp, subburnTrackId,
         inputParam->vpp.afs.enable, vpp_rff,
         m_poolPkt.get(), m_poolFrame.get(), nullptr, m_pPerfMonitor.get(), m_pLog);
@@ -916,7 +919,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     //m_stPicStruct = picstruct_rgy_to_enc(inputParam->input.picstruct);
     //if (inputParam->vpp.deinterlace != cudaVideoDeinterlaceMode_Weave) {
     //    m_stPicStruct = NV_ENC_PIC_STRUCT_FRAME;
-    //} else if (inputParam->vpp.afs.enable || inputParam->vpp.nnedi.enable || inputParam->vpp.yadif.enable) {
+    //} else if (inputParam->vpp.afs.enable || inputParam->vpp.nnedi.enable || inputParam->vpp.yadif.enable || inputParam->vpp.decomb.enable) {
     //    m_stPicStruct = NV_ENC_PIC_STRUCT_FRAME;
     //}
     //インタレ解除の個数をチェック
@@ -925,6 +928,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     if (inputParam->vpp.afs.enable) deinterlacer++;
     if (inputParam->vpp.nnedi.enable) deinterlacer++;
     if (inputParam->vpp.yadif.enable) deinterlacer++;
+    if (inputParam->vpp.decomb.enable) deinterlacer++;
     if (deinterlacer >= 2) {
         PrintMes(RGY_LOG_ERROR, _T("Activating 2 or more deinterlacer is not supported.\n"));
         return RGY_ERR_UNSUPPORTED;
@@ -1163,12 +1167,14 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.afs.enable)           filterPipeline.push_back(VppType::CL_AFS);
     if (inputParam->vpp.nnedi.enable)         filterPipeline.push_back(VppType::CL_NNEDI);
     if (inputParam->vpp.yadif.enable)         filterPipeline.push_back(VppType::CL_YADIF);
+    if (inputParam->vpp.decomb.enable)        filterPipeline.push_back(VppType::CL_DECOMB);
     if (inputParam->deint != IEPDeinterlaceMode::DISABLED) filterPipeline.push_back(VppType::IEP_DEINTERLACE);
     if (inputParam->vpp.decimate.enable)      filterPipeline.push_back(VppType::CL_DECIMATE);
     if (inputParam->vpp.mpdecimate.enable)    filterPipeline.push_back(VppType::CL_MPDECIMATE);
     if (inputParam->vpp.convolution3d.enable) filterPipeline.push_back(VppType::CL_CONVOLUTION3D);
     if (inputParam->vpp.smooth.enable)        filterPipeline.push_back(VppType::CL_DENOISE_SMOOTH);
     if (inputParam->vpp.dct.enable)           filterPipeline.push_back(VppType::CL_DENOISE_DCT);
+    if (inputParam->vpp.fft3d.enable)         filterPipeline.push_back(VppType::CL_DENOISE_FFT3D);
     if (inputParam->vpp.knn.enable)           filterPipeline.push_back(VppType::CL_DENOISE_KNN);
     if (inputParam->vpp.nlmeans.enable)       filterPipeline.push_back(VppType::CL_DENOISE_NLMEANS);
     if (inputParam->vpp.pmd.enable)           filterPipeline.push_back(VppType::CL_DENOISE_PMD);
@@ -1442,6 +1448,29 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         m_encFps = param->baseFps;
         return RGY_ERR_NONE;
     }
+    //yadif
+    if (vppType == VppType::CL_DECOMB) {
+        unique_ptr<RGYFilter> filter(new RGYFilterDecomb(m_cl));
+        shared_ptr<RGYFilterParamDecomb> param(new RGYFilterParamDecomb());
+        param->decomb = inputParam->vpp.decomb;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->timebase = m_outputTimebase;
+        param->bOutOverwrite = false;
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        clfilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<RGYFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
     //decimate
     if (vppType == VppType::CL_DECIMATE) {
         unique_ptr<RGYFilter> filter(new RGYFilterDecimate(m_cl));
@@ -1562,6 +1591,28 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         unique_ptr<RGYFilter> filter(new RGYFilterDenoiseDct(m_cl));
         shared_ptr<RGYFilterParamDenoiseDct> param(new RGYFilterParamDenoiseDct());
         param->dct = inputParam->vpp.dct;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        clfilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<RGYFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //dct
+    if (vppType == VppType::CL_DENOISE_FFT3D) {
+        unique_ptr<RGYFilter> filter(new RGYFilterDenoiseFFT3D(m_cl));
+        shared_ptr<RGYFilterParamDenoiseFFT3D> param(new RGYFilterParamDenoiseFFT3D());
+        param->fft3d = inputParam->vpp.fft3d;
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->baseFps = m_encFps;
