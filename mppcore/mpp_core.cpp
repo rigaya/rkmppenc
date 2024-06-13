@@ -1990,7 +1990,17 @@ RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
 }
 
 RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
-    m_enccfg.rc.change  = MPP_ENC_RC_CFG_CHANGE_ALL;
+    m_enccfg.rc.change  = MPP_ENC_RC_CFG_CHANGE_RC_MODE |
+                          MPP_ENC_RC_CFG_CHANGE_QUALITY |
+                          MPP_ENC_RC_CFG_CHANGE_BPS |
+                          MPP_ENC_RC_CFG_CHANGE_FPS_IN |
+                          MPP_ENC_RC_CFG_CHANGE_FPS_OUT |
+                          MPP_ENC_RC_CFG_CHANGE_GOP |
+                          MPP_ENC_RC_CFG_CHANGE_SKIP_CNT |
+                          MPP_ENC_RC_CFG_CHANGE_QP_INIT |
+                          MPP_ENC_RC_CFG_CHANGE_QP_RANGE |
+                          MPP_ENC_RC_CFG_CHANGE_QP_RANGE_I |
+                          MPP_ENC_RC_CFG_CHANGE_DROP_FRM;
     m_enccfg.rc.rc_mode = (MppEncRcMode)prm->rateControl;
     m_enccfg.rc.quality = (MppEncRcQuality)prm->qualityPreset;
     m_enccfg.rc.bps_target  = prm->bitrate * 1000;
@@ -2037,6 +2047,7 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
 
     m_enccfg.rc.gop             = prm->gopLen;
     m_enccfg.rc.skip_cnt        = 0;
+    m_enccfg.rc.drop_mode       = MPP_ENC_RC_DROP_FRM_DISABLED;
 
     auto ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_RC_CFG, &m_enccfg.rc));
     if (ret != RGY_ERR_NONE) {
