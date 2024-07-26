@@ -29,6 +29,8 @@ rm librga2_2.2.0-1_arm64.deb
 sudo gpasswd -a `id -u -n` video
 ```
 
+実施後は、ログアウト→再ログインにより設定を反映してください。
+
 ### 4. OpenCLのインストール (オプション)
 
 OpenCLフィルタ(```--vpp-deinterlace``` 以外のvppフィルタ) を使用する場合、OpenCLのインストールが必要です。使用しない場合は、OpenCLのインストールは必要ありません。

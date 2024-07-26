@@ -29,6 +29,8 @@ rm librga2_2.2.0-1_arm64.deb
 sudo gpasswd -a `id -u -n` video
 ```
 
+Afterwards, please logout and re-login to reflect the setting.
+
 ### 4. Install OpenCL modules (optional)
 
 OpenCL is required for vpp filters except ```--vpp-deinterlace```. If not using these filters install of OpenCL will not be required.

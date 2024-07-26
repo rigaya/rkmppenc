@@ -76,6 +76,8 @@ rm librga-dev_2.2.0-1_arm64.deb
 sudo gpasswd -a `id -u -n` video
 ```
 
+実施後は、ログアウト→再ログインにより設定を反映してください。
+
 ### 6. ビルドに必要なライブラリのインストール
 
 ```Shell

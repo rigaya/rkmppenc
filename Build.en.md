@@ -75,6 +75,8 @@ rm librga-dev_2.2.0-1_arm64.deb
 sudo gpasswd -a `id -u -n` video
 ```
 
+Afterwards, please logout and re-login to reflect the setting.
+
 ### 6. Install required libraries
 
 ```Shell
