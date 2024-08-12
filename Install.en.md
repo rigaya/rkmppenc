@@ -73,3 +73,21 @@ Mpp kernel      : 5.10
 HW Encode       : H.264/AVC H.265/HEVC
 HW Decode       : H.264/AVC(10bit) H.265/HEVC(10bit) MPEG2 VP9(10bit) AV1
 ```
+
+This checks and displays the following points.
+
+- Mpp service
+  - Whether ```/dev/mpp_service``` or ```/dev/mpp-service``` is accessible (read/write permission)
+  - Version name of mpp_ioctl
+  - /proc/device-tree/mpp-srv*/status is okay
+- Mpp kernel
+  - kernel version (Unknown is OK)
+- 2D accerelation
+  - iepv1  
+    Does /dev/iep exist and /proc/device-tree/iep*/status is okay
+  - iepv2  
+    Mpp service exists and /proc/device-tree/iep*/status is okay
+  - rga  
+    Does /dev/rga exist and /proc/device-tree/rga*/status is okay
+- HW Encode/Decode
+  - Status of codec support for each SoC defined in mpp

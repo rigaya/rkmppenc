@@ -74,3 +74,21 @@ Mpp kernel      : 5.10
 HW Encode       : H.264/AVC H.265/HEVC
 HW Decode       : H.264/AVC(10bit) H.265/HEVC(10bit) MPEG2 VP9(10bit) AV1
 ```
+
+これはそれぞれ下記を確認・表示しています。
+
+- Mpp service
+  - ```/dev/mpp_service``` または ```/dev/mpp-service``` にアクセスできる(Read/Write権限がある)か
+  - mpp_ioctlのバージョン名
+  - /proc/device-tree/mpp-srv*/status が okay になっているか?
+- Mpp kernel
+  - kernelのバージョン (Unknownでも問題なし)
+- 2D accerelation
+  - iepv1  
+    /dev/iep が存在し、/proc/device-tree/iep*/status が okay になっているか?
+  - iepv2  
+    Mpp service が存在し、/proc/device-tree/iep*/status が okay になっているか?
+  - rga  
+    /dev/rga が存在し、/proc/device-tree/rga*/status が okay になっているか?
+- HW Encode/Decode
+  - mpp内で定義されている各SoCのコーデック対応状況
