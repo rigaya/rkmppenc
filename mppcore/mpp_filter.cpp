@@ -30,6 +30,7 @@
 #include "mpp_filter.h"
 #include "rgy_event.h"
 #include "rgy_filter_cl.h"
+#include "rgy_filter_resize.h"
 #include "rga/rga.h"
 #include "rga/im2d.hpp"
 #include "rga/im2d_type.h"

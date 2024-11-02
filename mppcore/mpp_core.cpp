@@ -439,7 +439,7 @@ RGY_ERR MPPCore::initInput(MPPParam *inputParam) {
     const bool vpp_rff = inputParam->vpp.rff.enable;
     auto err = initReaders(m_pFileReader, m_AudioReaders, &inputParam->input,  &inputParam->inprm, inputCspOfRawReader,
         m_pStatus, &inputParam->common, &inputParam->ctrl, HWDecCodecCsp, subburnTrackId,
-        inputParam->vpp.afs.enable, vpp_rff,
+        inputParam->vpp.afs.enable, vpp_rff, inputParam->vpp.libplacebo_tonemapping.enable,
         m_poolPkt.get(), m_poolFrame.get(), nullptr, m_pPerfMonitor.get(), m_pLog);
     if (err != RGY_ERR_NONE) {
         PrintMes(RGY_LOG_ERROR, _T("failed to initialize file reader(s).\n"));
@@ -1017,7 +1017,7 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
                 switch (openclCsp) { // OpenCLフィルタの内部形式への変換
                 case RGY_CSP_NV12: openclCsp = RGY_CSP_YV12; break;
                 case RGY_CSP_P010: openclCsp = RGY_CSP_YV12_16; break;
-                case RGY_CSP_AYUV: openclCsp = RGY_CSP_YUV444; break;
+                case RGY_CSP_VUYA: openclCsp = RGY_CSP_YUV444; break;
                 case RGY_CSP_Y410: openclCsp = RGY_CSP_YUV444_16; break;
                 case RGY_CSP_Y416: openclCsp = RGY_CSP_YUV444_16; break;
                 default:
