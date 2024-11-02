@@ -2047,9 +2047,9 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
     }
 
     m_enccfg.rc.fps_in_num     = m_encFps.n();
-    m_enccfg.rc.fps_in_denorm  = m_encFps.d();
+    m_enccfg.rc.fps_in_denom   = m_encFps.d();
     m_enccfg.rc.fps_out_num    = m_encFps.n();
-    m_enccfg.rc.fps_out_denorm = m_encFps.d();
+    m_enccfg.rc.fps_out_denom  = m_encFps.d();
 
     m_enccfg.rc.gop             = prm->gopLen;
     m_enccfg.rc.skip_cnt        = 0;

@@ -291,7 +291,7 @@ VideoInfo videooutputinfo(
     info.dstWidth = prm.prep.width;
     info.dstHeight = prm.prep.height;
     info.fpsN = prm.rc.fps_out_num;
-    info.fpsD = prm.rc.fps_out_denorm;
+    info.fpsD = prm.rc.fps_out_denom;
     info.sar[0] = sar.n();
     info.sar[1] = sar.d();
     adjust_sar(&info.sar[0], &info.sar[1], info.dstWidth, info.dstHeight);

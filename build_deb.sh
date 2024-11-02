@@ -22,6 +22,10 @@ if [ -e /etc/lsb-release ]; then
         PACKAGE_DEPENDS="libc6(>=2.29),libstdc++6(>=6)"
         PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libmp3lame0,libopus0,libsoxr0,libspeex1,libtwolame0,libvorbisenc2,libasound2"
         PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libass9,libvpx7,libbluray2,libssl3"
+    elif [ "${PACKAGE_OS_CODENAME}" = "noble" ]; then
+        PACKAGE_DEPENDS="libc6(>=2.29),libstdc++6(>=6)"
+        PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libmp3lame0,libopus0,libsoxr0,libspeex1,libtwolame0,libvorbisenc2,libasound2"
+        PACKAGE_DEPENDS="${PACKAGE_DEPENDS},libass9,libvpx9,libbluray2,libssl3"
     else
         echo "${PACKAGE_OS_ID}${PACKAGE_OS_VER} ${PACKAGE_OS_CODENAME} not supported in this script!"
         exit 1
