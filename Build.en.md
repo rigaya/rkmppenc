@@ -1,26 +1,37 @@
 
 # rkmppencのビルド
 
-- [Linux (Ubuntu 20.04/22.04)](./Build.en.md#linux-ubuntu-2004-2204)
+- [Linux (Ubuntu 20.04-24.04)](./Build.en.md#linux-ubuntu-2004-2404)
 
-## Ubuntu 20.04/22.04
+## Ubuntu 20.04-24.04
 
 ### 0. Requirements
 
 - C++17 Compiler
 - git
 - libraries
-  - mpp 
-  - ffmpeg 4.x/5.x libs (libavcodec58, libavformat58, libavfilter7, libavutil56, libswresample3, libavdevice58)
+  - mpp
+  - ffmpeg 4.x - 7.x libs (libavcodec, libavformat, libavfilter, libavutil, libswresample, libavdevice)
   - libass9
   - OpenCL
   - [Optional] VapourSynth
 
 ### 1. Install build tools
 
-```Shell
-sudo apt install build-essential libtool git cmake
-```
+- Install build tools
+
+  ```Shell
+  sudo apt install build-essential libtool git cmake
+  ```
+
+- Install rust + cargo-c (for libdovi, libhdr10plus build)
+
+  ```Shell
+  sudo apt install libssl-dev curl
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal \
+    && . ~/.cargo/env \
+    && cargo install cargo-c
+  ```
 
 ### 2. Install OpenCL modules
 
