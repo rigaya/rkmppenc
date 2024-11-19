@@ -80,7 +80,8 @@
   - [--dhdr10-info copy \[HEVC\]](#--dhdr10-info-copy-hevc)
   - [--dolby-vision-profile \<string\> \[HEVC, AV1\]](#--dolby-vision-profile-string-hevc-av1)
   - [--dolby-vision-rpu \<string\> \[HEVC, AV1\]](#--dolby-vision-rpu-string-hevc-av1)
-  - [--dolby-vision-rpu copy \[HEVC\]](#--dolby-vision-rpu-copy-hevc)
+  - [--dolby-vision-rpu copy \[HEVC, AV1\]](#--dolby-vision-rpu-copy-hevc-av1)
+  - [--dolby-vision-rpu-prm \<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...](#--dolby-vision-rpu-prm-param1value1param2value2)
   - [--repeat-headers](#--repeat-headers)
   - [--no-repeat-headers](#--no-repeat-headers)
 - [IO / Audio / Subtitle Options](#io--audio--subtitle-options)
@@ -598,11 +599,26 @@ unset, copy, 5.0, 8.1, 8.2, 8.4
 ### --dolby-vision-rpu &lt;string&gt; [HEVC, AV1]
 Interleave Dolby Vision RPU metadata from the specified file into the output file. Recommended to be used with [--dolby-vision-profile](#--dolby-vision-profile-string).
 
-### --dolby-vision-rpu copy [HEVC]
+### --dolby-vision-rpu copy [HEVC, AV1]
 Interleave Dolby Vision RPU metadata copied from HEVC input file. Recommended to be used with [--dolby-vision-profile](#--dolby-vision-profile-string).
 
 Limitations for avhw reader: this option uses timestamps to reorder frames to decoded order to presentation order.
 Therefore, input files without timestamps (such as raw ES), are not supported. Please try for avsw reader for that case.
+
+### --dolby-vision-rpu-prm &lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...  
+
+Set parameters for ```--dolby-vision-rpu```.
+
+- **parameters**
+  
+  - crop=&lt;bool&gt;
+
+    Set active area offsets to 0 (no letterbox bars).
+
+- Examples
+  ```
+  Example:  --dolby-vision-rpu-prm crop=true
+  ```
 
 ### --repeat-headers
 Enable repeated insertion of headers.
