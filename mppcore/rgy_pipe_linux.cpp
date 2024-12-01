@@ -270,4 +270,33 @@ bool RGYPipeProcessLinux::processAlive() {
     int status = 0;
     return 0 == waitpid(m_phandle, &status, WNOHANG);
 }
+
+int RGYPipeProcessLinux::waitAndGetExitCode() {
+    int status = 0;
+    if (waitpid(m_phandle, &status, 0) == -1) {
+        return 1; // waitpid() failed
+    }
+    int ret = 0;
+    if (WIFEXITED(status)) {
+        ret = WEXITSTATUS(status);
+    }
+    return ret;
+}
+
+int RGYPipeProcessLinux::wait(uint32_t timeout) {
+    int status = 0;
+    if (timeout == INFINITE) {
+        waitpid(m_phandle, &status, 0);
+    } else if (timeout == 0) {
+        waitpid(m_phandle, &status, WNOHANG);
+    } else {
+        struct timespec ts = { 0, 1000000 };
+        while (timeout > 0 && 0 == waitpid(m_phandle, &status, WNOHANG)) {
+            nanosleep(&ts, nullptr);
+            timeout--;
+        }
+    }
+    return status;
+    
+}
 #endif //#if !(defined(_WIN32) || defined(_WIN64))
