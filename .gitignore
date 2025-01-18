@@ -41,6 +41,8 @@ rkmppenc
 [Bb]uild[Ll]og.*
 
 *.o
+*.cpp.d
+*.c.d
 *_i.c
 *_p.c
 *.ilk
