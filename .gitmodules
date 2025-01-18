@@ -13,6 +13,3 @@
 [submodule "clRNG"]
 	path = clRNG
 	url = https://github.com/clMathLibraries/clRNG.git
-[submodule "librga"]
-	path = librga
-	url = https://github.com/tsukumijima/librga-rockchip.git
