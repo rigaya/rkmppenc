@@ -30,6 +30,10 @@
 #include "rgy_level_av1.h"
 #if ENCODER_NVENC
 #include "NVEncParam.h"
+#elif ENCODER_VCEENC
+#include "vce_param.h"
+#elif ENCODER_MPP
+#include "mpp_param.h"
 #endif
 
 std::unique_ptr<RGYCodecLevel> createCodecLevel(RGY_CODEC codec) {

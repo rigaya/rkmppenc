@@ -122,6 +122,7 @@ protected:
     virtual RGY_ERR initPowerThrottoling(MPPParam *prm);
     virtual RGY_ERR initSSIMCalc(MPPParam *prm);
     virtual RGY_ERR initPipeline(MPPParam *prm);
+    virtual RGY_ERR checkRCParam(MPPParam *prm);
 
     bool VppAfsRffAware() const;
     virtual RGY_ERR allocatePiplelineFrames();

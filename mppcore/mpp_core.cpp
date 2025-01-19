@@ -1994,6 +1994,59 @@ RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
     return RGY_ERR_NONE;
 }
 
+RGY_ERR MPPCore::checkRCParam(MPPParam *prm) {
+    const bool hevc_high_tier = prm->codec == RGY_CODEC_HEVC && prm->codecParam[prm->codec].tier == 1;
+    auto codecLevel = createCodecLevel(prm->codec);
+    const int codecProfile = prm->codecParam[prm->codec].profile;
+    if (prm->codecParam[prm->codec].level != codecLevel->level_auto()) {
+        auto& level = prm->codecParam[prm->codec].level;
+        const int required_level = codecLevel->calc_auto_level(m_encWidth, m_encHeight, 0, false,
+            m_encFps.n(), m_encFps.d(), codecProfile, hevc_high_tier, 0, 0, 1, 1);
+        if (level < required_level) {
+            PrintMes(RGY_LOG_WARN, _T("Level %s does not support the current settings (%s @ %s, %dx%d, %d/%d fps), switching level selection to auto.\n"),
+                get_cx_desc(get_level_list(prm->codec), level),
+                CodecToStr(prm->codec).c_str(), get_cx_desc(get_profile_list(prm->codec), codecProfile),
+                m_encWidth, m_encHeight, m_encFps.n(), m_encFps.d());
+            level = codecLevel->level_auto();
+        } else {
+            // refはrkmppencでは設定がない
+            // 最大bitrateの制限を超えている場合、最大bitrateを下げる
+            if (prm->rateControl != MPP_ENC_RC_MODE_FIXQP) {
+                int max_bitrate_kbps = codecLevel->get_max_bitrate(level, codecProfile, hevc_high_tier);
+                if (prm->bitrate > max_bitrate_kbps) {
+                    PrintMes(RGY_LOG_WARN, _T("Bitrate is lowered %d -> %d due to level %s restriction.\n"), prm->bitrate, max_bitrate_kbps, get_cx_desc(get_level_list(prm->codec), level));
+                    prm->bitrate = max_bitrate_kbps;
+                }
+                if (prm->maxBitrate > max_bitrate_kbps) {
+                    PrintMes(RGY_LOG_WARN, _T("Max bitrate is lowered %d -> %d due to level %s restriction.\n"), prm->maxBitrate, max_bitrate_kbps, get_cx_desc(get_level_list(prm->codec), level));
+                    prm->maxBitrate = max_bitrate_kbps;
+                }
+                //if (prm->codec == RGY_CODEC_H264) {
+                //    int max_vbv_buffer_size = codecLevel->get_max_vbv_buf(level, codecProfile);
+                //    if ((int)m_stEncConfig.rcParams.vbvBufferSize > max_vbv_buffer_size * 1000) {
+                //        PrintMes(RGY_LOG_WARN, _T("VBV buffer size is lowered %d -> %d due to level %s restriction.\n"), m_stEncConfig.rcParams.vbvBufferSize / 1000, max_vbv_buffer_size, get_cx_desc(get_level_list(prm->codec), level));
+                //        m_stEncConfig.rcParams.vbvBufferSize = max_vbv_buffer_size * 1000;
+                //    }
+                //}
+            }
+        }
+    }
+    // levelからの最大ビットレートの自動決定 (適当な値を入れておかないとエラーになる)
+    if (prm->rateControl != MPP_ENC_RC_MODE_FIXQP && prm->maxBitrate == 0) {
+        //指定されたビットレートの1.25倍は最大ビットレートを確保する
+        const int prefered_bitrate_kbps = prm->bitrate * 5 / 4;
+        int level = prm->codecParam[prm->codec].level;
+        if (level == codecLevel->level_auto()) {
+            level = codecLevel->calc_auto_level(m_encWidth, m_encHeight, 0, false,
+                m_encFps.n(), m_encFps.d(), codecProfile, hevc_high_tier, prefered_bitrate_kbps, 0, 1, 1);
+        }
+        // rkmppencではあまり最大ビットレートを大きくすると、ビットレートが指定値から上振れしやすくなるので、
+        // ビットレートの1.25倍かlevelの最大ビットレートの小さい方を最大ビットレートに設定する
+        prm->maxBitrate = std::min(prefered_bitrate_kbps, codecLevel->get_max_bitrate(level, codecProfile, hevc_high_tier));
+    }
+    return RGY_ERR_NONE;
+}
+
 RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
     m_enccfg.rc.change  = MPP_ENC_RC_CFG_CHANGE_RC_MODE |
                           MPP_ENC_RC_CFG_CHANGE_QUALITY |
@@ -2005,6 +2058,7 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
                           MPP_ENC_RC_CFG_CHANGE_QP_INIT |
                           MPP_ENC_RC_CFG_CHANGE_QP_RANGE |
                           MPP_ENC_RC_CFG_CHANGE_QP_RANGE_I |
+                          MPP_ENC_RC_CFG_CHANGE_QP_MAX_STEP |
                           MPP_ENC_RC_CFG_CHANGE_DROP_FRM;
     m_enccfg.rc.rc_mode = (MppEncRcMode)prm->rateControl;
     m_enccfg.rc.quality = (MppEncRcQuality)prm->qualityPreset;
@@ -2041,6 +2095,7 @@ RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
             m_enccfg.rc.qp_min      = prm->qpMin;
             m_enccfg.rc.qp_max_i    = prm->qpMax;
             m_enccfg.rc.qp_min_i    = prm->qpMin;
+            m_enccfg.rc.qp_max_step = 16;
             m_enccfg.rc.qp_delta_ip = 3;
         }
     }
@@ -2169,6 +2224,11 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
     }
 
     ret = initEncoderPrep(prm);
+    if (ret != RGY_ERR_NONE) {
+        return ret;
+    }
+
+    ret = checkRCParam(prm);
     if (ret != RGY_ERR_NONE) {
         return ret;
     }
