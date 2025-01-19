@@ -79,9 +79,8 @@
 #include "cpu_info.h"
 #include "gpu_info.h"
 
-#include "rgy_level_h264.h"
+#include "rgy_level.h"
 #include "rgy_level_hevc.h"
-#include "rgy_level_av1.h"
 
 MPPCfg::MPPCfg() :
     cfg(nullptr),
