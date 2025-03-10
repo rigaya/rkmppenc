@@ -2835,6 +2835,9 @@ RGY_ERR MPPCore::run2() {
         err = RGY_ERR_ABORTED;
     }
 
+    // エラー終了の場合も含めキューをすべて開放する (m_pipelineTasksを解放する前に行う)
+    dataqueue.clear();
+
     if (m_videoQualityMetric) {
         PrintMes(RGY_LOG_DEBUG, _T("Flushing video quality metric calc.\n"));
         m_videoQualityMetric->addBitstream(nullptr);
