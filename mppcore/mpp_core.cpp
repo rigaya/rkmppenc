@@ -660,7 +660,7 @@ RGY_ERR MPPCore::initOutput(MPPParam *inputParams) {
 
     auto err = initWriters(m_pFileWriter, m_pFileWriterListAudio, m_pFileReader, m_AudioReaders,
         &inputParams->common, &inputParams->input, &inputParams->ctrl, outputVideoInfo,
-        m_trimParam, m_outputTimebase, m_Chapters, m_hdrsei.get(), m_dovirpu.get(), m_encTimestamp.get(), false, false, false, 0,
+        m_trimParam, m_outputTimebase, m_Chapters, m_hdrsei.get(), m_hdr10plus.get(), m_dovirpu.get(), m_encTimestamp.get(), false, false, false, 0,
         m_poolPkt.get(), m_poolFrame.get(), m_pStatus, m_pPerfMonitor, m_pLog);
     if (err != RGY_ERR_NONE) {
         PrintMes(RGY_LOG_ERROR, _T("failed to initialize file reader(s).\n"));
@@ -2443,7 +2443,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
     }
     if (m_encoder) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskMPPEncode>(m_encoder.get(), m_encCodec, m_enccfg, 1,
-            m_timecode.get(), m_encTimestamp.get(), m_outputTimebase, m_hdr10plus.get(), m_hdr10plusMetadataCopy,
+            m_timecode.get(), m_encTimestamp.get(), m_outputTimebase, m_hdr10plus.get(), m_doviRpu.get(),
             prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), m_pLog));
     }
 

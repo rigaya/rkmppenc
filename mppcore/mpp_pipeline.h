@@ -1576,18 +1576,18 @@ protected:
     std::array<MPPBufferPair, BUF_COUNT> m_buffer;
     std::deque<MppBuffer> m_queueFrameList;
     RGYListRef<RGYBitstream> m_bitStreamOut;
-    RGYHDR10Plus *m_hdr10plus;
-    bool m_hdr10plusMetadataCopy;
+    const RGYHDR10Plus *m_hdr10plus;
+    const DOVIRpu *m_doviRpu;
     std::unique_ptr<RGYConvertCSP> m_convert;
 public:
     PipelineTaskMPPEncode(
         MPPContext *enc, RGY_CODEC encCodec, MPPCfg& encParams, int outMaxQueueSize,
-        RGYTimecode *timecode, RGYTimestamp *encTimestamp, rgy_rational<int> outputTimebase, RGYHDR10Plus *hdr10plus, bool hdr10plusMetadataCopy,
+        RGYTimecode *timecode, RGYTimestamp *encTimestamp, rgy_rational<int> outputTimebase, const RGYHDR10Plus *hdr10plus, const DOVIRpu *doviRpu,
         int threadCsp, RGYParamThread threadParamCsp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPENC, outMaxQueueSize, log),
         m_encoder(enc), m_encCodec(encCodec), m_encParams(encParams), m_timecode(timecode), m_encTimestamp(encTimestamp), m_outputTimebase(outputTimebase),
         m_sentEOSFrame(false), m_frameGrp(nullptr), m_buffer(), m_queueFrameList(),
-        m_bitStreamOut(), m_hdr10plus(hdr10plus), m_hdr10plusMetadataCopy(hdr10plusMetadataCopy), m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)) {
+        m_bitStreamOut(), m_hdr10plus(hdr10plus), m_doviRpu(doviRpu), m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)) {
         for (auto& buf : m_buffer) {
             buf.frame = nullptr;
             buf.pkt = nullptr;
@@ -1715,12 +1715,28 @@ public:
 
         std::vector<std::shared_ptr<RGYFrameData>> metadatalist;
         if (m_encCodec == RGY_CODEC_HEVC || m_encCodec == RGY_CODEC_AV1) {
-            if (m_hdr10plus) {
-                if (const auto data = m_hdr10plus->getData(m_inFrames); data.size() > 0) {
-                    metadatalist.push_back(std::make_shared<RGYFrameDataHDR10plus>(data.data(), data.size(), dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf().frame()->timestamp()));
-                }
-            } else if (m_hdr10plusMetadataCopy && frame) {
+            if (frame) {
                 metadatalist = dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf().frame()->dataList();
+            }
+            if (m_hdr10plus) {
+                // 外部からHDR10+を読み込む場合、metadatalist 内のHDR10+の削除
+                for (auto it = metadatalist.begin(); it != metadatalist.end(); ) {
+                    if ((*it)->dataType() == RGY_FRAME_DATA_HDR10PLUS) {
+                        it = metadatalist.erase(it);
+                    } else {
+                        it++;
+                    }
+                }
+            }
+            if (m_doviRpu) {
+                // 外部からdoviを読み込む場合、metadatalist 内のdovi rpuの削除
+                for (auto it = metadatalist.begin(); it != metadatalist.end(); ) {
+                    if ((*it)->dataType() == RGY_FRAME_DATA_DOVIRPU) {
+                        it = metadatalist.erase(it);
+                    } else {
+                        it++;
+                    }
+                }
             }
         }
 #if 0
