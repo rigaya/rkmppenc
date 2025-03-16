@@ -891,8 +891,9 @@ RGY_ERR RGYOutputAvcodec::InitVideo(const VideoInfo *videoOutputInfo, const Avco
     m_Mux.video.pktParse          = av_packet_alloc();
     m_Mux.video.afs               = prm->afs;
     m_Mux.video.debugDirectAV1Out = prm->debugDirectAV1Out;
-    m_Mux.video.doviRpu           = prm->doviRpu;
+    m_Mux.video.hdr10plus         = prm->hdr10plus;
     m_Mux.video.hdr10plusMetadataCopy = prm->hdr10plusMetadataCopy;
+    m_Mux.video.doviRpu           = prm->doviRpu;
     m_Mux.video.doviRpuMetadataCopy = prm->doviRpuMetadataCopy;
     m_Mux.video.doviRpuConvertParam = prm->doviRpuConvertParam;
 
