@@ -2443,7 +2443,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
     }
     if (m_encoder) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskMPPEncode>(m_encoder.get(), m_encCodec, m_enccfg, 1,
-            m_timecode.get(), m_encTimestamp.get(), m_outputTimebase, m_hdr10plus.get(), m_doviRpu.get(),
+            m_timecode.get(), m_encTimestamp.get(), m_outputTimebase, m_hdr10plus.get(), m_dovirpu.get(),
             prm->ctrl.threadCsp, prm->ctrl.threadParams.get(RGYThreadType::CSP), m_pLog));
     }
 

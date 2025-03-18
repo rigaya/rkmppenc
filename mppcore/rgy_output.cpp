@@ -1182,6 +1182,7 @@ RGY_ERR initWriters(
     const vector<unique_ptr<AVChapter>>& chapters,
 #endif //#if ENABLE_AVSW_READER
     const RGYHDRMetadata *hdrMetadataIn,
+    RGYHDR10Plus *hdr10plus,
     DOVIRpu *doviRpu,
     RGYTimestamp *vidTimestamp,
     const bool videoDtsUnavailable,
