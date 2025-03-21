@@ -1049,7 +1049,15 @@ RGY_ERR RGYOutputAvcodec::InitVideo(const VideoInfo *videoOutputInfo, const Avco
             AddMessage(RGY_LOG_DEBUG, _T("copied AV_PKT_DATA_DOVI_CONF from input\n"));
             doviconf.reset();
         }
-        if (m_Mux.video.doviProfileSrc == m_Mux.video.doviProfileDst) {
+        if (   m_Mux.video.doviProfileSrc == m_Mux.video.doviProfileDst // 入出力が同じなら変換しない
+            || (    m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_UNSET // 入力ファイルから情報が取得できなかった場合
+                 || m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_81 //profile 8.x(HEVC) や 10.x(AV1) は変換しない
+                 || m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_82
+                 || m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_84
+                 || m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_100
+                 || m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_101
+                 || m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_102
+                 || m_Mux.video.doviProfileSrc == RGY_DOVI_PROFILE_104)) {
             m_Mux.video.doviRpuConvertParam.convertProfile = false;
         }
 #else
