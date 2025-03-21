@@ -2611,8 +2611,6 @@ RGY_ERR MPPCore::init(MPPParam *prm) {
         return ret;
     }
 
-    m_encTimestamp = std::make_unique<RGYTimestamp>(prm->common.timestampPassThrough);
-
     if (RGY_ERR_NONE != (ret = initPowerThrottoling(prm))) {
         return ret;
     }
@@ -2624,6 +2622,8 @@ RGY_ERR MPPCore::init(MPPParam *prm) {
     if (RGY_ERR_NONE != (ret = initPerfMonitor(prm))) {
         return ret;
     }
+
+    m_encTimestamp = std::make_unique<RGYTimestamp>(prm->common.timestampPassThrough, false);
 
     if (RGY_ERR_NONE != (ret = initOutput(prm))) {
         return ret;
