@@ -1179,6 +1179,12 @@ switch hevc bitstream filter used for hw decoder input. (for debug purpose)
   - libavcodec  
     libavcodec の hevc_mp4toannexb bitstream filter を使用する。
 
+### --input-pixel-format &lt;string&gt;
+avdeviceで使用する "pixel_format" の設定。(それ以外での用途での使用は想定していません)
+
+### --offset-video-dts-advance  
+先頭のdtsが0になるよう、Bフレームによる遅延の分だけtimestampを補正します。
+
 ### --allow-other-negative-pts  
 音声・字幕において負のtimestampを許容する。原則デバッグ用。
 
