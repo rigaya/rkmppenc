@@ -2432,6 +2432,10 @@ Disable OpenCL realated features.
 
 This can avid error on systems OpenCL not installed or corrupted.
 
+### --task-perf-monitor
+
+Output rough time consumed for each main thread tasks, including wait time.
+
 ### --perf-monitor [&lt;string&gt;[,&lt;string&gt;]...]
 Outputs performance information. You can select the information name you want to output as a parameter from the following table. The default is all (all information).
 
