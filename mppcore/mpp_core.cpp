@@ -305,7 +305,7 @@ RGY_ERR MPPCore::initChapters(MPPParam *prm) {
 }
 
 RGY_ERR MPPCore::initLog(MPPParam *prm) {
-    m_pLog.reset(new RGYLog(prm->ctrl.logfile.c_str(), prm->ctrl.loglevel, prm->ctrl.logAddTime));
+    m_pLog.reset(new RGYLog(prm->ctrl.logfile.c_str(), prm->ctrl.loglevel, prm->ctrl.logOpt.addTime, prm->ctrl.logOpt.addLogLevel, prm->ctrl.logOpt.disableColor));
     if ((prm->ctrl.logfile.length() > 0 || prm->common.outputFilename.length() > 0) && prm->input.type != RGY_INPUT_FMT_SM) {
         m_pLog->writeFileHeader(prm->common.outputFilename.c_str());
     }
