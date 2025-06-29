@@ -85,7 +85,7 @@ public:
 
     virtual RGY_ERR init(MPPParam *prm);
     virtual RGY_ERR initLog(MPPParam *prm);
-    virtual RGY_ERR initDevice(const bool enableOpenCL, const bool checkVppPerformance);
+    virtual RGY_ERR initDevice(const bool enableOpenCL, const int openCLBuildThreads, const bool checkVppPerformance);
     virtual RGY_ERR initInput(MPPParam *pParams);
     virtual RGY_ERR initOutput(MPPParam *prm);
     virtual RGY_ERR run2();

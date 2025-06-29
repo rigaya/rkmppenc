@@ -2264,7 +2264,7 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
     return RGY_ERR_NONE;
 }
 
-RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const bool checkVppPerformance) {
+RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const int openCLBuildThreads, const bool checkVppPerformance) {
     if (!enableOpenCL) {
         PrintMes(RGY_LOG_DEBUG, _T("OpenCL disabled.\n"));
         return RGY_ERR_NONE;
@@ -2305,7 +2305,7 @@ RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const bool checkVppPerforma
     }
     selectedPlatform->setDev(devices[0]);
 
-    m_cl = std::make_shared<RGYOpenCLContext>(selectedPlatform, m_pLog);
+    m_cl = std::make_shared<RGYOpenCLContext>(selectedPlatform, openCLBuildThreads, m_pLog);
     if (m_cl->createContext((checkVppPerformance) ? CL_QUEUE_PROFILING_ENABLE : 0) != CL_SUCCESS) {
         PrintMes(RGY_LOG_WARN, _T("Failed to create OpenCL context, OpenCL disabled.\n"));
         m_cl.reset();
@@ -2595,7 +2595,7 @@ RGY_ERR MPPCore::init(MPPParam *prm) {
         return ret;
     }
 
-    if (RGY_ERR_NONE != (ret = initDevice(prm->ctrl.enableOpenCL, prm->vpp.checkPerformance))) {
+    if (RGY_ERR_NONE != (ret = initDevice(prm->ctrl.enableOpenCL, prm->ctrl.parallelEnc.isParent() ? 1 : prm->ctrl.openclBuildThreads, prm->vpp.checkPerformance))) {
         return ret;
     }
 

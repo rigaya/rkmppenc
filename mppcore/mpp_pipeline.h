@@ -1870,7 +1870,7 @@ public:
                 auto crop = initCrop();
                 m_convert->run((mppinfo.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
                     (void **)mppinfo.ptr, (const void **)surfEncInInfo.ptr,
-                    surfEncInInfo.width, surfEncInInfo.pitch[0], surfEncInInfo.pitch[1], mppinfo.pitch[0],
+                    surfEncInInfo.width, surfEncInInfo.pitch[0], surfEncInInfo.pitch[1], mppinfo.pitch[0], mppinfo.pitch[1],
                     surfEncInInfo.height, mppinfo.height, crop.c);
                     
                 if (auto clframe = dynamic_cast<PipelineTaskOutputSurf *>(frame.get())->surf().cl(); clframe != nullptr) {
@@ -2008,7 +2008,7 @@ public:
                 auto crop = initCrop();
                 m_convert->run((mappedHost.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
                     (void **)m_inputFrameTmp->ptr().data(), (const void **)mappedHost.ptr,
-                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], m_inputFrameTmp->pitch(RGY_PLANE_Y),
+                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], m_inputFrameTmp->pitch(RGY_PLANE_Y), m_inputFrameTmp->pitch(RGY_PLANE_C),
                     mappedHost.height, m_inputFrameTmp->height(), crop.c);
 
                 m_inputFrameTmp->setPropertyFrom(surfVppInCL);
@@ -2180,7 +2180,7 @@ public:
                 auto crop = initCrop();
                 m_convert->run((mappedHost.picstruct & RGY_PICSTRUCT_INTERLACED) ? 1 : 0,
                     (void **)inputFrameTmp->ptr().data(), (const void **)mappedHost.ptr,
-                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], inputFrameTmp->pitch(RGY_PLANE_Y),
+                    mappedHost.width, mappedHost.pitch[0], mappedHost.pitch[1], inputFrameTmp->pitch(RGY_PLANE_Y), inputFrameTmp->pitch(RGY_PLANE_C),
                     inputFrameTmp->height(), inputFrameTmp->height(), crop.c);
 
                 inputFrameTmp->setPropertyFrom(surfVppInCL);
