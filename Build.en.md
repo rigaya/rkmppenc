@@ -58,11 +58,11 @@ clinfo
 ### 3. Install mpp
 
 ```Shell
-wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-a94f677/librockchip-mpp1_1.5.0-1_arm64.deb
+wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-194af18/librockchip-mpp1_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
 rm librockchip-mpp1_1.5.0-1_arm64.deb
 
-wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-a94f677/librockchip-mpp-dev_1.5.0-1_arm64.deb
+wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-194af18/librockchip-mpp-dev_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp-dev_1.5.0-1_arm64.deb
 rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 
@@ -73,10 +73,10 @@ rm rockchip-multimedia-config_1.0.2-1_all.deb
 
 ### 4. Install librga
 ```Shell
-wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-b5fb3a6/librga2_2.2.0-1_arm64.deb
+wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-e454afe/librga2_2.2.0-1_arm64.deb
 sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
-wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-b5fb3a6/librga-dev_2.2.0-1_arm64.deb
+wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-e454afe/librga-dev_2.2.0-1_arm64.deb
 sudo apt install ./librga-dev_2.2.0-1_arm64.deb
 rm librga-dev_2.2.0-1_arm64.deb
 ```

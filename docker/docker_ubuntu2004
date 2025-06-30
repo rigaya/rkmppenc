@@ -33,17 +33,17 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-a94f677/librockchip-mpp1_1.5.0-1_arm64.deb && \
+RUN wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-194af18/librockchip-mpp1_1.5.0-1_arm64.deb && \
     apt-get install -y ./librockchip-mpp1_1.5.0-1_arm64.deb && \
     rm librockchip-mpp1_1.5.0-1_arm64.deb && \
-    wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-a94f677/librockchip-mpp-dev_1.5.0-1_arm64.deb && \
+    wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-194af18/librockchip-mpp-dev_1.5.0-1_arm64.deb && \
     apt-get install -y ./librockchip-mpp-dev_1.5.0-1_arm64.deb && \
     rm librockchip-mpp-dev_1.5.0-1_arm64.deb
 
-RUN wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-b5fb3a6/librga2_2.2.0-1_arm64.deb && \
+RUN wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-e454afe/librga2_2.2.0-1_arm64.deb && \
     apt-get install -y ./librga2_2.2.0-1_arm64.deb && \
     rm librga2_2.2.0-1_arm64.deb && \
-    wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-b5fb3a6/librga-dev_2.2.0-1_arm64.deb && \
+    wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-e454afe/librga-dev_2.2.0-1_arm64.deb && \
     apt-get install -y ./librga-dev_2.2.0-1_arm64.deb && \
     rm librga-dev_2.2.0-1_arm64.deb
 
