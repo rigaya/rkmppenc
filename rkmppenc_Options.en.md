@@ -628,6 +628,12 @@ Enable repeated insertion of headers.
 ### --no-repeat-headers
 Disable repeated insertion of headers. Might be ignored by other options which require repeated insertion of PPS.
 
+### --aud
+Insert Access Unit Delimiters (AUD).
+
+### --no-aud
+Disable insertion of Access Unit Delimiters (AUD).
+
 ## IO / Audio / Subtitle Options
 
 ### --input-analyze &lt;float&gt;

@@ -572,6 +572,12 @@ avhw読み込みでは、フレームの並び替えにタイムスタンプを�
 ### --no-repeat-headers
 ヘッダの定期的な挿入を無効化する。ただし、他のPPSの定期的な挿入を必要とするオプションを使用した場合、本オプションは無視される。
 
+### --aud
+Access Unit Delimiter（AUD）を挿入する。
+
+### --no-aud
+Access Unit Delimiter（AUD）の挿入を無効化する。
+
 ## 入出力 / 音声 / 字幕などのオプション
 
 ### --input-analyze &lt;float&gt;

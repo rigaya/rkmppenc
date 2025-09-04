@@ -281,6 +281,7 @@ struct MPPParam {
     int     gopLen;
     int     chromaQPOffset;
     bool    repeatHeaders;
+    bool    aud;
 
     int     par[2];
 

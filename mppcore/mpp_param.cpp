@@ -62,6 +62,7 @@ MPPParam::MPPParam() :
     gopLen(MPP_DEFAULT_GOP_LEN),
     chromaQPOffset(0),
     repeatHeaders(false),
+    aud(false),
     par(),
     disableDeblock(false),
     deblockAlpha(0),

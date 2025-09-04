@@ -164,6 +164,7 @@ tstring encoder_help() {
         _T("   --max-bitrate <int>          set max bitrate (kbps) (default: %d)\n")
         _T("   --gop-len <int>              set length of gop (default: auto)\n")
         _T("   --repeat-headers             enable repeated insertion of headers.\n")
+        _T("   --aud                        insert access unit delimiters.\n")
         _T("   --chroma-qp-offset <int>     set qp offset for chroma")
         _T("   --no-deblock                 disable deblock filter [H.264]")
         _T("   --deblock <int>:<int>        set deblock filter <alpha>:<beta> [H.264]"),
@@ -440,6 +441,14 @@ int parse_one_option(const TCHAR *option_name, const TCHAR* strInput[], int& i, 
     if (IS_OPTION("no-repeat-pps")
         || IS_OPTION("no-repeat-headers")) {
         pParams->repeatHeaders = false;
+        return 0;
+    }
+    if (IS_OPTION("aud")) {
+        pParams->aud = true;
+        return 0;
+    }
+    if (IS_OPTION("no-aud")) {
+        pParams->aud = false;
         return 0;
     }
     if (IS_OPTION("chroma-qp-offset")) {
@@ -857,6 +866,7 @@ tstring gen_cmd(const MPPParam *pParams, bool save_disabled_prm) {
     //    OPT_LST_AV1(_T("--profile"), _T(""), profile, list_av1_profile);
     //}
     OPT_BOOL(_T("--repeat-headers"), _T("--no-repeat-headers"), repeatHeaders);
+    OPT_BOOL(_T("--aud"), _T("--no-aud"), aud);
 
     OPT_NUM(_T("--chroma-qp-offset"), chromaQPOffset);
     OPT_BOOL(_T("--no-deblock"), _T(""), disableDeblock);
