@@ -1,5 +1,33 @@
 # rkmppenc Release Notes
 
+## 0.16
+
+- Update mpp and librga libraries.
+- Add [--aud](./rkmppenc_Options.en.md#--aud) option.
+- Add support for build with ffmpeg 8.0 libs.
+- Improve --vpp-subburn quality for moving subtitles.
+- Improve timestamp handling for negative timestamps.
+- Improve precision of [--vpp-afs](./rkmppenc_Options.en.md#--vpp-afs-param1value1param2value2).
+- Use thread pool to prevent unlimited OpenCL build threads.
+- Fixed an issue with [--vpp-decimate](./rkmppenc_Options.en.md#--vpp-decimate-param1value1param2value2) where timestamp and duration of frames became incorrect due to improper handling of the final frame's timing.
+
+## 0.15
+
+- Improve audio and video synchronization to achieve more uniform mixing when muxing with subtitles or data tracks.
+- Improve invalid input data handling to avoid freeze when "failed to run h264_mp4toannexb bitstream filter" error occurs.
+  Now properly exits with error.
+- Add support for uyvy as input color format.
+
+## 0.14
+
+- Add support for ISO 639-2 T-codes in language code specification.
+- Add option to specify input pixel format when using avdevice. (--input-pixel-format)
+- Fix timestamps occasionally becoming incorrect when using --seek with certain input files.
+
+## 0.13
+
+- Fix some codecs not being able to decode with avsw since 0.11.
+
 ## 0.12
 
 - Fix --avsw not working in rkmppenc 0.11.
