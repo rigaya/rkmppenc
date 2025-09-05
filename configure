@@ -359,6 +359,14 @@ else
     cnf_write "Skip"
 fi
 
+printf "checking for -Wno-psabi support..."
+if cxx_check "-Wno-psabi" "${CXXFLAGS} -Wno-psabi ${LDFLAGS}" ; then
+    CXXFLAGS="${CXXFLAGS} -Wno-psabi"
+    cnf_write "OK"
+else
+    cnf_write "Skip"
+fi
+
 LDFLAGS="-L. -ldl -lm -lstdc++ -lstdc++fs"
 if [ $ARM64 -ne 0 ]; then
     CXXINC="${CXXINC} -DLINUX64"
