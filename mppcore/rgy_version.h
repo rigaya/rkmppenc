@@ -29,9 +29,9 @@
 #ifndef __RGY_VERSION_H__
 #define __RGY_VERSION_H__
 
-#define VER_FILEVERSION             0,0,14,0
-#define VER_STR_FILEVERSION          "0.14"
-#define VER_STR_FILEVERSION_TCHAR _T("0.14")
+#define VER_FILEVERSION             0,0,17,0
+#define VER_STR_FILEVERSION          "0.17"
+#define VER_STR_FILEVERSION_TCHAR _T("0.17")
 
 
 #if (defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64__) || defined(__ARM_ARCH))
