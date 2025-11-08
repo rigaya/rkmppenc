@@ -1,4 +1,10 @@
 # rkmppenc Release Notes
+## 0.17
+
+- Fix error when encoding H.264 for RTMP/FLV output. (#10)
+- Fix timestamps not being set correctly when reading raw input.
+- Enable parallel encoding with multiple pipes.
+- Avoid unintended FPS values when the beginning of the video is corrupted.
 
 ## 0.16
 
