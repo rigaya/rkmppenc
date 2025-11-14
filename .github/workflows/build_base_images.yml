@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   build-base:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm64
     strategy:
       fail-fast: false
       matrix:
@@ -44,6 +44,7 @@ jobs:
         with:
           context: ./
           file: ${{ env.DOCKER_FILE }}
+          platforms: linux/arm64
           push: true
           tags: ${{ env.IMAGE_REPO }}:${{ matrix.dockerimg }}
           cache-from: type=gha
