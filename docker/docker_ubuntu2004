@@ -72,9 +72,12 @@ RUN wget https://github.com/rigaya/FFmpeg/releases/download/6.0-06addfde934cde30
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-RUN useradd -u $LOCAL_USER_ID -m --user-group --shell /bin/bash rigaya
-RUN groupmod -g $LOCAL_GROUP_ID rigaya
-WORKDIR /home/rigaya
-COPY . .
-RUN chown -R rigaya:rigaya .
-USER rigaya
+ENV CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV PATH=/usr/local/cargo/bin:$PATH
+
+# Install Rust toolchain (system-wide) and cargo-c for building bundled Rust libs
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path && \
+    cargo --version && rustc --version && \
+    cargo install cargo-c && \
+    cargo-cbuild --version 2>/dev/null || true
