@@ -98,6 +98,7 @@
   - [--video-metadata \<string\> or \<string\>=\<string\>](#--video-metadata-string-or-stringstring)
   - [--audio-copy \[\<int/string\>;\[,\<int/string\>\]...\]](#--audio-copy-intstringintstring)
   - [--audio-codec \[\[\<int/string\>?\]\<string\>\[:\<string\>=\<string\>\[,\<string\>=\<string\>\]...\]...\]](#--audio-codec-intstringstringstringstringstringstring)
+  - [--audio-encode-other-codec-only](#--audio-encode-other-codec-only)
   - [--audio-bitrate \[\<int/string\>?\]\<int\>](#--audio-bitrate-intstringint)
   - [--audio-profile \[\<int/string\>?\]\<string\>](#--audio-profile-intstringstring)
   - [--audio-stream \[\<int/string\>?\]{\<string1\>}\[:\<string2\>\]](#--audio-stream-intstringstring1string2)
@@ -766,6 +767,15 @@ Also, after ":" you can specify params for audio encoder,  after "#" you can spe
   
   Example 5: set param "aac_coder" to "twoloop" which will improve quality at low bitrate for aac encoder
   --audio-codec aac:aac_coder=twoloop
+  ```
+
+### --audio-encode-other-codec-only
+When used together with `--audio-codec`, if the input audio codec equals the codec specified by `--audio-codec`, the audio will be copied (`--audio-copy`). Encoding will be performed only when the codec differs.
+
+- Examples
+  ```
+  Example: Copy when input is AAC, otherwise encode to AAC
+  --audio-codec aac --audio-encode-other-codec-only
   ```
 
 ### --audio-bitrate [&lt;int/string&gt;?]&lt;int&gt;
