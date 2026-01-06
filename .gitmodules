@@ -13,3 +13,6 @@
 [submodule "librga"]
 	path = librga
 	url = https://github.com/tsukumijima/librga-rockchip
+[submodule "mpp"]
+	path = mpp
+	url = https://github.com/HermanChen/mpp.git
