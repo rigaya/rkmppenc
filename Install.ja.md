@@ -39,7 +39,7 @@ OpenCLフィルタ(```--vpp-deinterlace``` 以外のvppフィルタ) を使用�
 ここではRK3588 SoC内蔵のMali G610 MP4 GPUでのインストール例を示します。対象SoCによってインストールすべきものは変わるかと思います。
 
 ```Shell
-wget https://github.com/tsukumijima/libmali-rockchip/releases/download/v1.9-1-6f3d407/libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
+wget https://github.com/tsukumijima/libmali-rockchip/releases/download/v1.9-1-3238416/libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 sudo apt install -y ./libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 rm libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 ```
