@@ -4,9 +4,6 @@
 [submodule "cppcodec"]
 	path = cppcodec
 	url = https://github.com/tplgy/cppcodec.git
-[submodule "mpp"]
-	path = mpp
-	url = https://github.com/rockchip-linux/mpp.git
 [submodule "build_pkg"]
 	path = build_pkg
 	url = https://github.com/rigaya/build_pkg.git
