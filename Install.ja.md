@@ -1,14 +1,14 @@
 
 # rkmppencのインストール
 
-- Linux (Ubuntu 20.04/22.04)
+- Linux (Ubuntu 20.04-24.04)
 
-## Ubuntu 20.04/22.04
+## Ubuntu 20.04-24.04
 
 ### 1. Rockchip MPPのインストール
 
 ```Shell
-wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-194af18/librockchip-mpp1_1.5.0-1_arm64.deb
+wget https://github.com/tsukumijima/mpp-rockchip/releases/download/v1.5.0-1-20250110-194af18/librockchip-mpp1_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
 rm librockchip-mpp1_1.5.0-1_arm64.deb
 
@@ -19,7 +19,7 @@ rm rockchip-multimedia-config_1.0.2-1_all.deb
 
 ### 2. librgaのインストール
 ```Shell
-wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-e454afe/librga2_2.2.0-1_arm64.deb
+wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-20260105-bfd411b/librga2_2.2.0-1_arm64.deb
 sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
 ```

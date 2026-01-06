@@ -8,7 +8,7 @@
 ### 1. Install Rockchip MPP
 
 ```Shell
-wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-194af18/librockchip-mpp1_1.5.0-1_arm64.deb
+wget https://github.com/tsukumijima/mpp-rockchip/releases/download/v1.5.0-1-20250110-194af18/librockchip-mpp1_1.5.0-1_arm64.deb
 sudo apt install ./librockchip-mpp1_1.5.0-1_arm64.deb
 rm librockchip-mpp1_1.5.0-1_arm64.deb
 
@@ -19,7 +19,7 @@ rm rockchip-multimedia-config_1.0.2-1_all.deb
 
 ### 2. Install librga
 ```Shell
-wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-e454afe/librga2_2.2.0-1_arm64.deb
+wget https://github.com/tsukumijima/librga-rockchip/releases/download/v2.2.0-1-20260105-bfd411b/librga2_2.2.0-1_arm64.deb
 sudo apt install ./librga2_2.2.0-1_arm64.deb
 rm librga2_2.2.0-1_arm64.deb
 ```
@@ -39,7 +39,7 @@ OpenCL is required for vpp filters except ```--vpp-deinterlace```. If not using 
 Here shows examples for installing OpenCL modules for Mali G610 MP4 GPU in RK3588 SoC. Required modules will differ depending on your SoC.
 
 ```Shell
-wget https://github.com/tsukumijima/libmali-rockchip/releases/download/v1.9-1-6f3d407/libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
+wget https://github.com/tsukumijima/libmali-rockchip/releases/download/v1.9-1-3238416/libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 sudo apt install -y ./libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 rm libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 ```
