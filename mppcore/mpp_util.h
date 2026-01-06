@@ -35,9 +35,15 @@
 #include "rgy_frame.h"
 #include "mpp_frame.h"
 #include "rga/rga.h"
+#include "rgy_log.h"
 
 #include "mpp_param.h"
 #include "convert_csp.h"
+#include <unordered_map>
+#include <variant>
+#include <string>
+#include <memory>
+#include <cstdlib>
 
 class RGYFrameData;
 
@@ -52,16 +58,56 @@ MAP_PAIR_0_1_PROTO(interp, rgy, RGY_VPP_RESIZE_ALGO, rga, IM_SCALE_MODE);
 uint32_t setMppH264ForceConstraintFlags(const std::array<std::pair<bool, bool>, 6>& constraint_flags);
 
 struct MPPCfg {
-    MppEncCfg       cfg;
-    MppEncPrepCfg   prep;
-    MppEncRcCfg     rc;
-    MppEncCodecCfg  codec;
-    MppEncSliceSplit split;
+    MppEncCfg cfg;
+    std::unordered_map<std::string, std::variant<RK_S32, RK_U32, RK_S64, RK_U64>> params;
+    std::shared_ptr<RGYLog> log;
 
     MPPCfg();
+    void initLog(std::shared_ptr<RGYLog> log) { this->log = log; }
+    
+    // 設定値を追加
+    void set_s32(const std::string& key, RK_S32 value) { params[key] = value; }
+    void set_u32(const std::string& key, RK_U32 value) { params[key] = value; }
+    void set_s64(const std::string& key, RK_S64 value) { params[key] = value; }
+    void set_u64(const std::string& key, RK_U64 value) { params[key] = value; }
+    
+    // 設定値を取得（デフォルト値あり版）
+    template<typename T>
+    T get(const std::string& key, T default_value) const {
+        auto it = params.find(key);
+        if (it != params.end()) {
+            if (auto* val = std::get_if<T>(&it->second)) {
+                return *val;
+            }
+        }
+        return default_value;
+    }
+    
+    // 設定値を取得（デフォルト値なし版：キーが見つからなければエラーログ出力して終了）
+    template<typename T>
+    T get(const std::string& key) const {
+        auto it = params.find(key);
+        if (it != params.end()) {
+            if (auto* val = std::get_if<T>(&it->second)) {
+                return *val;
+            }
+        }
+        // キーが見つからない、または型が一致しない場合
+        if (log) {
+            log->write(RGY_LOG_ERROR, RGY_LOGT_CORE, _T("MPPCfg::get: Key \"%s\" not found or type mismatch.\n"), char_to_tstring(key));
+        }
+        std::abort();
+    }
+    
+    // すべての設定をMppEncCfgに適用
+    RGY_ERR apply(MppEncCfg enc_cfg) const;
+    
+    // 値の文字列化（表示用）
+    tstring to_string(const std::string& key) const;
+    
     RGYFrameInfo frameinfo() const {
-        const int outWidth = prep.width;
-        const int outHeight = prep.height;
+        const int outWidth = get<RK_S32>("prep:width");
+        const int outHeight = get<RK_S32>("prep:height");
         int bitdepth = 8;
         auto csp = RGY_CSP_NV12;
         const bool yuv444 = false;
@@ -73,27 +119,32 @@ struct MPPCfg {
         return RGYFrameInfo(outWidth, outHeight, csp, bitdepth, RGY_PICSTRUCT_FRAME, RGY_MEM_TYPE_CPU);
     }
     RGY_CODEC rgy_codec() const {
-        return codec_enc_to_rgy(codec.coding);
+        auto coding = get<RK_S32>("codec:type");
+        return codec_enc_to_rgy((MppCodingType)coding);
     }
     int codec_profile() const {
         switch (rgy_codec()) {
-        case RGY_CODEC_H264: return codec.h264.profile;
-        case RGY_CODEC_HEVC: return codec.h265.profile;
+        case RGY_CODEC_H264: return get<RK_S32>("h264:profile");
+        case RGY_CODEC_HEVC: return get<RK_S32>("h265:profile");
         default: break;
         }
         return 0;
     }
     int codec_level() const {
         switch (rgy_codec()) {
-        case RGY_CODEC_H264: return codec.h264.level;
-        case RGY_CODEC_HEVC: return codec.h265.level;
+        case RGY_CODEC_H264: return get<RK_S32>("h264:level");
+        case RGY_CODEC_HEVC: return get<RK_S32>("h265:level");
         default: break;
         }
         return 0;
     }
     int codec_tier() const {
         switch (rgy_codec()) {
-        case RGY_CODEC_HEVC: return codec.h265.tier;
+        case RGY_CODEC_HEVC: {
+            // h265:tierはドキュメントに記載なし
+            // return get<RK_S32>("h265:tier");
+            return 0;
+        }
         default: break;
         }
         return 0;

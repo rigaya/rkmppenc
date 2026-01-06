@@ -84,11 +84,8 @@
 
 MPPCfg::MPPCfg() :
     cfg(nullptr),
-    prep({0}),
-    rc({0}),
-    codec(),
-    split({0}) {
-
+    params(),
+    log() {
 }
 
 MPPContext::MPPContext() :
@@ -213,6 +210,12 @@ void MPPCore::Terminate() {
     m_pLog.reset();
     m_encCodec = RGY_CODEC_UNKNOWN;
     m_pAbortByUser = nullptr;
+
+    // MppEncCfgを解放
+    if (m_enccfg.cfg != nullptr) {
+        mpp_enc_cfg_deinit(m_enccfg.cfg);
+        m_enccfg.cfg = nullptr;
+    }
 }
 
 void MPPCore::PrintMes(RGYLogLevel log_level, const TCHAR *format, ...) {
@@ -1969,32 +1972,6 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
     return RGY_ERR_UNSUPPORTED;
 }
 
-RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
-    m_enccfg.prep.change        = MPP_ENC_PREP_CFG_CHANGE_INPUT |
-                                  MPP_ENC_PREP_CFG_CHANGE_ROTATION |
-                                  MPP_ENC_PREP_CFG_CHANGE_FORMAT;
-    m_enccfg.prep.width         = m_encWidth;
-    m_enccfg.prep.height        = m_encHeight;
-    m_enccfg.prep.hor_stride    = mpp_frame_pitch(GetEncoderCSP(prm), m_encWidth);
-    m_enccfg.prep.ver_stride    = m_encHeight;
-    m_enccfg.prep.format        = csp_rgy_to_enc(GetEncoderCSP(prm));
-    m_enccfg.prep.rotation      = MPP_ENC_ROT_0;
-
-    m_enccfg.prep.color         = (MppFrameColorSpace)m_encVUI.matrix;
-    m_enccfg.prep.colorprim     = (MppFrameColorPrimaries)m_encVUI.colorprim;
-    m_enccfg.prep.colortrc      = (MppFrameColorTransferCharacteristic)m_encVUI.transfer;
-    m_enccfg.prep.range         = (MppFrameColorRange)m_encVUI.colorrange;
-
-    auto ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_PREP_CFG, &m_enccfg.prep));
-    if (ret != RGY_ERR_NONE) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to set prep cfg to encoder: %s.\n"), get_err_mes(ret));
-        return ret;
-    }
-
-    PrintMes(RGY_LOG_DEBUG, _T("Set encoder prep config to encoder.\n"));
-    return RGY_ERR_NONE;
-}
-
 RGY_ERR MPPCore::checkRCParam(MPPParam *prm) {
     const bool hevc_high_tier = prm->codec == RGY_CODEC_HEVC && prm->codecParam[prm->codec].tier == 1;
     auto codecLevel = createCodecLevel(prm->codec);
@@ -2048,98 +2025,127 @@ RGY_ERR MPPCore::checkRCParam(MPPParam *prm) {
     return RGY_ERR_NONE;
 }
 
+RGY_ERR MPPCore::initEncoderPrep(const MPPParam *prm) {
+    auto fmt = csp_rgy_to_enc(GetEncoderCSP(prm));
+    auto hor_stride = mpp_frame_pitch(GetEncoderCSP(prm), m_encWidth);
+
+    // 設定値をmapに保存
+    m_enccfg.set_s32("prep:width", m_encWidth);
+    m_enccfg.set_s32("prep:height", m_encHeight);
+    m_enccfg.set_s32("prep:hor_stride", hor_stride);
+    m_enccfg.set_s32("prep:ver_stride", m_encHeight);
+    m_enccfg.set_s32("prep:format", fmt);
+    m_enccfg.set_s32("prep:rotation", MPP_ENC_ROT_0);
+    // m_enccfg.set_s32("prep:color", (RK_S32)(MppFrameColorSpace)m_encVUI.matrix); // ドキュメントに記載なし（prep:colorspaceはあるが、prep:colorはない）
+    m_enccfg.set_s32("prep:colorprim", (RK_S32)(MppFrameColorPrimaries)m_encVUI.colorprim);
+    m_enccfg.set_s32("prep:colortrc", (RK_S32)(MppFrameColorTransferCharacteristic)m_encVUI.transfer);
+    m_enccfg.set_s32("prep:range", (RK_S32)(MppFrameColorRange)m_encVUI.colorrange); // prep:colorrangeの別名として記載あり
+
+    PrintMes(RGY_LOG_DEBUG, _T("Set encoder prep config to encoder.\n"));
+    return RGY_ERR_NONE;
+}
+
 RGY_ERR MPPCore::initEncoderRC(const MPPParam *prm) {
-    m_enccfg.rc.change  = MPP_ENC_RC_CFG_CHANGE_RC_MODE |
-                          MPP_ENC_RC_CFG_CHANGE_QUALITY |
-                          MPP_ENC_RC_CFG_CHANGE_BPS |
-                          MPP_ENC_RC_CFG_CHANGE_FPS_IN |
-                          MPP_ENC_RC_CFG_CHANGE_FPS_OUT |
-                          MPP_ENC_RC_CFG_CHANGE_GOP |
-                          MPP_ENC_RC_CFG_CHANGE_SKIP_CNT |
-                          MPP_ENC_RC_CFG_CHANGE_QP_INIT |
-                          MPP_ENC_RC_CFG_CHANGE_QP_RANGE |
-                          MPP_ENC_RC_CFG_CHANGE_QP_RANGE_I |
-                          MPP_ENC_RC_CFG_CHANGE_QP_MAX_STEP |
-                          MPP_ENC_RC_CFG_CHANGE_DROP_FRM;
-    m_enccfg.rc.rc_mode = (MppEncRcMode)prm->rateControl;
-    m_enccfg.rc.quality = (MppEncRcQuality)prm->qualityPreset;
-    m_enccfg.rc.bps_target  = prm->bitrate * 1000;
+    RK_S32 quality = (MppEncRcQuality)prm->qualityPreset;
+    RK_S32 bps_target = prm->bitrate * 1000;
+    RK_S32 is_fix_qp = (prm->rateControl == MPP_ENC_RC_MODE_FIXQP) ? 1 : 0;
+
+    RK_S32 qp_init, qp_max, qp_min, qp_max_i, qp_min_i, qp_max_step, qp_delta_ip;
+    RK_S32 bps_max, bps_min;
 
     if (prm->rateControl == MPP_ENC_RC_MODE_FIXQP) {
-        m_enccfg.rc.qp_init     = prm->qp.qpI;
-        m_enccfg.rc.qp_max      = std::max(prm->qp.qpI, prm->qp.qpP);
-        m_enccfg.rc.qp_min      = std::min(prm->qp.qpI, prm->qp.qpP);
-        m_enccfg.rc.qp_max_i    = std::max(prm->qp.qpI, prm->qp.qpP);
-        m_enccfg.rc.qp_min_i    = std::min(prm->qp.qpI, prm->qp.qpP);
-        m_enccfg.rc.qp_delta_ip = prm->qp.qpP - prm->qp.qpI;
-        m_enccfg.rc.qp_delta_vi = prm->qp.qpP - prm->qp.qpI;
-        m_enccfg.rc.quality     = MPP_ENC_RC_QUALITY_CQP;
+        qp_init     = prm->qp.qpI;
+        qp_max      = std::max(prm->qp.qpI, prm->qp.qpP);
+        qp_min      = std::min(prm->qp.qpI, prm->qp.qpP);
+        qp_max_i    = std::max(prm->qp.qpI, prm->qp.qpP);
+        qp_min_i    = std::min(prm->qp.qpI, prm->qp.qpP);
+        qp_delta_ip = prm->qp.qpP - prm->qp.qpI;
+        quality     = MPP_ENC_RC_QUALITY_CQP;
+        bps_max = bps_min = 0;
+        qp_max_step = 0;
     } else {
-        if (prm->rateControl == MPP_ENC_RC_MODE_VBR && m_enccfg.rc.quality == MPP_ENC_RC_QUALITY_CQP) {
-            m_enccfg.rc.bps_target  = -1;
-            m_enccfg.rc.bps_max     = -1;
-            m_enccfg.rc.bps_min     = -1;
+        if (prm->rateControl == MPP_ENC_RC_MODE_VBR && quality == MPP_ENC_RC_QUALITY_CQP) {
+            bps_target  = -1;
+            bps_max     = -1;
+            bps_min     = -1;
+            qp_init = qp_max = qp_min = qp_max_i = qp_min_i = qp_max_step = qp_delta_ip = 0;
         } else {
             if (prm->rateControl == MPP_ENC_RC_MODE_CBR) {
-                m_enccfg.rc.bps_max     = m_enccfg.rc.bps_target * 17 / 16;
-                m_enccfg.rc.bps_min     = m_enccfg.rc.bps_target * 15 / 16;
+                bps_max     = bps_target * 17 / 16;
+                bps_min     = bps_target * 15 / 16;
             } else {
                 if (prm->maxBitrate == 0) { // 自動で適当な値を入れておかないとエラーになる
-                    m_enccfg.rc.bps_max = m_enccfg.rc.bps_target * 3 / 2;
+                    bps_max = bps_target * 3 / 2;
                 } else {
-                    m_enccfg.rc.bps_max = std::max(prm->maxBitrate * 1000, m_enccfg.rc.bps_target);
+                    bps_max = std::max(prm->maxBitrate * 1000, bps_target);
                 }
-                m_enccfg.rc.bps_min     = m_enccfg.rc.bps_target * 1 / 16;
+                bps_min     = bps_target * 1 / 16;
             }
-            m_enccfg.rc.qp_init     = -1;
-            m_enccfg.rc.qp_max      = prm->qpMax;
-            m_enccfg.rc.qp_min      = prm->qpMin;
-            m_enccfg.rc.qp_max_i    = prm->qpMax;
-            m_enccfg.rc.qp_min_i    = prm->qpMin;
-            m_enccfg.rc.qp_max_step = 16;
-            m_enccfg.rc.qp_delta_ip = 3;
+            qp_init     = -1;
+            qp_max      = prm->qpMax;
+            qp_min      = prm->qpMin;
+            qp_max_i    = prm->qpMax;
+            qp_min_i    = prm->qpMin;
+            qp_max_step = 16;
+            qp_delta_ip = 3;
         }
     }
 
-    m_enccfg.rc.fps_in_num     = m_encFps.n();
-    m_enccfg.rc.fps_in_denom   = m_encFps.d();
-    m_enccfg.rc.fps_out_num    = m_encFps.n();
-    m_enccfg.rc.fps_out_denom  = m_encFps.d();
-
-    m_enccfg.rc.gop             = prm->gopLen;
-    m_enccfg.rc.skip_cnt        = 0;
-    m_enccfg.rc.drop_mode       = MPP_ENC_RC_DROP_FRM_DISABLED;
-
-    auto ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_RC_CFG, &m_enccfg.rc));
-    if (ret != RGY_ERR_NONE) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to set rc config to encoder: %s.\n"), get_err_mes(ret));
-        return ret;
+    // 設定値をmapに保存
+    m_enccfg.set_s32("rc:mode", is_fix_qp ? MPP_ENC_RC_MODE_FIXQP :
+                      (prm->rateControl ? MPP_ENC_RC_MODE_CBR : MPP_ENC_RC_MODE_VBR));
+    // m_enccfg.set_s32("rc:quality", quality); // ドキュメントに記載なし
+    m_enccfg.set_s32("rc:bps_target", bps_target);
+    if (bps_max > 0) {
+        m_enccfg.set_s32("rc:bps_max", bps_max);
     }
+    if (bps_min > 0) {
+        m_enccfg.set_s32("rc:bps_min", bps_min);
+    }
+    m_enccfg.set_s32("rc:fps_in_flex", 0);
+    m_enccfg.set_s32("rc:fps_in_num", m_encFps.n());
+    m_enccfg.set_s32("rc:fps_in_denom", m_encFps.d());
+    m_enccfg.set_s32("rc:fps_out_flex", 0);
+    m_enccfg.set_s32("rc:fps_out_num", m_encFps.n());
+    m_enccfg.set_s32("rc:fps_out_denom", m_encFps.d());
+    m_enccfg.set_s32("rc:gop", prm->gopLen);
+    m_enccfg.set_u32("rc:drop_mode", MPP_ENC_RC_DROP_FRM_DISABLED);
+    
+    // QP関連の設定
+    if (qp_init >= 0) {
+        m_enccfg.set_s32("rc:qp_init", qp_init);
+    }
+    m_enccfg.set_s32("rc:qp_min", qp_min);
+    m_enccfg.set_s32("rc:qp_max", qp_max);
+    m_enccfg.set_s32("rc:qp_min_i", qp_min_i);
+    m_enccfg.set_s32("rc:qp_max_i", qp_max_i);
+    if (qp_max_step > 0) {
+        m_enccfg.set_s32("rc:qp_step", qp_max_step);
+    }
+    // m_enccfg.set_s32("rc:qp_delta_ip", qp_delta_ip); // ドキュメントに記載なし（rc:qp_ipはあるが、rc:qp_delta_ipはない。h264:qp_delta_ipはある）
+
     PrintMes(RGY_LOG_DEBUG, _T("Set rc config to encoder.\n"));
     return RGY_ERR_NONE;
 }
 
 RGY_ERR MPPCore::initEncoderCodec(const MPPParam *prm) {
     m_encCodec = prm->codec;
-    m_enccfg.codec.coding = codec_rgy_to_enc(prm->codec);
+    auto coding = codec_rgy_to_enc(prm->codec);
+    
+    // 設定値をmapに保存
+    m_enccfg.set_s32("codec:type", coding);
+
     switch (prm->codec) {
     case RGY_CODEC_H264: {
-        m_enccfg.codec.h264.change = MPP_ENC_H264_CFG_CHANGE_PROFILE |
-                                     MPP_ENC_H264_CFG_CHANGE_ENTROPY |
-                                     MPP_ENC_H264_CFG_CHANGE_TRANS_8x8 |
-                                     MPP_ENC_H264_CFG_CHANGE_CHROMA_QP |
-                                     MPP_ENC_H264_CFG_CHANGE_DEBLOCKING;
-        m_enccfg.codec.h264.profile = prm->codecParam[RGY_CODEC_H264].profile;
-        m_enccfg.codec.h264.level   = prm->codecParam[RGY_CODEC_H264].level;
-        m_enccfg.codec.h264.entropy_coding_mode    = (m_enccfg.codec.h264.profile == get_cx_value(list_avc_profile, _T("baseline"))) ? 0 : 1;
-        m_enccfg.codec.h264.entropy_coding_mode_ex = m_enccfg.codec.h264.entropy_coding_mode; // 実質的には ex のほうが効いている
-        m_enccfg.codec.h264.cabac_init_idc         = 0;
-        m_enccfg.codec.h264.transform8x8_mode      = (m_enccfg.codec.h264.profile == get_cx_value(list_avc_profile, _T("high"))) ? 1 : 0;
+        RK_S32 profile = prm->codecParam[RGY_CODEC_H264].profile;
+        RK_S32 level = prm->codecParam[RGY_CODEC_H264].level;
+        RK_S32 entropy_coding_mode = (profile == get_cx_value(list_avc_profile, _T("baseline"))) ? 0 : 1;
+        RK_S32 transform8x8_mode = (profile == get_cx_value(list_avc_profile, _T("high"))) ? 1 : 0;
+        
         // high profile は デフォルトで constraint_set3 = 1 となぜかなってしまうので、これを上書きする
         // https://github.com/rockchip-linux/mpp/blob/develop/mpp/codec/enc/h264/h264e_sps.c#L99
-        if (m_enccfg.codec.h264.profile == get_cx_value(list_avc_profile, _T("high"))) {
-            m_enccfg.codec.h264.change |= MPP_ENC_H264_CFG_CHANGE_CONSTRAINT_SET;
-            m_enccfg.codec.h264.constraint_set = setMppH264ForceConstraintFlags(
+        if (profile == get_cx_value(list_avc_profile, _T("high"))) {
+            RK_U32 constraint_set = setMppH264ForceConstraintFlags(
                 std::array<std::pair<bool, bool>, 6>
                 {std::pair<bool, bool>{ true, false },  // constraint_set0
                  std::pair<bool, bool>{ true, false },  // constraint_set1
@@ -2148,32 +2154,62 @@ RGY_ERR MPPCore::initEncoderCodec(const MPPParam *prm) {
                  std::pair<bool, bool>{ true, false },  // constraint_set4
                  std::pair<bool, bool>{ true, false }}  // constraint_set5
             );
+            m_enccfg.set_u32("h264:constraint_set", constraint_set);
         }
-        m_enccfg.codec.h264.chroma_cb_qp_offset  = prm->chromaQPOffset;
-        m_enccfg.codec.h264.chroma_cr_qp_offset  = prm->chromaQPOffset;
-        m_enccfg.codec.h264.deblock_disable      = prm->disableDeblock ? 1 : 0;
-        m_enccfg.codec.h264.deblock_offset_alpha = prm->deblockAlpha;
-        m_enccfg.codec.h264.deblock_offset_beta  = prm->deblockBeta;
+
+        m_enccfg.set_s32("h264:profile", profile);
+        m_enccfg.set_s32("h264:level", level);
+        m_enccfg.set_s32("h264:cabac_en", entropy_coding_mode);
+        m_enccfg.set_s32("h264:cabac_idc", 0);
+        m_enccfg.set_s32("h264:trans8x8", transform8x8_mode);
+        
+        // H.264固有のQP設定（rc設定から取得）
+        RK_S32 qp_init = m_enccfg.get<RK_S32>("rc:qp_init", -1);
+        RK_S32 qp_min = m_enccfg.get<RK_S32>("rc:qp_min", 0);
+        RK_S32 qp_max = m_enccfg.get<RK_S32>("rc:qp_max", 0);
+        RK_S32 qp_min_i = m_enccfg.get<RK_S32>("rc:qp_min_i", 0);
+        RK_S32 qp_max_i = m_enccfg.get<RK_S32>("rc:qp_max_i", 0);
+        RK_S32 qp_max_step = m_enccfg.get<RK_S32>("rc:qp_step", 0); // rc:qp_max_stepではなくrc:qp_step
+        // rc:qp_delta_ipはドキュメントにない。h264:qp_delta_ipは設定するが、rcレベルではrc:qp_ipが存在（ドキュメント646行目）
+        // initEncoderRCと同じロジックで計算
+        RK_S32 qp_delta_ip;
+        RK_S32 rc_mode_val = m_enccfg.get<RK_S32>("rc:mode", 0);
+        if (rc_mode_val == MPP_ENC_RC_MODE_FIXQP) {
+            qp_delta_ip = prm->qp.qpP - prm->qp.qpI;
+        } else {
+            qp_delta_ip = 3; // デフォルト値（initEncoderRCでの設定値と同じ）
+        }
+        
+        if (qp_init >= 0) {
+            m_enccfg.set_s32("h264:qp_init", qp_init);
+        }
+        m_enccfg.set_s32("h264:qp_min", qp_min);
+        m_enccfg.set_s32("h264:qp_max", qp_max);
+        m_enccfg.set_s32("h264:qp_min_i", qp_min_i);
+        m_enccfg.set_s32("h264:qp_max_i", qp_max_i);
+        if (qp_max_step > 0) {
+            m_enccfg.set_s32("h264:qp_step", qp_max_step);
+        }
+        m_enccfg.set_s32("h264:qp_delta_ip", qp_delta_ip);
+        
+        m_enccfg.set_s32("h264:cb_qp_offset", prm->chromaQPOffset);
+        m_enccfg.set_s32("h264:cr_qp_offset", prm->chromaQPOffset);
+        m_enccfg.set_s32("h264:dblk_disable", prm->disableDeblock ? 1 : 0);
+        m_enccfg.set_s32("h264:dblk_alpha", prm->deblockAlpha);
+        m_enccfg.set_s32("h264:dblk_beta", prm->deblockBeta);
     } break;
     case RGY_CODEC_HEVC: {
-        m_enccfg.codec.h265.change = MPP_ENC_H265_CFG_PROFILE_LEVEL_TILER_CHANGE |
-                                     MPP_ENC_H265_CFG_TRANS_CHANGE;
-        m_enccfg.codec.h265.profile = prm->codecParam[RGY_CODEC_HEVC].profile;
-        m_enccfg.codec.h265.level   = prm->codecParam[RGY_CODEC_HEVC].level;
-        m_enccfg.codec.h265.tier    = prm->codecParam[RGY_CODEC_HEVC].tier;
-        m_enccfg.codec.h265.trans_cfg.cb_qp_offset = prm->chromaQPOffset;
-        m_enccfg.codec.h265.trans_cfg.cr_qp_offset = prm->chromaQPOffset;
+        m_enccfg.set_s32("h265:profile", prm->codecParam[RGY_CODEC_HEVC].profile);
+        m_enccfg.set_s32("h265:level", prm->codecParam[RGY_CODEC_HEVC].level);
+        // m_enccfg.set_s32("h265:tier", prm->codecParam[RGY_CODEC_HEVC].tier); // ドキュメントに記載なし
+        m_enccfg.set_s32("h265:cb_qp_offset", prm->chromaQPOffset);
+        m_enccfg.set_s32("h265:cr_qp_offset", prm->chromaQPOffset);
     } break;
     default:
         PrintMes(RGY_LOG_DEBUG, _T("Unknown codec %s.\n"), CodecToStr(prm->codec).c_str());
         return RGY_ERR_UNSUPPORTED;
     }
 
-    auto ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_CODEC_CFG, &m_enccfg.codec));
-    if (ret != RGY_ERR_NONE) {
-        PrintMes(RGY_LOG_ERROR, _T("Failed to set codec config to encoder : %s.\n"), get_err_mes(ret));
-        return ret;
-    }
     PrintMes(RGY_LOG_DEBUG, _T("Set codec config to encoder.\n"));
     return RGY_ERR_NONE;
 }
@@ -2224,6 +2260,14 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
         return ret;
     }
 
+    // MppEncCfgを初期化
+    m_enccfg.initLog(m_pLog);
+    ret = err_to_rgy(mpp_enc_cfg_init(&m_enccfg.cfg));
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to initialize encoder config: %s.\n"), get_err_mes(ret));
+        return ret;
+    }
+
     ret = initEncoderPrep(prm);
     if (ret != RGY_ERR_NONE) {
         return ret;
@@ -2241,6 +2285,20 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
 
     ret = initEncoderCodec(prm);
     if (ret != RGY_ERR_NONE) {
+        return ret;
+    }
+
+    // すべての設定値をMppEncCfgに適用
+    ret = m_enccfg.apply(m_enccfg.cfg);
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to apply encoder config: %s.\n"), get_err_mes(ret));
+        return ret;
+    }
+
+    // MppEncCfgをエンコーダーに設定
+    ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_CFG, m_enccfg.cfg));
+    if (ret != RGY_ERR_NONE) {
+        PrintMes(RGY_LOG_ERROR, _T("Failed to set encoder config: %s.\n"), get_err_mes(ret));
         return ret;
     }
 
@@ -2996,19 +3054,33 @@ tstring MPPCore::GetEncoderParam() {
             }
         }
     }
-    if (m_enccfg.rc.rc_mode == MPP_ENC_RC_MODE_FIXQP) {
-        mes += strsprintf(_T("CQP:           %d:%d\n"), m_enccfg.rc.qp_init, m_enccfg.rc.qp_init + m_enccfg.rc.qp_delta_ip);
+    RK_S32 rc_mode = m_enccfg.get<RK_S32>("rc:mode", 0);
+    if (rc_mode == MPP_ENC_RC_MODE_FIXQP) {
+        RK_S32 qp_init = m_enccfg.get<RK_S32>("rc:qp_init", 0);
+        // rc:qp_delta_ipはドキュメントにないので、h264:qp_delta_ipまたはh265:qp_delta_ipから取得を試みる
+        RK_S32 qp_delta_ip = 0;
+        if (m_encCodec == RGY_CODEC_H264) {
+            qp_delta_ip = m_enccfg.get<RK_S32>("h264:qp_delta_ip", 0);
+        } else if (m_encCodec == RGY_CODEC_HEVC) {
+            qp_delta_ip = m_enccfg.get<RK_S32>("h265:qp_delta_ip", 0);
+        }
+        mes += strsprintf(_T("CQP:           %d:%d\n"), qp_init, qp_init + qp_delta_ip);
     } else {
-        mes += strsprintf(_T("Quality:       %s\n"), get_cx_desc(list_mpp_quality_preset, m_enccfg.rc.quality));
+        // RK_S32 quality = m_enccfg.get<RK_S32>("rc:quality", 0); // rc:qualityはドキュメントにない
+        RK_S32 bps_target = m_enccfg.get<RK_S32>("rc:bps_target", 0);
+        RK_S32 bps_max = m_enccfg.get<RK_S32>("rc:bps_max", 0);
+        RK_S32 qp_min = m_enccfg.get<RK_S32>("rc:qp_min", 0);
+        RK_S32 qp_max = m_enccfg.get<RK_S32>("rc:qp_max", 0);
+        // mes += strsprintf(_T("Quality:       %s\n"), get_cx_desc(list_mpp_quality_preset, quality)); // rc:qualityはドキュメントにない
         {
             mes += strsprintf(_T("%s:           %d kbps\n"),
-                get_cx_desc(list_mpp_rc_method, m_enccfg.rc.rc_mode), m_enccfg.rc.bps_target / 1000);
+                get_cx_desc(list_mpp_rc_method, rc_mode), bps_target / 1000);
         }
-        mes += strsprintf(_T("Max bitrate:   %d kbps\n"), m_enccfg.rc.bps_max / 1000);
-        mes += strsprintf(_T("QP:            Min: %d, Max: %d\n"),
-            m_enccfg.rc.qp_min, m_enccfg.rc.qp_max);
+        mes += strsprintf(_T("Max bitrate:   %d kbps\n"), bps_max / 1000);
+        mes += strsprintf(_T("QP:            Min: %d, Max: %d\n"), qp_min, qp_max);
     }
-    mes += strsprintf(_T("GOP Len:       %d frames\n"), m_enccfg.rc.gop);
+    RK_S32 gop = m_enccfg.get<RK_S32>("rc:gop", 0);
+    mes += strsprintf(_T("GOP Len:       %d frames\n"), gop);
     { const auto &vui_str = m_encVUI.print_all();
     if (vui_str.length() > 0) {
         mes += strsprintf(_T("VUI:              %s\n"), vui_str.c_str());

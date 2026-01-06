@@ -1621,9 +1621,12 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
 
     RGY_ERR allocateMppBuffer() {
-        const int planeSize = ALIGN(m_encParams.prep.hor_stride, 64) * ALIGN(m_encParams.prep.ver_stride, 64);
+        const int hor_stride = m_encParams.get<RK_S32>("prep:hor_stride");
+        const int ver_stride = m_encParams.get<RK_S32>("prep:ver_stride");
+        const int planeSize = ALIGN(hor_stride, 64) * ALIGN(ver_stride, 64);
         int frameSize = 0;
-        switch (m_encParams.prep.format & MPP_FRAME_FMT_MASK) {
+        const MppFrameFormat format = (MppFrameFormat)m_encParams.get<RK_S32>("prep:format");
+        switch (format & MPP_FRAME_FMT_MASK) {
             case MPP_FMT_YUV420SP:
             case MPP_FMT_YUV420P: {
                 frameSize = planeSize * 3 / 2;
@@ -1772,11 +1775,11 @@ public:
                 PrintMes(RGY_LOG_ERROR, _T("Failed to allocate mpp frame: %s\n"), get_err_mes(err));
                 return err;
             }
-            mpp_frame_set_width(mppframe, m_encParams.prep.width);
-            mpp_frame_set_height(mppframe, m_encParams.prep.height);
-            mpp_frame_set_hor_stride(mppframe, m_encParams.prep.hor_stride);
-            mpp_frame_set_ver_stride(mppframe, m_encParams.prep.ver_stride);
-            mpp_frame_set_fmt(mppframe, m_encParams.prep.format);
+            mpp_frame_set_width(mppframe, m_encParams.get<RK_S32>("prep:width"));
+            mpp_frame_set_height(mppframe, m_encParams.get<RK_S32>("prep:height"));
+            mpp_frame_set_hor_stride(mppframe, m_encParams.get<RK_S32>("prep:hor_stride"));
+            mpp_frame_set_ver_stride(mppframe, m_encParams.get<RK_S32>("prep:ver_stride"));
+            mpp_frame_set_fmt(mppframe, (MppFrameFormat)m_encParams.get<RK_S32>("prep:format"));
             mpp_frame_set_buffer(mppframe, nullptr);
             mpp_frame_set_eos(mppframe, 1);
             mppframeeos = true;
@@ -1794,28 +1797,40 @@ public:
             if (auto inFrameMpp = surfIn.mpp(); inFrameMpp != nullptr) {
                 mppframe = inFrameMpp->releaseMpp(); // 中身がMppFrameの場合はそのまま使用する
                 //メモリの確保方法が、エンコーダの設定と一致しているかを確認する
-                if (mpp_frame_get_width(mppframe)     != (RK_U32)m_encParams.prep.width
-                || mpp_frame_get_height(mppframe)     != (RK_U32)m_encParams.prep.height
-                || mpp_frame_get_hor_stride(mppframe) != (RK_U32)m_encParams.prep.hor_stride
-                || mpp_frame_get_ver_stride(mppframe) != (RK_U32)m_encParams.prep.ver_stride
-                || mpp_frame_get_fmt(mppframe)        != m_encParams.prep.format) {
-                    m_encParams.prep.change     = MPP_ENC_PREP_CFG_CHANGE_INPUT | MPP_ENC_PREP_CFG_CHANGE_FORMAT;
-                    m_encParams.prep.width      = mpp_frame_get_width(mppframe);
-                    m_encParams.prep.height     = mpp_frame_get_height(mppframe);
-                    m_encParams.prep.hor_stride = mpp_frame_get_hor_stride(mppframe);
-                    m_encParams.prep.ver_stride = mpp_frame_get_ver_stride(mppframe);
-                    m_encParams.prep.format     = mpp_frame_get_fmt(mppframe);
+                RK_S32 enc_width = m_encParams.get<RK_S32>("prep:width");
+                RK_S32 enc_height = m_encParams.get<RK_S32>("prep:height");
+                RK_S32 enc_hor_stride = m_encParams.get<RK_S32>("prep:hor_stride");
+                RK_S32 enc_ver_stride = m_encParams.get<RK_S32>("prep:ver_stride");
+                MppFrameFormat enc_format = (MppFrameFormat)m_encParams.get<RK_S32>("prep:format");
+                
+                if (mpp_frame_get_width(mppframe)     != (RK_U32)enc_width
+                || mpp_frame_get_height(mppframe)     != (RK_U32)enc_height
+                || mpp_frame_get_hor_stride(mppframe) != (RK_U32)enc_hor_stride
+                || mpp_frame_get_ver_stride(mppframe) != (RK_U32)enc_ver_stride
+                || mpp_frame_get_fmt(mppframe)        != enc_format) {
+                    m_encParams.set_s32("prep:width", mpp_frame_get_width(mppframe));
+                    m_encParams.set_s32("prep:height", mpp_frame_get_height(mppframe));
+                    m_encParams.set_s32("prep:hor_stride", mpp_frame_get_hor_stride(mppframe));
+                    m_encParams.set_s32("prep:ver_stride", mpp_frame_get_ver_stride(mppframe));
+                    m_encParams.set_s32("prep:format", (RK_S32)mpp_frame_get_fmt(mppframe));
                     
-                    auto ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_PREP_CFG, &m_encParams.prep));
+                    auto ret = m_encParams.apply(m_encParams.cfg);
+                    if (ret != RGY_ERR_NONE) {
+                        PrintMes(RGY_LOG_ERROR, _T("Failed to apply prep cfg changes: %s.\n"), get_err_mes(ret));
+                        return ret;
+                    }
+                    ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_CFG, m_encParams.cfg));
                     if (ret != RGY_ERR_NONE) {
                         PrintMes(RGY_LOG_ERROR, _T("Failed to reset prep cfg to encoder: %dx%d %s [%d:%d]: %s.\n"), 
-                            m_encParams.prep.width, m_encParams.prep.height, RGY_CSP_NAMES[csp_enc_to_rgy(m_encParams.prep.format)],
-                            m_encParams.prep.hor_stride, m_encParams.prep.ver_stride, get_err_mes(ret));
+                            m_encParams.get<RK_S32>("prep:width"), m_encParams.get<RK_S32>("prep:height"), 
+                            RGY_CSP_NAMES[csp_enc_to_rgy((MppFrameFormat)m_encParams.get<RK_S32>("prep:format"))],
+                            m_encParams.get<RK_S32>("prep:hor_stride"), m_encParams.get<RK_S32>("prep:ver_stride"), get_err_mes(ret));
                         return ret;
                     }
                     PrintMes(RGY_LOG_DEBUG, _T("Reset prep cfg to encoder: %dx%d %s [%d:%d].\n"),
-                        m_encParams.prep.width, m_encParams.prep.height, RGY_CSP_NAMES[csp_enc_to_rgy(m_encParams.prep.format)],
-                        m_encParams.prep.hor_stride, m_encParams.prep.ver_stride);
+                        m_encParams.get<RK_S32>("prep:width"), m_encParams.get<RK_S32>("prep:height"),
+                        RGY_CSP_NAMES[csp_enc_to_rgy((MppFrameFormat)m_encParams.get<RK_S32>("prep:format"))],
+                        m_encParams.get<RK_S32>("prep:hor_stride"), m_encParams.get<RK_S32>("prep:ver_stride"));
                 }
             } else {
                 auto err = err_to_rgy(mpp_frame_init(&mppframe));
@@ -1823,11 +1838,11 @@ public:
                     PrintMes(RGY_LOG_ERROR, _T("Failed to allocate mpp frame: %s\n"), get_err_mes(err));
                     return err;
                 }
-                mpp_frame_set_width(mppframe, m_encParams.prep.width);
-                mpp_frame_set_height(mppframe, m_encParams.prep.height);
-                mpp_frame_set_hor_stride(mppframe, m_encParams.prep.hor_stride);
-                mpp_frame_set_ver_stride(mppframe, m_encParams.prep.ver_stride);
-                mpp_frame_set_fmt(mppframe, m_encParams.prep.format);
+                mpp_frame_set_width(mppframe, m_encParams.get<RK_S32>("prep:width"));
+                mpp_frame_set_height(mppframe, m_encParams.get<RK_S32>("prep:height"));
+                mpp_frame_set_hor_stride(mppframe, m_encParams.get<RK_S32>("prep:hor_stride"));
+                mpp_frame_set_ver_stride(mppframe, m_encParams.get<RK_S32>("prep:ver_stride"));
+                mpp_frame_set_fmt(mppframe, (MppFrameFormat)m_encParams.get<RK_S32>("prep:format"));
 
                 if (!m_frameGrp) {
                     auto err = allocateMppBuffer();

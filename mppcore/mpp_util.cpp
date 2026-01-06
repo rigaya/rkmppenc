@@ -33,6 +33,8 @@
 #include "mpp_log_def.h"
 #include "rga/rga.h"
 #include "rgy_frame.h"
+#include "rk_venc_cfg.h"
+#include "rk_mpi.h"
 
 static const auto RGY_CODEC_TO_MPP = make_array<std::pair<RGY_CODEC, MppCodingType>>(
     std::make_pair(RGY_CODEC_UNKNOWN, MPP_VIDEO_CodingUnused),
@@ -288,15 +290,15 @@ VideoInfo videooutputinfo(
     info.codec = prm.rgy_codec();
     info.codecProfile = prm.codec_profile();
     info.codecLevel = prm.codec_level();
-    info.dstWidth = prm.prep.width;
-    info.dstHeight = prm.prep.height;
-    info.fpsN = prm.rc.fps_out_num;
-    info.fpsD = prm.rc.fps_out_denom;
+    info.dstWidth = prm.get<RK_S32>("prep:width");
+    info.dstHeight = prm.get<RK_S32>("prep:height");
+    info.fpsN = prm.get<RK_S32>("rc:fps_out_num");
+    info.fpsD = prm.get<RK_S32>("rc:fps_out_denom");
     info.sar[0] = sar.n();
     info.sar[1] = sar.d();
     adjust_sar(&info.sar[0], &info.sar[1], info.dstWidth, info.dstHeight);
     info.picstruct = picstruct;
-    info.csp = csp_enc_to_rgy(prm.prep.format);
+    info.csp = csp_enc_to_rgy((MppFrameFormat)prm.get<RK_S32>("prep:format"));
     info.vui = vui;
     return info;
 }
@@ -327,3 +329,49 @@ int64_t rational_rescale(int64_t v, rgy_rational<int> from, rgy_rational<int> to
 }
 
 #endif
+
+RGY_ERR MPPCfg::apply(MppEncCfg enc_cfg) const {
+    for (const auto& [key, value] : params) {
+        MPP_RET ret = MPP_OK;
+        std::visit([&](auto&& val) {
+            using T = std::decay_t<decltype(val)>;
+            if constexpr (std::is_same_v<T, RK_S32>) {
+                ret = mpp_enc_cfg_set_s32(enc_cfg, key.c_str(), val);
+            } else if constexpr (std::is_same_v<T, RK_U32>) {
+                ret = mpp_enc_cfg_set_u32(enc_cfg, key.c_str(), val);
+            } else if constexpr (std::is_same_v<T, RK_S64>) {
+                ret = mpp_enc_cfg_set_s64(enc_cfg, key.c_str(), val);
+            } else if constexpr (std::is_same_v<T, RK_U64>) {
+                ret = mpp_enc_cfg_set_u64(enc_cfg, key.c_str(), val);
+            }
+        }, value);
+        if (ret != MPP_OK) {
+            if (log) {
+                log->write(RGY_LOG_ERROR, RGY_LOGT_CORE, _T("Failed to set %s to %s: %s.\n"),
+                    char_to_tstring(key).c_str(), to_string(key).c_str(), get_err_mes(err_to_rgy(ret)));
+            }
+            return err_to_rgy(ret);
+        }
+    }
+    return RGY_ERR_NONE;
+}
+
+tstring MPPCfg::to_string(const std::string& key) const {
+    auto it = params.find(key);
+    if (it != params.end()) {
+        return std::visit([](auto&& val) -> tstring {
+            using T = std::decay_t<decltype(val)>;
+            if constexpr (std::is_same_v<T, RK_S32>) {
+                return strsprintf(_T("%d"), val);
+            } else if constexpr (std::is_same_v<T, RK_U32>) {
+                return strsprintf(_T("%u"), val);
+            } else if constexpr (std::is_same_v<T, RK_S64>) {
+                return strsprintf(_T("%lld"), (long long)val);
+            } else if constexpr (std::is_same_v<T, RK_U64>) {
+                return strsprintf(_T("%llu"), (unsigned long long)val);
+            }
+            return _T("unfound");
+        }, it->second);
+    }
+    return _T("");
+}
