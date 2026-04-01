@@ -190,6 +190,8 @@
   - [--lowlatency](#--lowlatency)
   - [--fallback-bitdepth](#--fallback-bitdepth)
   - [--avsdll \<string\>](#--avsdll-string)
+  - [--vsdir \<string\>](#--vsdir-string)
+  - [--vpy-assume-script-dir](#--vpy-assume-script-dir)
   - [--disable-opencl](#--disable-opencl)
   - [--task-perf-monitor](#--task-perf-monitor)
   - [--perf-monitor \[\<string\>\[,\<string\>\]...\]](#--perf-monitor-stringstring)
@@ -2474,6 +2476,12 @@ When enabled, if all available GPUs do not support 10-bit encoding, the encoder 
 
 ### --avsdll &lt;string&gt;
 Specifies AviSynth DLL location to use. When unspecified, the default AviSynth.dll will be used.
+
+### --vsdir &lt;string&gt;
+Specifies vapoursynth portable directory to use. Supported on Windows only.
+
+### --vpy-assume-script-dir
+When using the vpy reader, resolves relative paths in `.vpy` against the script file's directory instead of the current working directory.
 
 ### --disable-opencl  
 Disable OpenCL realated features.

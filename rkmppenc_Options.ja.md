@@ -127,7 +127,6 @@
   - [--attachment-copy \[\<int\>\[,\<int\>\]...\]](#--attachment-copy-intint)
   - [--attachment-source \<string\>\[:{\<int\>?}\[;\<param1\>=\<value1\>\]...\]...](#--attachment-source-stringintparam1value1)
   - [--perf-monitor-interval \<int\>](#--perf-monitor-interval-int)
-  - [--muxer-add-cmd](#--muxer-add-cmd)
 
 ## コマンドラインの例
 
@@ -2448,6 +2447,12 @@ avsw/avhw読み込み時のデバッグ情報出力。
 
 ### --avsdll &lt;string&gt;
 使用するAvsiynth.dllを指定するオプション。特に指定しない場合、システムのAvisynth.dllが使用される。
+
+### --vsdir &lt;string&gt; [Windows専用]
+VapoursynthのPortable版を使用する際に、インストールしたフォルダを指定する。特に指定しない場合、システムにインストールされたVapoursynthが使用される。
+
+### --vpy-assume-script-dir
+vpy reader使用時に、`.vpy` 内の相対パスをカレントディレクトリではなく、スクリプトファイルのあるディレクトリ基準で解決する。
 
 ### --disable-opencl
 OpenCLを無効化する。OpenCL関連のフィルタは使用できなくなる。
