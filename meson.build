@@ -520,6 +520,8 @@ mppcore_sources = files(
   'mppcore/rgy_filter_denoise_nlmeans.cpp',
   'mppcore/rgy_filter_denoise_pmd.cpp',
   'mppcore/rgy_filter_edgelevel.cpp',
+  'mppcore/rgy_filter_msharpen.cpp',
+  'mppcore/rgy_filter_msmooth.cpp',
   'mppcore/rgy_filter_mpdecimate.cpp',
   'mppcore/rgy_filter_nnedi.cpp',
   'mppcore/rgy_filter_overlay.cpp',

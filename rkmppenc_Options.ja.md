@@ -1244,6 +1244,8 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-convolution3d](#--vpp-convolution3d-param1value1param2value2)
   - [--vpp-smooth](#--vpp-smooth-param1value1param2value2)
   - [--vpp-denoise-dct](#--vpp-denoise-dct-param1value1param2value2)
+  - [--vpp-fft3d](#--vpp-fft3d-param1value1param2value2)
+  - [--vpp-msmooth](#--vpp-msmooth-param1value1param2value2)
   - [--vpp-knn](#--vpp-knn-param1value1param2value2)
   - [--vpp-nlmeans](#--vpp-knn-param1value1param2value2)
   - [--vpp-pmd](#--vpp-pmd-param1value1param2value2)
@@ -1251,6 +1253,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-resize](#--vpp-resize-string)
   - [--vpp-unsharp](#--vpp-unsharp-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
+  - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
   - [--vpp-curves](#--vpp-overlay-param1value1param2value2)
   - [--vpp-tweak](#--vpp-tweak-param1value1param2value2)
@@ -1828,6 +1831,32 @@ yadifによるインタレ解除を行う。
     - fp32 ... 常にfp32(単精度浮動小数点)で計算する
     
   
+### --vpp-msmooth [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+ディテール保持型スムージングフィルタ。Donald A. Graftの MSmooth に基づく。
+エッジを検出してマスクを作成し、エッジ以外の領域に対して反復的な平滑化を行う。
+
+- **パラメータ**
+  - strength=&lt;int&gt; (default=3, 0 - 20)  
+    スムージングの反復回数。値が大きいほど強い平滑化効果。
+  
+  - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
+    エッジ検出の閾値。
+  
+  - highq=&lt;bool&gt;  (default=true)  
+    trueの場合、4方向(対角+水平垂直)でエッジ検出を行う。falseの場合は対角2方向のみ。
+  
+  - mask=&lt;bool&gt;  (default=false)  
+    trueの場合、スムージングの代わりにエッジマスクを出力する(デバッグ用)。
+
+- 使用例
+  ```
+  例: デフォルト設定
+  --vpp-msmooth
+  
+  例: 強めの平滑化
+  --vpp-msmooth strength=6,threshold=10.0
+  ```
+
 ### --vpp-knn [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 
 - **パラメータ**
@@ -2030,6 +2059,31 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
   
   例: 輪郭の黒い部分を気持ち強める
   --vpp-edgelevel strength=5.0,threshold=24.0,black=6.0
+  ```
+
+### --vpp-msharpen [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+エッジ選択型シャープニングフィルタ。Donald A. Graftの MSharpen に基づく。
+
+- **パラメータ**
+  - strength=&lt;float&gt; (default=1.0, 0.0 - 1.0)  
+    シャープニングの強度。
+  
+  - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
+    エッジ検出の閾値。
+  
+  - highq=&lt;bool&gt;  (default=true)  
+    trueの場合、4方向(対角+水平垂直)でエッジ検出を行う。falseの場合は対角2方向のみ。
+  
+  - mask=&lt;bool&gt;  (default=false)  
+    trueの場合、シャープニングの代わりにエッジマスクを出力する(デバッグ用)。
+
+- 使用例
+  ```
+  例: デフォルト設定
+  --vpp-msharpen
+  
+  例: やや弱め
+  --vpp-msharpen strength=0.5,threshold=20.0
   ```
 
 ### --vpp-warpsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
