@@ -2756,6 +2756,7 @@ RGY_ERR MPPCore::run2() {
         PipelineTaskData(size_t t, std::unique_ptr<PipelineTaskOutput>& d) : task(t), data(std::move(d)) {};
     };
     std::deque<PipelineTaskData> dataqueue;
+    std::vector<char> firstSendFrame(m_pipelineTasks.size(), false);
     {
         auto checkContinue = [&checkAbort](RGY_ERR& err) {
             //if (checkAbort() || stdInAbort()) { err = RGY_ERR_ABORTED; return false; }
@@ -2781,6 +2782,10 @@ RGY_ERR MPPCore::run2() {
                 if (d.task < m_pipelineTasks.size()) {
                     err = RGY_ERR_NONE;
                     auto& task = m_pipelineTasks[d.task];
+                    if (!firstSendFrame[d.task]) {
+                        PrintMes(RGY_LOG_DEBUG, _T("First send frame to task %s.\n"), task->print().c_str());
+                        firstSendFrame[d.task] = true;
+                    }
                     PipelineTaskOutputSurf *taskSurf = dynamic_cast<PipelineTaskOutputSurf *>(d.data.get());
                     if (taskSurf) {
                         PrintMes(RGY_LOG_TRACE, _T("Send task %s: %lld.\n"), task->print().c_str(), taskSurf->surf().frame()->timestamp());
@@ -2878,6 +2883,7 @@ RGY_ERR MPPCore::run2() {
                         //checkptsの処理上、でてきたフレームはすぐに後続処理に渡したいのでbreak
                         break;
                     } else if (itask == flushedTaskGet && flushedTaskGet < flushedTaskSend) {
+                        PrintMes(RGY_LOG_DEBUG, _T("Flush task %s.\n"), task->print().c_str());
                         flushedTaskGet++;
                     }
                 }
