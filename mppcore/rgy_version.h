@@ -79,6 +79,9 @@ const char *get_encoder_version();
 #define DECODER_NAME  "vce"
 #define HW_TIMEBASE 10000000L //AMF_SECOND
 
+#define ENABLE_VMAF 0
+#define ENABLE_LIBVSHIP 0
+
 #define ENABLE_LIBASS_SUBBURN 0
 #define ENABLE_VPP_SMOOTH_QP_FRAME 0
 
