@@ -2430,7 +2430,7 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
     } else {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(0, m_pFileReader.get(), m_cl, m_pLog));
     }
-    if (m_pFileWriterListAudio.size() > 0) {
+    if (m_pFileWriterListAudio.size() > 0 || hasFilterForStreams(m_vpFilters)) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskAudio>(m_pFileReader.get(), m_AudioReaders, m_pFileWriterListAudio, m_vpFilters, 0, m_pLog));
     }
     { // checkpts
