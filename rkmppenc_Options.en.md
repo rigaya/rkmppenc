@@ -1309,8 +1309,10 @@ Vpp filters will be applied in fixed order, regardless of the order in the comma
   - [--vpp-delogo](#--vpp-delogo-stringparam1value1param2value2)
   - [--vpp-afs](#--vpp-afs-param1value1param2value2)
   - [--vpp-nnedi](#--vpp-nnedi-param1value1param2value2)
+  - [--vpp-bwdif](#--vpp-bwdif-param1value1)
   - [--vpp-yadif](#--vpp-yadif-param1value1)
   - [--vpp-decomb](#--vpp-decomb-param1value1param2value2)
+  - [--vpp-ivtc](#--vpp-ivtc-param1value1param2value2)
   - [--vpp-transform/rotate](#--vpp-rotate-int)
   - [--vpp-decimate](#--vpp-decimate-param1value1param2value2)
   - [--vpp-mpdecimate](#--vpp-mpdecimate-param1value1param2value2)
@@ -1663,6 +1665,30 @@ nnedi deinterlacer.
   example: --vpp-nnedi field=auto,nns=64,nsize=32x6,quality=slow,prescreen=none,prec=fp32
   ```
 
+### --vpp-bwdif [&lt;param1&gt;=&lt;value1&gt;]
+Bwdif deinterlacer.
+
+- **parameters**
+
+  - mode
+
+    - frame (default)
+      Same-rate output, one frame per input frame.
+    - bob
+      Double-rate output, two frames per input frame.
+
+  - order
+
+    - auto (default)
+      Detect field order from each input frame.
+    - tff
+      Assume top field first.
+    - bff
+      Assume bottom field first.
+
+  - thr
+    Motion threshold. Default: 0.0 (0.0 - 100.0).
+
 ### --vpp-yadif [&lt;param1&gt;=&lt;value1&gt;]
 Yadif deinterlacer.
 
@@ -1682,6 +1708,24 @@ Yadif deinterlacer.
       Generate one frame from each field assuming top field first.
     - bob_bff   
       Generate one frame from each field assuming bottom field first.
+
+### --vpp-ivtc [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+Inverse telecine for soft-telecine / hard-telecine sources.
+
+- **parameters**
+  - guide=&lt;int&gt;  (default: 1)  
+    Matching mode.
+    - 0  
+      Select the candidate with the minimum match-quality from C/P/N. Note: if C is fully progressive (zero combing), it is always kept to avoid introducing combing from mixing fields of different time origins.
+    - 1  
+      Prefer C when it is clean enough, otherwise choose from P/N.
+
+  - post=&lt;int&gt;  (default: 2)  
+    Post process for residual combing.
+    - 0  
+      No post process.
+    - 2  
+      Per-pixel adaptive bob-deinterlace on second-field rows. Only pixels detected as combed are replaced with the vertical average of adjacent first-field rows. First-field rows are always passed through untouched.
 
 ### --vpp-decimate [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]  
 Drop duplicated frame in cycles set.

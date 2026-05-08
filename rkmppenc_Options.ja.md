@@ -1633,6 +1633,30 @@ nnediによるインタレ解除を行う。基本的には片方フィールド
   例: --vpp-nnedi field=auto,nns=64,nsize=32x6,quality=slow,prescreen=none,prec=fp32
   ```
 
+### --vpp-bwdif [&lt;param1&gt;=&lt;value1&gt;]
+bwdifによるインタレ解除を行う。
+
+- **パラメータ**
+
+  - mode
+
+    - frame (default)
+      入力と同じフレームレートで出力する。
+    - bob
+      2倍フレームレートで出力する。
+
+  - order
+
+    - auto (default)
+      入力フレームごとのフィールド順を自動判定する。
+    - tff
+      トップフィールド優先として処理する。
+    - bff
+      ボトムフィールド優先として処理する。
+
+  - thr=&lt;float&gt;
+    動き判定の閾値。デフォルト 0.0 (0.0 - 100.0)。
+
 ### --vpp-yadif [&lt;param1&gt;=&lt;value1&gt;]
 yadifによるインタレ解除を行う。
 
@@ -1652,6 +1676,24 @@ yadifによるインタレ解除を行う。
       60fps化を行う(tff)。
     - bob_bff   
       60fps化を行う(bff)。
+
+### --vpp-ivtc [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+ソフトテレシネ/ハードテレシネ向けの inverse telecine を行います。
+
+- **パラメータ**
+  - guide=&lt;int&gt;  (デフォルト: 1)  
+    マッチングモード。
+    - 0  
+      C/P/N の中から match-quality 最小の候補を選択。ただし C が完全に progressive (combing ゼロ) の場合は、別時刻のフィールド混合によるコーミング発生を防ぐため C を維持する。
+    - 1  
+      C が十分クリーンなら C を優先し、そうでなければ P/N から選択。
+
+  - post=&lt;int&gt;  (デフォルト: 2)  
+    フィールドマッチ後に残るコーミングへの後処理。
+    - 0  
+      後処理なし。
+    - 2  
+      2nd field の row に対して、ピクセル単位で適応的に bob deinterlace を行い、コーミングと判定された pixel を、1st field の上下 row の垂直平均で置換する。1st field の row は常にそのまま通す。
 
 ### --vpp-decimate [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]  
 重複フレームを削除します。
