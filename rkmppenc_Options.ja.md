@@ -1236,6 +1236,15 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-afs](#--vpp-afs-param1value1param2value2)
   - [--vpp-nnedi](#--vpp-nnedi-param1value1param2value2)
   - [--vpp-yadif](#--vpp-yadif-param1value1)
+  - [--vpp-rtgmc](#--vpp-rtgmc-param1value1)
+  - [--vpp-rtgmc-bob](#--vpp-rtgmc-bob-param1value1)
+  - [--vpp-rtgmc-search-prefilter](#--vpp-rtgmc-search-prefilter-param1value1)
+  - [--vpp-rtgmc-edi](#--vpp-rtgmc-edi-param1value1)
+  - [--vpp-rtgmc-retouch](#--vpp-rtgmc-retouch-param1value1)
+  - [--vpp-rtgmc-shimmer-repair](#--vpp-rtgmc-shimmer-repair-param1value1)
+  - [--vpp-rtgmc-primitive](#--vpp-rtgmc-primitive-param1value1)
+  - [--vpp-degrain](#--vpp-degrain-param1value1)
+  - [--vpp-kfm](#--vpp-kfm-param1value1param2value2)
   - [--vpp-transform/rotate](#--vpp-rotate-int)
   - [--vpp-decimate](#--vpp-decimate-param1value1param2value2)
   - [--vpp-mpdecimate](#--vpp-mpdecimate-param1value1param2value2)
@@ -1255,6 +1264,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
+  - [--vpp-maa](#--vpp-maa-param1value1param2value2)
   - [--vpp-curves](#--vpp-overlay-param1value1param2value2)
   - [--vpp-tweak](#--vpp-tweak-param1value1param2value2)
   - [--vpp-deband](#--vpp-deband-param1value1param2value2)
@@ -1676,6 +1686,200 @@ yadifによるインタレ解除を行う。
       60fps化を行う(tff)。
     - bob_bff   
       60fps化を行う(bff)。
+
+### --vpp-rtgmc [&lt;param1&gt;=&lt;value1&gt;]
+高品質として知られる QTGMC のアルゴリズムを使うインタレ解除フィルタを一部処理をGPU並列向けに緩和したもの。高品質だが処理が重い。
+
+- **主要パラメータ**
+
+  - preset=&lt;string&gt;
+    `slower`, `slow`, `medium`, `fast`, `faster`(デフォルト), `veryfast`, `superfast`, `ultrafast`, `draft`。
+    原則としてオリジナルの値を踏襲。
+
+  - tuning=&lt;string&gt;
+    `none`(デフォルト), `dv-sd`, `dv-hd`。
+
+  - preset展開表 (実装値)
+
+    | preset | tr0 | tr1 | tr2 | rep0-thin | rep2-thin | edi | nnsize | nneurons | search_refine | search | searchparam | pelsearch | chroma_motion | precise | prog_sad_mask |
+    |:--|--:|--:|--:|--:|--:|:--|--:|--:|--:|--:|--:|--:|:--|:--|--:|
+    | slower | 2 | 2 | 1 | 4 | 4 | nnedi3 | 1 | 1 | 3 | 4 | 2 | 2 | on | off | 10.0 |
+    | slow | 2 | 1 | 1 | 4 | 4 | nnedi3 | 1 | 1 | 3 | 4 | 2 | 2 | off | off | 10.0 |
+    | medium | 2 | 1 | 1 | 3 | 4 | nnedi3 | 5 | 1 | 3 | 4 | 2 | 1 | off | off | 10.0 |
+    | fast | 2 | 1 | 0 | 3 | 4 | nnedi3 | 5 | 0 | 2 | 4 | 2 | 1 | off | off | 0.0 |
+    | faster | 1 | 1 | 0 | 0 | 4 | nnedi3 | 4 | 0 | 2 | 4 | 2 | 1 | off | off | 0.0 |
+    | veryfast | 1 | 1 | 0 | 0 | 4 | nnedi3 | 4 | 0 | 2 | 4 | 1 | 1 | off | off | 0.0 |
+    | superfast | 1 | 1 | 0 | 0 | 3 | nnedi3 | 4 | 0 | 1 | 0 | 1 | 1 | off | off | 0.0 |
+    | ultrafast | 1 | 1 | 0 | 0 | 3 | repyadif | 4 | 0 | 1 | 0 | 1 | 1 | off | off | 0.0 |
+    | draft | 0 | 1 | 0 | 0 | 0 | bob | 4 | 0 | 0 | 0 | 1 | 1 | off | off | 0.0 |
+
+    - `blksize` は `slower..fast` では `tuning` 依存 (`dv-hd=32`, それ以外=16)、`faster..draft` では固定 `32`。
+    - `overlap` は `slower..faster` で `blksize/2`、`veryfast..draft` で `blksize/4`。
+    - `subpel` は `slower..slow=2`、`medium..draft=1`。
+
+  - source_match=&lt;int&gt;
+    `0-3`。`match_tr1/match_tr2` は `0-2`、`match_enhance` は `0.0-1.0`。
+
+  - edi/match_edi=&lt;string&gt;
+    `bob`, `yadif`, `cyadif`, `repyadif`, `repcyadif`, `nnedi3`, `passthrough`。
+    ただし `source_match>0` 時の `match_edi` は `bob/yadif/cyadif/repyadif/repcyadif/nnedi3` のみ。
+
+  - tr0/rep0-thin/rep0-pad/search_refine
+    `tr0=-1..2`、`rep0-thin=0-7`、`rep0-pad=0-3`、`search_refine=0-3`。
+
+  - mv_spatial_refine=&lt;int|auto&gt;
+    モーションベクトルの spatial refine 回数。動きベクトル探索は複数の解像度（解析レベル）を粗→細の順に進む階層構造を取るが、本オプションは各レベルで「**近傍ブロックの動きベクトルを参照してさらに精度を上げる**」spatial refine パスを何回実行するかを指定する。
+    デフォルトは `auto` (`-1`) で、**もっとも解像度の低い最上位レベル（ブロック数が最も少ない階層）でのみ spatial refine を行い、それ以降の下位レベルでは行わない**。ブロック数の少ない階層に spatial 情報による精度向上を集中させ、ブロック数の多い下位階層では GPU の並列性を最大限に活用するための既定戦略。
+    `0` は spatial refine を全レベルで無効化、`1` は全レベルで1回、`2` は全レベルで2回、以降同様。
+
+  - rep1-thin/rep1-pad/rep2-thin/rep2-pad
+    `repN-thin=0-7`、`repN-pad=0-3`。
+
+  - noise系
+
+    ノイズ抽出・平滑化・戻し量を制御する段。主に以下のパラメータで構成される。
+
+    - `noise_process`
+      ノイズ処理段の有効化レベル。`0` は無効、`1` はノイズ処理を有効化、`2` は現状未対応。
+    - `denoiser`
+      ノイズ低減器の種類。`nlmeans` は NLMeans 系、`fft3d` は FFT3D 系を使用する。
+    - `noise_deint`
+      抽出ノイズの補間方法。`none` は補間なし、`bob` はボブ補間、`generate` はノイズ生成補間(現状未対応)。
+    - `sigma`
+      ノイズ推定強度。値を上げるほど平滑化が強くなる。
+    - `chroma_noise`
+      色差面もノイズ低減対象に含めるかどうか。
+    - `grain_restore` / `noise_restore`
+      平滑化後に粒状感を戻す量。現実装では `noise_process=1` 時のみ有効。
+    ただし有効範囲は後述の「注意」を参照。
+
+  - motion系
+
+    モーションベクトル探索と時系列参照の挙動を制御する段。
+    - `searchparam` / `pelsearch`
+      探索の広さ・精度側のプリセット係数。`1` は軽量寄り、`2` は精度寄り。
+    - `useflag`
+      参照方向の制限。`0` は前後参照、`1` は過去方向のみ、`2` は未来方向のみ。
+    - `pel` / `levels` / `lambda` / `lsad` / `pnew` / `plevel` / `globalmotion`
+      ブロックマッチングの副パラメータ群。探索の粒度・コスト関数・大域動き補正の重みを調整する。
+    なお `subpelinterp=2`, `truemotion=false`, `dct=0` は CUDA参照実装互換のため固定。
+
+  - retouch系
+
+    出力の輪郭補正と過剰シャープ抑制を行う後段。
+    - `sharpness`
+      基本のシャープ量 (`0.0-1.0`)。大きいほど輪郭強調が強くなる。
+    - `limit`
+      旧来互換の抑制係数 (`0.0-1.0`)。高値側でオーバーシュート抑制を強める。
+    - `smode`
+      シャープ処理の方式選択 (`0-2`)。`0` は実質オフ、`1/2` は補正経路が異なる。
+    - `slmode` / `slrad` / `sovs`
+      シャープ抑制の方式・半径・許容オーバーシュート量 (`slmode=0-4`, `slrad=0-3`, `sovs>=0`)。
+    - `svthin`
+      細線化量 (`0.0-1.0`)。インタレ由来の縦方向太りを抑える。
+    - `sbb`
+      back-blend の適用モード (`0-3`)。シャープ前後の差分混合位置を制御する。
+    - `precise`
+      retouch の精密経路を使うかどうか (`on/off`)。
+
+- **注意**
+  - EDI は bob/yadif/cyadif/repyadif/repcyadif/nnedi3(rnnedi3) 相当のみ対応します。NNEDI2/NNEDI/EEDI3(+NNEDI3)/EEDI2/
+  TDeint、EdiMaxD、EdiThreads は未対応です。
+  - chroma_edi は none または nnedi3(rnnedi3) のみ対応します。
+  - ノイズ処理は noise_process=2、ezkeepgrain、denoise_mc=true、noise_tr>0、noise_deint=generate、ShowNoise、
+  StabilizeNoise、dfttest/KNLMeansCL、lsb/lsbd/DftDither 相当の経路には対応していません。
+  - source_match は 0-3 に対応しますが、MatchPreset/MatchPreset2 による段階別設定、独立した MatchEdi2、EdiMaxD 系の指
+  定は未対応です。match_edi は bob/yadif/cyadif/repyadif/repcyadif/nnedi3 の範囲です。
+  - FPSDivisor、ShutterBlur、ShutterAngleSrc/Out、SBlurLimit によるモーションブラー/フレーム間引きは未対応です。
+
+### --vpp-rtgmc-bob [&lt;param1&gt;=&lt;value1&gt;]
+デバッグ用 `--vpp-rtgmc` bob 単体フィルタ。パラメータ: `order=auto|tff|bff`。
+
+### --vpp-rtgmc-search-prefilter [&lt;param1&gt;=&lt;value1&gt;]
+デバッグ用 `--vpp-rtgmc` search reference prefilter 単体フィルタ。パラメータ: `tr0`, `rep0-thin`, `rep0-pad`, `search_refine`, `tv_range`, `chroma_motion`, `dump_y4m`, `dump_stage`, `dump_max_frames`。
+
+### --vpp-rtgmc-edi [&lt;param1&gt;=&lt;value1&gt;]
+デバッグ用 `--vpp-rtgmc` EDI 単体フィルタ。パラメータ: `mode`, `nnsize`, `nneurons`, `ediqual`, `chroma_edi`。
+
+### --vpp-rtgmc-retouch [&lt;param1&gt;=&lt;value1&gt;]
+デバッグ用 `--vpp-rtgmc` retouch 単体フィルタ。パラメータ: `sharpness`, `limit`, `smode`, `slmode`, `slrad`, `sovs`, `svthin`, `sbb`, `precise`, `tr1`, `tr2`。
+
+### --vpp-rtgmc-shimmer-repair [&lt;param1&gt;=&lt;value1&gt;]
+デバッグ用 `--vpp-rtgmc` shimmer repair 単体フィルタ。パラメータ: `stage=rep1|rep2`, `rep-thin`, `rep-pad`, `rep_chroma`。
+
+### --vpp-rtgmc-primitive [&lt;param1&gt;=&lt;value1&gt;]
+デバッグ用 `--vpp-rtgmc` primitive/debug 単体フィルタ。パラメータ: `op`, `ref`, `mode`, `weight`, `chroma`。
+
+### --vpp-degrain [&lt;param1&gt;=&lt;value1&gt;]
+動き補償つき degrain デバッグフィルタ。
+
+- **パラメータ**
+  - preset=&lt;string&gt;
+    surface preset。`custom` (デフォルト), `auto`。原則としてオリジナルの値を踏襲。
+  - mode=&lt;string&gt;
+    出力モード。`source` (デフォルト), `analyze`, `compb`, `compf`, `compb2`, `compf2`, `degrain`, `mv`, `sad`。
+  - stage=&lt;string&gt;
+    Step2 stage marker。`auto` (デフォルト), `tr1`, `tr2`。
+  - tr=&lt;int&gt;
+    Auto preset temporal radius。`1` または `2`。`mode=degrain`, `stage`, `delta` を設定する。
+  - blksize/search/overlap/delta/levels/pel
+    ブロックマッチングの形状と時間方向参照半径。
+  - thsad/thsadc/thscd1/thscd2
+    degrain とシーンチェンジの閾値。
+  - tr0/rep0/search_refine
+    search reference prefilter パラメータ。
+  - searchparam/pelsearch/truemotion/lambda/lsad/pnew/plevel/globalmotion/dct/useflag
+    モーション探索の調整パラメータ。
+  - mv_spatial_refine=&lt;int|auto&gt;
+    モーションベクトルの spatial refine 回数。デフォルトは `auto` (`-1`) で、もっとも解像度の低い最上位レベルでのみ近傍ブロック参照による refine を行い、下位（高解像度）レベルでは行わない。ブロック数の少ない階層に spatial 情報を集中させ、ブロック数の多い下位階層では GPU の並列性を最大限に活用するための既定戦略。`0` は全レベルで無効、`1` は全レベルで1回、`2` は全レベルで2回、以降同様。
+  - chroma/binomial/tv_range
+    色差解析、prefilter、レンジ制御。
+
+- **注意**
+  - 解析を伴うモードでは levels=2 が必要です。
+  - 解析時の blksize は 8/16/32 のみ対応します。
+  - overlap は 0 または blksize/2 のみ対応します。
+  - delta は 1-5 に対応しますが、delta>2 は analyze または stage=tr2 の degrain のみ対応します。
+  - pel は 1/2/4 のみ対応します。
+
+### --vpp-kfm [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+`--vpp-rtgmc`を使用した逆テレシネ・24/30/60混合VFR対応の高品質なインタレ解除フィルタ。重いのでdGPUでの使用を推奨。
+
+- **パラメータ**
+
+  - mode=&lt;string&gt;
+    出力モード。`vfr` (デフォルト), `60`, `24`。
+
+  - preset=&lt;string&gt;
+    RTGMCのpreset。`slower`, `slow`, `medium`, `fast`, `faster`(デフォルト), `veryfast`, `superfast`, `ultrafast`, `draft`。
+
+  - timing=&lt;string&gt;
+    タイミング解析モード。`realtime`, `realtime+` (デフォルト), `strict`。
+
+  - past_cycles=&lt;int&gt;
+    `realtime+` のcommit delay cycle数。デフォルト: 30。
+
+  - thswitch=&lt;float&gt;
+    60p切替threshold。デフォルト: 0.5。
+
+  - ucf=&lt;bool&gt;
+    UCF段を有効化。デフォルト: off。
+
+  - nr=&lt;bool&gt;
+    最終出力に `vpp-degrain` を適用。デフォルト: off。
+
+  - is120=&lt;bool&gt;
+    120fps duration補正用の予約フラグ。デフォルト: on。
+
+  - debug=&lt;bool&gt;
+    `timecode` 指定時に `.result.dat` / `.frameinfo.tsv` dumpを出力する。デフォルト: off。
+
+  - debug_stage=&lt;string&gt;
+    `none`, `switch-flag`(`switch-flag-min`), `contains-combe`, `combe-mask`(`combe-mask-min`)。
+    24p系デバッグ表示に使用。
+
+  - timecode=&lt;path&gt;
+    timecode v2 dump path。`mode=24/vfr` では `*.duration.txt` も併せて出力する。
 
 ### --vpp-ivtc [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 ソフトテレシネ/ハードテレシネ向けの inverse telecine を行います。
@@ -2156,6 +2360,40 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
   --vpp-warpsharp threshold=128,blur=3,type=1
   ```
 
+### --vpp-maa [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+アニメ・セル画調の映像向けの masked anti-aliasing を行う。方向別9コストのAAとエッジマスクを組み合わせ、非エッジ部分を壊さずに斜め線のジャギーを低減する。
+
+- **パラメータ**
+  - ss=&lt;float&gt; (デフォルト=2.0, 1.0 - 4.0)
+    スーパーサンプリング倍率。
+
+  - aa=&lt;int&gt; (デフォルト=48, 0 - 255)
+    輝度のAA強度。
+
+  - aac=&lt;int&gt; (デフォルト=aa-8, 0 - 255)
+    色差のAA強度。chroma=on のときのみ使用する。
+
+  - mask=&lt;bool&gt; (デフォルト=on)
+    エッジマスクを有効にする。
+
+  - mthresh=&lt;int&gt; (デフォルト=7, 1 - 255)
+    エッジ判定の閾値。値を大きくするとエッジとして扱うピクセルが少なくなる。
+
+  - chroma=&lt;bool&gt; (デフォルト=off)
+    色差プレーンも処理する。おおよそ50-100%遅くなる。
+
+  - show=&lt;int&gt; (デフォルト=0)
+    デバッグ表示。0=通常、1=マスクのみ、2=マスク+AA。
+
+- 使用例
+  ```
+  例: デフォルト設定
+  --vpp-maa
+
+  例: 輝度AAをやや強め、エッジ判定を少し強める
+  --vpp-maa aa=64,mthresh=8
+  ```
+
 ### --vpp-enhance [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;][...]
 
 - **パラメータ**
@@ -2558,6 +2796,22 @@ OpenCLをインストールしていない環境やOpenCLが正常に動作し�
 ### --task-perf-monitor
 
 メインスレッドの各処理ごとの待機時間を含んだおおまかな所要時間を出力する。
+
+### --cl-perf-dump &lt;dir&gt;
+OpenCL kernel performance dumpを指定したディレクトリに出力し、エンコード後に`report.html`を自動生成する。
+
+また、report生成には`python`が必要。デフォルトではWindowsでは`py.exe`、必要に応じて`python.exe`を使用し、Linuxでは`python3`を使用する。使用するpythonは[--python](#--python-string)で別途指定可能。
+
+`ocloc`があると逆アセンブルを表示可能(必須ではない)。`ocloc`はIntel oneAPIをインストールすると含まれており、典型的には `C:\Program Files (x86)\Intel\oneAPI\<version>\bin\ocloc.exe` などにある。`ocloc`の実行ファイルパスは[--ocloc-path](#--ocloc-path-path)で指定できる。
+
+
+### --ocloc-path &lt;path&gt;
+[--cl-perf-dump](#--cl-perf-dump-dir)と併用し、cl_perf aggregateに渡すocloc実行ファイルパスを指定する。
+
+### --python &lt;string&gt;
+[--perf-monitor](#--perf-monitor-stringstring)のplot表示、および[--cl-perf-dump](#--cl-perf-dump-dir)のreport生成に使用するPython実行ファイルパスを指定する。
+
+指定のない場合、Windowsでは`py.exe`、必要に応じて`python.exe`を使用し、Linuxでは`python3`を使用する。
 
 ### --perf-monitor [&lt;string&gt;[,&lt;string&gt;]...]
 エンコーダのパフォーマンス情報を出力する。パラメータとして出力したい情報名を下記から選択できる。デフォルトはall (すべての情報)。

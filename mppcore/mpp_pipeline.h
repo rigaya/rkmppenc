@@ -474,6 +474,7 @@ public:
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) = 0;
     virtual bool abort() { return false; }; // 中断指示を受け取ったらtrueを返す
     virtual RGY_ERR getOutputFrameInfo(RGYFrameInfo& info) { info = RGYFrameInfo(); return RGY_ERR_NONE; }
+    virtual int additionalOutputSurfaces() const { return 0; }
     virtual std::vector<std::unique_ptr<PipelineTaskOutput>> getOutput(const bool sync) {
         std::vector<std::unique_ptr<PipelineTaskOutput>> output;
         while ((int)m_outQeueue.size() > m_outMaxQueueSize) {
@@ -1509,6 +1510,13 @@ public:
     virtual bool isPassThrough() const override { return true; }
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
+    virtual int additionalOutputSurfaces() const override {
+        int frames = 0;
+        for (const auto& filter : m_vpFilters) {
+            frames += filter->requiredOutputFrames();
+        }
+        return frames;
+    }
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
 #if 0
         if (!frame) {
@@ -2296,6 +2304,13 @@ public:
 
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
+    virtual int additionalOutputSurfaces() const override {
+        int frames = 0;
+        for (const auto& filter : m_vpFilters) {
+            frames += filter->requiredOutputFrames();
+        }
+        return frames;
+    }
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
         if (m_prevInputFrame.size() > 0) {
             //前回投入したフレームの処理が完了していることを確認したうえで参照を破棄することでロックを解放する
@@ -2343,12 +2358,24 @@ public:
         }
 
         std::vector<std::unique_ptr<PipelineTaskOutputSurf>> outputSurfs;
+        auto queueOutputSurfs = [this, &outputSurfs]() {
+            m_outQeueue.insert(m_outQeueue.end(),
+                std::make_move_iterator(outputSurfs.begin()),
+                std::make_move_iterator(outputSurfs.end())
+            );
+            outputSurfs.clear();
+        };
         while (filterframes.size() > 0 || drain) {
+            if (filterframes.empty() && drain) {
+                filterframes.push_back(std::make_pair(RGYFrameInfo(), 0u));
+            }
             //フィルタリングするならここ
+            bool filterFrameConsumed = false;
             for (uint32_t ifilter = filterframes.front().second; ifilter < m_vpFilters.size() - 1; ifilter++) {
                 // コピーを作ってそれをfilter関数に渡す
                 // vpp-rffなどoverwirteするフィルタのときに、filterframes.pop_front -> push がうまく動作しない
                 RGYFrameInfo input = filterframes.front().first;
+                const bool drainFrame = input.ptr[0] == nullptr;
 
                 int nOutFrames = 0;
                 RGYFrameInfo *outInfo[16] = { 0 };
@@ -2358,21 +2385,36 @@ public:
                     return sts_filter;
                 }
                 if (nOutFrames == 0) {
-                    if (drain) {
+                    if (drainFrame) {
                         filterframes.front().second++;
                         continue;
                     }
+                    if (drain || filterframes.size() > 1 || !outputSurfs.empty()) {
+                        filterframes.pop_front();
+                        filterFrameConsumed = true;
+                        break;
+                    }
                     return RGY_ERR_NONE;
                 }
-                drain = false; //途中でフレームが出てきたら、drain完了していない
 
+                const auto nextFilter = ifilter + 1;
                 filterframes.pop_front();
+                if (drainFrame) {
+                    filterframes.push_back(std::make_pair(RGYFrameInfo(), ifilter));
+                }
                 //最初に出てきたフレームは先頭に追加する
                 for (int jframe = nOutFrames - 1; jframe >= 0; jframe--) {
-                    filterframes.push_front(std::make_pair(*outInfo[jframe], ifilter + 1));
+                    filterframes.push_front(std::make_pair(*outInfo[jframe], nextFilter));
                 }
             }
-            if (drain) {
+            if (filterFrameConsumed) {
+                continue;
+            }
+            if (filterframes.front().first.ptr[0] == nullptr) {
+                if (!outputSurfs.empty()) {
+                    queueOutputSurfs();
+                    return RGY_ERR_NONE;
+                }
                 return RGY_ERR_MORE_DATA; //最後までdrain = trueなら、drain完了
             }
             
@@ -2439,13 +2481,20 @@ public:
                 outputSurf->addClEvent(event);
             }
             outputSurfs.push_back(std::move(outputSurf));
+            if (drain) {
+                const auto drainOutputLimit = std::max<size_t>(1, std::min<size_t>(
+                    4,
+                    std::max<size_t>(1, m_workSurfs.bufCount() / 2)));
+                if (outputSurfs.size() >= drainOutputLimit
+                    && (filterframes.empty() || filterframes.front().first.ptr[0] == nullptr)) {
+                    queueOutputSurfs();
+                    return RGY_ERR_NONE;
+                }
+            }
 
             #undef clFrameOutInteropRelease
         }
-        m_outQeueue.insert(m_outQeueue.end(),
-            std::make_move_iterator(outputSurfs.begin()),
-            std::make_move_iterator(outputSurfs.end())
-        );
+        queueOutputSurfs();
         return RGY_ERR_NONE;
     }
 };
