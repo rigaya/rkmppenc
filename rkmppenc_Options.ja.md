@@ -2805,6 +2805,24 @@ OpenCL kernel performance dumpを指定したディレクトリに出力し、�
 `ocloc`があると逆アセンブルを表示可能(必須ではない)。`ocloc`はIntel oneAPIをインストールすると含まれており、典型的には `C:\Program Files (x86)\Intel\oneAPI\<version>\bin\ocloc.exe` などにある。`ocloc`の実行ファイルパスは[--ocloc-path](#--ocloc-path-path)で指定できる。
 
 
+
+### --cl-perf-timeline [&lt;float&gt;]
+[--cl-perf-dump](#--cl-perf-dump-dir)と併用し、OpenCLコマンドのtimelineデータを収集して`timeline.html`を生成する。
+
+エンコード開始から指定秒数の間、個々のkernel起動やメモリ転送コマンドのhost側発行タイミングとdevice側実行タイミングを記録する。host-device間のclock correlationは`clGetDeviceAndHostTimer` (OpenCL 2.1)による2点calibrationで補正される。
+
+値を省略した場合のデフォルトは10秒。負の値を指定すると時間制限なしで全イベントを収集する(大量のメモリを消費する場合がある)。
+
+```
+例: 先頭5秒間のtimelineを収集
+--cl-perf-dump perf_out --cl-perf-timeline 5
+
+例: デフォルト10秒間で収集
+--cl-perf-dump perf_out --cl-perf-timeline
+```
+
+生成される`timeline.html`はCanvas 2Dベースのインタラクティブなビューアで、ズーム/パン/ホバーによる詳細表示が可能。host thread別レーンとdevice queue別レーンの2セクション構成で、同一イベントのhost/device対応をseq番号で紐づけてハイライト表示する。
+
 ### --ocloc-path &lt;path&gt;
 [--cl-perf-dump](#--cl-perf-dump-dir)と併用し、cl_perf aggregateに渡すocloc実行ファイルパスを指定する。
 

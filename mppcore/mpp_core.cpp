@@ -2713,7 +2713,7 @@ RGY_ERR MPPCore::initEncoder(MPPParam *prm) {
     return RGY_ERR_NONE;
 }
 
-RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const int openCLBuildThreads, const bool checkVppPerformance, const tstring& clPerfDumpDir) {
+RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const int openCLBuildThreads, const bool checkVppPerformance, const tstring& clPerfDumpDir, const double clPerfTimelineSec) {
     if (!enableOpenCL) {
         PrintMes(RGY_LOG_DEBUG, _T("OpenCL disabled.\n"));
         return RGY_ERR_NONE;
@@ -2764,6 +2764,12 @@ RGY_ERR MPPCore::initDevice(const bool enableOpenCL, const int openCLBuildThread
     if (!clPerfDumpDir.empty()) {
         RGYOpenCLPerfCollector::instance().enable(clPerfDumpDir);
         PrintMes(RGY_LOG_DEBUG, _T("OpenCL perf collector enabled: %s\n"), clPerfDumpDir.c_str());
+        if (clPerfTimelineSec != 0.0) {
+            const uint64_t window_ns = (clPerfTimelineSec < 0.0) ? 0
+                : (uint64_t)(clPerfTimelineSec * 1e9);
+            RGYOpenCLPerfCollector::instance().enableTimeline(window_ns, devices[0]);
+            PrintMes(RGY_LOG_DEBUG, _T("OpenCL perf timeline enabled: %.1f sec\n"), clPerfTimelineSec);
+        }
     }
     return RGY_ERR_NONE;
 }
@@ -3049,7 +3055,7 @@ RGY_ERR MPPCore::init(MPPParam *prm) {
         return ret;
     }
 
-    if (RGY_ERR_NONE != (ret = initDevice(prm->ctrl.enableOpenCL, prm->ctrl.parallelEnc.isParent() ? 1 : prm->ctrl.openclBuildThreads, prm->vpp.checkPerformance, prm->ctrl.clPerfDumpDir))) {
+    if (RGY_ERR_NONE != (ret = initDevice(prm->ctrl.enableOpenCL, prm->ctrl.parallelEnc.isParent() ? 1 : prm->ctrl.openclBuildThreads, prm->vpp.checkPerformance, prm->ctrl.clPerfDumpDir, prm->ctrl.clPerfTimelineSec))) {
         return ret;
     }
 
