@@ -1266,6 +1266,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-deflicker](#--vpp-deflicker-param1value1param2value2)
   - [--vpp-colorfix](#--vpp-colorfix-param1value1param2value2)
   - [--vpp-dehalo](#--vpp-dehalo-param1value1param2value2)
+  - [--vpp-finedehalo](#--vpp-finedehalo-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
@@ -2436,6 +2437,55 @@ H.264の非強フィルタ相当の空間デブロックフィルタ。エンコ
   ```
   --vpp-dehalo
   --vpp-dehalo rx=2.4,ry=2.0,darkstr=0.8,brightstr=0.1,lowsens=40,highsens=70,ss=1.5
+  ```
+
+### --vpp-finedehalo [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+細線保護マスクを使ったハロー除去フィルタ。輝度成分に補正を適用し、色差成分は元のままコピーする。
+
+- **パラメータ**
+  - rx=&lt;float&gt; (default=2.0, 0.5 - 10.0)
+    水平方向のハロー半径。
+
+  - ry=&lt;float&gt; (default=2.0, 0.5 - 10.0)
+    垂直方向のハロー半径。
+
+  - darkstr=&lt;float&gt; (default=1.0, 0.0 - 1.0)
+    明るいハローを暗く補正する強度。
+
+  - brightstr=&lt;float&gt; (default=0.0, 0.0 - 1.0)
+    暗いハローを明るく補正する強度。
+
+  - lowsens=&lt;int&gt; (default=50, 0 - 100)
+    dehalo処理の感度ランプ下限。
+
+  - highsens=&lt;int&gt; (default=50, 0 - 100)
+    dehalo処理の感度ランプ上限。
+
+  - ss=&lt;float&gt; (default=1.5, 1.0 - 4.0)
+    スーパーサンプリング倍率。
+
+  - thmi=&lt;int&gt; (default=80, 0 - 255)
+    エッジマスクの下限しきい値。
+
+  - thma=&lt;int&gt; (default=128, 0 - 255)
+    エッジマスクの上限しきい値。
+
+  - thlimi=&lt;int&gt; (default=50, 0 - 255)
+    補正制限マスクの下限しきい値。
+
+  - thlima=&lt;int&gt; (default=100, 0 - 255)
+    補正制限マスクの上限しきい値。
+
+  - showmask=&lt;int&gt; (default=0, 0 - 4)
+    デバッグ用マスク出力。
+
+  - edge=&lt;string&gt; (default=prewitt)
+    エッジ検出方式。prewitt, sobel, scharr, kirsch, laplacian から選択。
+
+- 使用例
+  ```
+  --vpp-finedehalo
+  --vpp-finedehalo edge=scharr,thmi=60,thma=160,thlimi=30,thlima=120,showmask=4
   ```
 
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
