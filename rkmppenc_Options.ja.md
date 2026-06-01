@@ -2406,6 +2406,37 @@ H.264の非強フィルタ相当の空間デブロックフィルタ。エンコ
   --vpp-colorfix mode=gray,frames=30,strength=0.7
   ```
 
+### --vpp-dehalo [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+ハロー除去フィルタ。輝度に補正を適用し、色差はそのままコピーする。
+
+- **パラメータ**
+  - rx=&lt;float&gt; (default=2.00, 0.5 - 10.0)
+    横方向のハロー半径。
+
+  - ry=&lt;float&gt; (default=2.00, 0.5 - 10.0)
+    縦方向のハロー半径。
+
+  - darkstr=&lt;float&gt; (default=1.00, 0.0 - 1.0)
+    明るいハローを暗くする強度。
+
+  - brightstr=&lt;float&gt; (default=0.0, 0.0 - 1.0)
+    暗いハローを明るく補正する強度。
+
+  - lowsens=&lt;int&gt; (default=50, 0 - 100)
+    感度ランプの下側アンカー。
+
+  - highsens=&lt;int&gt; (default=50, 0 - 100)
+    感度ランプの上側アンカー。
+
+  - ss=&lt;float&gt; (default=1.50, 1.0 - 4.0)
+    スーパーサンプリング倍率。
+
+- 使用例
+  ```
+  --vpp-dehalo
+  --vpp-dehalo rx=2.4,ry=2.0,darkstr=0.8,brightstr=0.1,lowsens=40,highsens=70,ss=1.5
+  ```
+
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 エッジレベル調整フィルタ。輪郭強調用のフィルタ。
 

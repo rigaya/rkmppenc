@@ -2459,6 +2459,37 @@ Corrects color cast and white balance.
   --vpp-colorfix mode=gray,frames=30,strength=0.7
   ```
 
+### --vpp-dehalo [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+Halo removal filter. Applies correction to luma and copies chroma unchanged.
+
+- **Parameters**
+  - rx=&lt;float&gt; (default=2.00, 0.5 - 10.0)
+    Horizontal halo radius.
+
+  - ry=&lt;float&gt; (default=2.00, 0.5 - 10.0)
+    Vertical halo radius.
+
+  - darkstr=&lt;float&gt; (default=1.00, 0.0 - 1.0)
+    Bright-halo darkening strength.
+
+  - brightstr=&lt;float&gt; (default=0.0, 0.0 - 1.0)
+    Strength for brightening dark halos.
+
+  - lowsens=&lt;int&gt; (default=50, 0 - 100)
+    Sensitivity ramp lower anchor.
+
+  - highsens=&lt;int&gt; (default=50, 0 - 100)
+    Sensitivity ramp upper anchor.
+
+  - ss=&lt;float&gt; (default=1.50, 1.0 - 4.0)
+    Supersampling ratio.
+
+- examples
+  ```
+  --vpp-dehalo
+  --vpp-dehalo rx=2.4,ry=2.0,darkstr=0.8,brightstr=0.1,lowsens=40,highsens=70,ss=1.5
+  ```
+
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 Edge level adjustment filter, for edge sharpening.
 

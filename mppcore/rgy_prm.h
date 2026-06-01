@@ -88,6 +88,7 @@ static const int RGY_AUDIO_QUALITY_DEFAULT = 0;
 #define ENABLE_VPP_FILTER_DEBLOCK      (ENCODER_QSV   || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_DEFLICKER    (ENCODER_QSV   || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_COLORFIX     (ENCODER_QSV   || ENCODER_MPP)
+#define ENABLE_VPP_FILTER_DEHALO       (ENCODER_QSV   || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_WARPSHARP    (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_EDGELEVEL    (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_MSHARPEN     (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
@@ -208,6 +209,7 @@ enum class VppType : int {
     CL_DEBLOCK,
     CL_DEFLICKER,
     CL_COLORFIX,
+    CL_DEHALO,
     CL_EDGELEVEL,
     CL_MSHARPEN,
     CL_WARPSHARP,
@@ -563,6 +565,13 @@ static const int   FILTER_DEFAULT_COLORFIX_BLACK = 0;
 static const int   FILTER_DEFAULT_COLORFIX_FRAMES = 30;
 static const float FILTER_DEFAULT_COLORFIX_STRENGTH = 1.0f;
 static const float FILTER_DEFAULT_COLORFIX_VARIANCE_THRESHOLD = 2.0f;
+static const float FILTER_DEFAULT_DEHALO_RX = 2.0f;
+static const float FILTER_DEFAULT_DEHALO_RY = 2.0f;
+static const float FILTER_DEFAULT_DEHALO_DARKSTR = 1.0f;
+static const float FILTER_DEFAULT_DEHALO_BRIGHTSTR = 0.0f;
+static const int   FILTER_DEFAULT_DEHALO_LOWSENS = 50;
+static const int   FILTER_DEFAULT_DEHALO_HIGHSENS = 50;
+static const float FILTER_DEFAULT_DEHALO_SS = 1.5f;
 
 static const float FILTER_DEFAULT_WARPSHARP_THRESHOLD = 128.0f;
 static const int   FILTER_DEFAULT_WARPSHARP_BLUR = 2;
@@ -2877,6 +2886,22 @@ struct VppEdgelevel {
     tstring print() const;
 };
 
+struct VppDehalo {
+    bool enable;
+    float rx;
+    float ry;
+    float darkstr;
+    float brightstr;
+    int lowsens;
+    int highsens;
+    float ss;
+
+    VppDehalo();
+    bool operator==(const VppDehalo& x) const;
+    bool operator!=(const VppDehalo& x) const;
+    tstring print() const;
+};
+
 struct VppMsharpen {
     bool  enable;
     float strength;
@@ -3157,6 +3182,7 @@ struct RGYParamVpp {
     VppDeblock deblock;
     VppDeflicker deflicker;
     VppColorFix colorfix;
+    VppDehalo dehalo;
     VppEdgelevel edgelevel;
     VppMsharpen msharpen;
     VppWarpsharp warpsharp;
