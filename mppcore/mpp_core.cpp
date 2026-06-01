@@ -86,6 +86,7 @@
 #include "rgy_filter_unsharp.h"
 #include "rgy_filter_chromashift.h"
 #include "rgy_filter_deblock.h"
+#include "rgy_filter_deflicker.h"
 #include "rgy_filter_edgelevel.h"
 #include "rgy_filter_msharpen.h"
 #include "rgy_filter_warpsharp.h"
@@ -1263,6 +1264,7 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.unsharp.enable)    filterPipeline.push_back(VppType::CL_UNSHARP);
     if (inputParam->vpp.chromashift.enable) filterPipeline.push_back(VppType::CL_CHROMASHIFT);
     if (inputParam->vpp.deblock.enable)    filterPipeline.push_back(VppType::CL_DEBLOCK);
+    if (inputParam->vpp.deflicker.enable)  filterPipeline.push_back(VppType::CL_DEFLICKER);
     if (inputParam->vpp.edgelevel.enable)  filterPipeline.push_back(VppType::CL_EDGELEVEL);
     if (inputParam->vpp.msharpen.enable)   filterPipeline.push_back(VppType::CL_MSHARPEN);
     if (inputParam->vpp.warpsharp.enable)  filterPipeline.push_back(VppType::CL_WARPSHARP);
@@ -2265,6 +2267,28 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         unique_ptr<RGYFilter> filter(new RGYFilterDeblock(m_cl));
         shared_ptr<RGYFilterParamDeblock> param(new RGYFilterParamDeblock());
         param->deblock = inputParam->vpp.deblock;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        clfilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<RGYFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //deflicker
+    if (vppType == VppType::CL_DEFLICKER) {
+        unique_ptr<RGYFilter> filter(new RGYFilterDeflicker(m_cl));
+        shared_ptr<RGYFilterParamDeflicker> param(new RGYFilterParamDeflicker());
+        param->deflicker = inputParam->vpp.deflicker;
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->baseFps = m_encFps;

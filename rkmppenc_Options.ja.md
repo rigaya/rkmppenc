@@ -1263,6 +1263,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-unsharp](#--vpp-unsharp-param1value1param2value2)
   - [--vpp-chromashift](#--vpp-chromashift-param1value1param2value2)
   - [--vpp-deblock](#--vpp-deblock-param1value1param2value2)
+  - [--vpp-deflicker](#--vpp-deflicker-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
@@ -2333,6 +2334,34 @@ H.264の非強フィルタ相当の空間デブロックフィルタ。エンコ
   ```
   --vpp-deblock
   --vpp-deblock qp=30,alpha=2,beta=2,chroma=true
+  ```
+
+### --vpp-deflicker [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+フレーム間の輝度ゆらぎを統計的に補正する時間方向フィルタ。
+
+- **パラメータ**
+  - strength=&lt;float&gt; (default=1.0, 0.0-1.0)
+    補正結果の合成強度。
+
+  - damping=&lt;float&gt; (default=0.8, 0.0-1.0)
+    前フレームの補正量を使った時間方向の減衰。
+
+  - scene_threshold=&lt;float&gt; (default=2.0, 0.5-5.0)
+    シーンチェンジ判定のしきい値。判定されたフレームは補正せず通過する。
+
+  - frames=&lt;int&gt; (default=30, 5-300)
+    参照統計に使用するローリングフレーム数。
+
+  - predictor=&lt;bool&gt; (default=true)
+    predictor-corrector による2段補正を使用する。
+
+  - chroma=&lt;bool&gt; (default=false)
+    色差プレーンにも補正を適用する。
+
+- 使用例
+  ```
+  --vpp-deflicker
+  --vpp-deflicker strength=0.8,damping=0.9,frames=60,predictor=false,chroma=true
   ```
 
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
