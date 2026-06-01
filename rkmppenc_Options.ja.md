@@ -1264,6 +1264,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-chromashift](#--vpp-chromashift-param1value1param2value2)
   - [--vpp-deblock](#--vpp-deblock-param1value1param2value2)
   - [--vpp-deflicker](#--vpp-deflicker-param1value1param2value2)
+  - [--vpp-colorfix](#--vpp-colorfix-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
@@ -2362,6 +2363,41 @@ H.264の非強フィルタ相当の空間デブロックフィルタ。エンコ
   ```
   --vpp-deflicker
   --vpp-deflicker strength=0.8,damping=0.9,frames=60,predictor=false,chroma=true
+  ```
+
+### --vpp-colorfix [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+色かぶりやホワイトバランスを補正するフィルタ。
+
+- **パラメータ**
+  - mode=&lt;manual|auto|gray&gt; (default=manual)
+    補正モード。manual は指定した白点/黒点で補正し、auto は色差平均、gray は grayworld 仮定で解析する。
+
+  - space=&lt;auto|rgb|yuv&gt; (default=auto)
+    処理する色空間。auto は mode に応じて選択する。
+
+  - matrix=&lt;auto|bt601|bt709|bt2020&gt; (default=auto)
+    RGB/YUV 変換に使用する行列。auto は入力 VUI と解像度から選択する。
+
+  - white=&lt;rrggbb&gt; (default=ffffff)
+    manual モードの白点。
+
+  - black=&lt;rrggbb&gt; (default=000000)
+    manual モードの黒点。
+
+  - frames=&lt;int&gt; (default=30, 10-5000)
+    auto/gray モードで解析に使用するフレーム数。
+
+  - strength=&lt;float&gt; (default=1.0, 0.0-1.0)
+    auto/gray モードの補正強度。
+
+  - variance_threshold=&lt;float&gt; (default=2.0, &gt;0)
+    フラッシュ/フェードを解析から除外するための分散しきい値。
+
+- 使用例
+  ```
+  --vpp-colorfix
+  --vpp-colorfix white=fff6e8,black=050505
+  --vpp-colorfix mode=gray,frames=30,strength=0.7
   ```
 
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
