@@ -312,7 +312,9 @@ static int run_on_os_codepage() {
 
 int mpp_run(MPPParam *pParams) {
     const auto clPerfDumpDir = pParams->ctrl.clPerfDumpDir;
+    const auto clPerfDisasmTool = pParams->ctrl.clPerfDisasmTool;
     const auto clPerfOclocPath = pParams->ctrl.clPerfOclocPath;
+    const auto clPerfRgaPath = pParams->ctrl.clPerfRgaPath;
     const auto pythonPath = pParams->ctrl.pythonPath;
     const bool clPerfGenerateReport = !pParams->ctrl.parallelEnc.isChild();
     auto mpp = std::make_unique<MPPCore>();
@@ -327,7 +329,7 @@ int mpp_run(MPPParam *pParams) {
         if (mpp->run2() != RGY_ERR_NONE) {
             mpp.reset();
             if (clPerfGenerateReport) {
-                cl_perf_generate_report(clPerfDumpDir, tstring(), clPerfOclocPath, tstring(), pythonPath);
+                cl_perf_generate_report(clPerfDumpDir, clPerfDisasmTool, clPerfOclocPath, clPerfRgaPath, pythonPath);
             }
             return 1;
         }
@@ -335,13 +337,13 @@ int mpp_run(MPPParam *pParams) {
         _ftprintf(stderr, _T("fatal error in encoding pipeline.\n"));
         mpp.reset();
         if (clPerfGenerateReport) {
-            cl_perf_generate_report(clPerfDumpDir, tstring(), clPerfOclocPath, tstring(), pythonPath);
+            cl_perf_generate_report(clPerfDumpDir, clPerfDisasmTool, clPerfOclocPath, clPerfRgaPath, pythonPath);
         }
         return 1;
     }
     mpp.reset();
     if (clPerfGenerateReport) {
-        cl_perf_generate_report(clPerfDumpDir, tstring(), clPerfOclocPath, tstring(), pythonPath);
+        cl_perf_generate_report(clPerfDumpDir, clPerfDisasmTool, clPerfOclocPath, clPerfRgaPath, pythonPath);
     }
     return 0;
 }
