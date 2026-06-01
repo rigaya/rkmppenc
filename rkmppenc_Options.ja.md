@@ -1262,6 +1262,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-resize](#--vpp-resize-string)
   - [--vpp-unsharp](#--vpp-unsharp-param1value1param2value2)
   - [--vpp-chromashift](#--vpp-chromashift-param1value1param2value2)
+  - [--vpp-deblock](#--vpp-deblock-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
@@ -2310,6 +2311,28 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
   --vpp-chromashift x=1.0,y=-0.5
   --vpp-chromashift auto=true,auto_frames=5
   --vpp-chromashift show=laplacian
+  ```
+
+### --vpp-deblock [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+H.264の非強フィルタ相当の空間デブロックフィルタ。エンコーダの `--no-deblock` とは異なり、入力画像に対するVPPフィルタとして動作する。
+
+- **パラメータ**
+  - qp=&lt;int&gt; (default=24, 0-51)
+    フィルタ強度のQP。
+
+  - alpha=&lt;int&gt; (default=0, -6 - 6)
+    alphaオフセット。
+
+  - beta=&lt;int&gt; (default=0, -6 - 6)
+    betaオフセット。
+
+  - chroma=&lt;bool&gt; (default=false)
+    planar色差プレーンにも適用する。NV12/P010などのsemi-planar色差では無効化される。
+
+- 使用例
+  ```
+  --vpp-deblock
+  --vpp-deblock qp=30,alpha=2,beta=2,chroma=true
   ```
 
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
