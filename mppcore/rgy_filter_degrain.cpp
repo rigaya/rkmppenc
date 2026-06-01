@@ -141,6 +141,10 @@ RGYFilterDegrain::RGYFilterDegrain(shared_ptr<RGYOpenCLContext> context) :
     m_frameAnalysisData(),
     m_frameAnalysisLayout(),
     m_pendingSceneChange(),
+    m_sceneChangeReadbackSAD(),
+    m_sceneChangeCounts(),
+    m_sceneChangeDisableMask(),
+    m_sceneChangeReadbackSADIndex(0),
     m_inputCount(0),
     m_drainCount(0),
     m_bInterlacedWarn(false),
@@ -895,6 +899,12 @@ void RGYFilterDegrain::close() {
     m_degrainMotionSearchPrograms.clear();
     m_useDegrainChromaProgram = false;
     clearPendingSceneChange();
+    for (auto &sad : m_sceneChangeReadbackSAD) {
+        sad.reset();
+    }
+    m_sceneChangeCounts.reset();
+    m_sceneChangeDisableMask.reset();
+    m_sceneChangeReadbackSADIndex = 0;
     m_analysis.mv.reset();
     m_analysis.sad.reset();
     m_analysis.windowRampY.reset();
