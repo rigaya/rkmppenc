@@ -1265,6 +1265,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-deblock](#--vpp-deblock-param1value1param2value2)
   - [--vpp-deflicker](#--vpp-deflicker-param1value1param2value2)
   - [--vpp-colorfix](#--vpp-colorfix-param1value1param2value2)
+  - [--vpp-dehalo](#--vpp-dehalo-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
