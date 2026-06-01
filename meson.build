@@ -541,6 +541,7 @@ mppcore_sources = files(
   'mppcore/rgy_filter_deblock.cpp',
   'mppcore/rgy_filter_dehalo.cpp',
   'mppcore/rgy_filter_finedehalo.cpp',
+  'mppcore/rgy_filter_hqdering.cpp',
   'mppcore/rgy_filter_deflicker.cpp',
   'mppcore/rgy_filter_colorfix.cpp',
   'mppcore/rgy_filter_ivtc.cpp',

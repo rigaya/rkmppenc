@@ -1267,6 +1267,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-colorfix](#--vpp-colorfix-param1value1param2value2)
   - [--vpp-dehalo](#--vpp-dehalo-param1value1param2value2)
   - [--vpp-finedehalo](#--vpp-finedehalo-param1value1param2value2)
+  - [--vpp-hqdering](#--vpp-hqdering-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
@@ -2486,6 +2487,34 @@ H.264の非強フィルタ相当の空間デブロックフィルタ。エンコ
   ```
   --vpp-finedehalo
   --vpp-finedehalo edge=scharr,thmi=60,thma=160,thlimi=30,thlima=120,showmask=4
+  ```
+
+### --vpp-hqdering [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+DCTリンギング低減フィルタ。輝度成分に補正を適用し、色差成分は元のままコピーする。
+
+- **パラメータ**
+  - mrad=&lt;int&gt; (default=1, 1 - 3)
+    リングマスクの拡張半径。
+
+  - mthr=&lt;int&gt; (default=10, 0 - 255)
+    エッジマスクのしきい値。
+
+  - sigma=&lt;float&gt; (default=1.5, 0.5 - 5.0)
+    ガウスぼかしの sigma。
+
+  - showmask=&lt;bool&gt; (default=false)
+    有効マスクのみを出力する。
+
+  - protect=&lt;bool&gt; (default=true)
+    元のエッジ画素を保護する。
+
+  - edge=&lt;string&gt; (default=log)
+    エッジ検出方式。log, sobel, prewitt, scharr, kirsch, laplacian から選択。
+
+- 使用例
+  ```
+  --vpp-hqdering
+  --vpp-hqdering mrad=2,mthr=12,sigma=2.0,protect=true,edge=scharr
   ```
 
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
