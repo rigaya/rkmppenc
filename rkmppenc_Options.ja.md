@@ -2085,8 +2085,7 @@ yadifによるインタレ解除を行う。
     
   
 ### --vpp-msmooth [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
-ディテール保持型スムージングフィルタ。Donald A. Graftの MSmooth に基づく。
-エッジを検出してマスクを作成し、エッジ以外の領域に対して反復的な平滑化を行う。
+ディテール保持型スムージングフィルタ。エッジを検出してマスクを作成し、エッジ以外の領域に対して反復的な平滑化を行う。
 
 - **パラメータ**
   - strength=&lt;int&gt; (default=3, 0 - 20)  
@@ -2325,7 +2324,7 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
   ```
 
 ### --vpp-deblock [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
-H.264の非強フィルタ相当の空間デブロックフィルタ。エンコーダの `--no-deblock` とは異なり、入力画像に対するVPPフィルタとして動作する。
+H.264のnon-strong style相当の空間デブロックフィルタ。エンコーダの `--no-deblock` とは異なり、入力画像に対するVPPフィルタとして動作する。
 
 - **パラメータ**
   - qp=&lt;int&gt; (default=24, 0-51)
@@ -2543,7 +2542,7 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
   ```
 
 ### --vpp-msharpen [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
-エッジ選択型シャープニングフィルタ。Donald A. Graftの MSharpen に基づく。
+エッジ選択型シャープニングフィルタ。
 
 - **パラメータ**
   - strength=&lt;float&gt; (default=1.0, 0.0 - 1.0)  
@@ -3080,7 +3079,9 @@ OpenCL kernel performance dumpを指定したディレクトリに出力し、�
 --cl-perf-dump perf_out --cl-perf-timeline
 ```
 
-生成される`timeline.html`はCanvas 2Dベースのインタラクティブなビューアで、ズーム/パン/ホバーによる詳細表示が可能。host thread別レーンとdevice queue別レーンの2セクション構成で、同一イベントのhost/device対応をseq番号で紐づけてハイライト表示する。
+![timeline](data/qsvencc_cl_perf_timeline_20260531.png)
+
+生成される`timeline.html`はズーム/パン/ホバーによる詳細表示が可能(マウスホイール/ドラッグ)。host thread別レーンとdevice queue別レーンの2セクション構成で、同一イベントのhost/device対応をseq番号で紐づけてハイライト表示する。
 
 ### --ocloc-path &lt;path&gt;
 [--cl-perf-dump](#--cl-perf-dump-dir)と併用し、cl_perf aggregateに渡すocloc実行ファイルパスを指定する。
