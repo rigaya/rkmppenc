@@ -2141,6 +2141,9 @@ Detects edges to create a mask, then applies iterative smoothing to non-edge are
   
   - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
     Edge detection threshold.
+
+  - threshold_c=&lt;float&gt;  (default=-1.0, -1.0 - 255.0)  
+    Chroma edge detection threshold. -1.0 uses the same value as threshold.
   
   - highq=&lt;bool&gt;  (default=true)  
     When true, uses 4-direction edge detection (diagonal + horizontal/vertical). When false, uses only 2 diagonal directions.
@@ -2155,6 +2158,9 @@ Detects edges to create a mask, then applies iterative smoothing to non-edge are
   
   Example: Stronger smoothing
   --vpp-msmooth strength=6,threshold=10.0
+
+  Example: Separate chroma threshold
+  --vpp-msmooth threshold=12.0,threshold_c=18.0
   ```
 
 ### --vpp-knn [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
