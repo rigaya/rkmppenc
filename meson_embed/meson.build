@@ -58,6 +58,7 @@ resource_specs = [
   ['rgy_filter_rtgmc_primitive_cl', '../mppcore/rgy_filter_rtgmc_primitive.cl', 'mppcore_rgy_filter_rtgmc_primitive_cl'],
   ['rgy_filter_rtgmc_mmask_cl', '../mppcore/rgy_filter_rtgmc_mmask.cl', 'mppcore_rgy_filter_rtgmc_mmask_cl'],
   ['rgy_filter_edgelevel_cl', '../mppcore/rgy_filter_edgelevel.cl', 'mppcore_rgy_filter_edgelevel_cl'],
+  ['rgy_filter_chromashift_cl', '../mppcore/rgy_filter_chromashift.cl', 'mppcore_rgy_filter_chromashift_cl'],
   ['rgy_filter_ivtc_cl', '../mppcore/rgy_filter_ivtc.cl', 'mppcore_rgy_filter_ivtc_cl'],
   ['rgy_filter_rtgmc_bob_cl', '../mppcore/rgy_filter_rtgmc_bob.cl', 'mppcore_rgy_filter_rtgmc_bob_cl'],
   ['rgy_filter_maa_cl', '../mppcore/rgy_filter_maa.cl', 'mppcore_rgy_filter_maa_cl'],

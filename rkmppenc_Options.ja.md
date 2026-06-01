@@ -1261,6 +1261,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-subburn](#--vpp-subburn-param1value1param2value2)
   - [--vpp-resize](#--vpp-resize-string)
   - [--vpp-unsharp](#--vpp-unsharp-param1value1param2value2)
+  - [--vpp-chromashift](#--vpp-chromashift-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
@@ -2280,6 +2281,35 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
   ```
   例: やや強め
   --vpp-unsharp weight=1.0
+  ```
+
+### --vpp-chromashift [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+色差プレーンをシフトし、輝度と色差の位置ずれを補正するフィルタ。
+
+- **パラメータ**
+  - x=&lt;float&gt; (default=0.0, -4.0 - 4.0)
+    横方向のシフト量。輝度画素単位で指定する。
+
+  - y=&lt;float&gt; (default=0.0, -4.0 - 4.0)
+    縦方向のシフト量。輝度画素単位で指定する。
+
+  - show=&lt;normal|laplacian&gt; (default=normal)
+    laplacian 診断画像を出力する。
+
+  - auto=&lt;bool&gt; (default=false)
+    冒頭フレームからシフト量を自動検出する。
+
+  - auto_frames=&lt;int&gt; (default=5, 1-100)
+    自動検出で採用する解析フレーム数。
+
+  - auto_min_pairs=&lt;int&gt; (default=200, 10-10000)
+    解析フレームあたりに必要なゼロクロス対応点数。
+
+- 使用例
+  ```
+  --vpp-chromashift x=1.0,y=-0.5
+  --vpp-chromashift auto=true,auto_frames=5
+  --vpp-chromashift show=laplacian
   ```
 
 ### --vpp-edgelevel [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
