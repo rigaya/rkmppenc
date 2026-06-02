@@ -1259,6 +1259,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-nlmeans](#--vpp-knn-param1value1param2value2)
   - [--vpp-pmd](#--vpp-pmd-param1value1param2value2)
   - [--vpp-denoise-hqdn3d](#--vpp-denoise-hqdn3d-param1value1param2value2)
+  - [--vpp-descale](#--vpp-descale-param1value1param2value2)
   - [--vpp-subburn](#--vpp-subburn-param1value1param2value2)
   - [--vpp-resize](#--vpp-resize-string)
   - [--vpp-unsharp](#--vpp-unsharp-param1value1param2value2)
@@ -2206,6 +2207,49 @@ HQDN3D による空間・時間方向のノイズ除去を行う。`cl_khr_fp16`
 - 使用例
   ```
   --vpp-denoise-hqdn3d luma_spatial=4.0,chroma_spatial=3.0,luma_temporal=6.0,chroma_temporal=4.5
+  ```
+
+### --vpp-descale [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+既知のアップスケールカーネルを逆算し、元の低解像度に近い画像へ縮小します。
+
+- **パラメータ**
+  - kernel=&lt;string&gt;
+    逆算するアップスケールカーネル。デフォルトは bicubic。
+    ```
+    bilinear, bicubic, spline16, spline36, spline64, lanczos2, lanczos3, lanczos4, auto
+    ```
+
+  - width=&lt;int&gt; / height=&lt;int&gt;
+    出力する元解像度。明示カーネルでは両方を指定します。
+
+  - b=&lt;float&gt;, c=&lt;float&gt;
+    bicubic のパラメータ。デフォルトは b=0.0, c=0.5。
+
+  - src_left=&lt;float&gt;, src_top=&lt;float&gt;
+    入力画像のサブピクセルオフセット。デフォルトは 0.0。
+
+  - border_handling=&lt;string&gt;
+    端処理。デフォルトは mirror。
+    ```
+    mirror, zero, repeat
+    ```
+
+  - auto=&lt;bool&gt;
+    `kernel=auto` と解像度探索を有効にします。入力を別途開いて `detect_frames` 枚を解析するため、stdin や pipe では使用できません。
+
+  - search_min=&lt;int&gt;, search_max=&lt;int&gt;, search_step=&lt;int&gt;
+    `auto=true` 時の探索範囲と細かさ。`search_step` のデフォルトは 1。
+
+  - detect_frames=&lt;int&gt;
+    自動検出で平均化するフレーム数。デフォルトは 10。
+
+  - show_scores=&lt;bool&gt;
+    自動検出時の候補スコアをログに出力します。デフォルトは false。
+
+- 使用例
+  ```
+  --vpp-descale kernel=bicubic,width=1280,height=720,b=0,c=0.5
+  --vpp-descale auto=true,detect_frames=8
   ```
 
 ### --vpp-preprocess [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]

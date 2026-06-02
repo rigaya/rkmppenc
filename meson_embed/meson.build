@@ -28,6 +28,7 @@ resource_specs = [
   ['rgy_filter_denoise_dct_cl', '../mppcore/rgy_filter_denoise_dct.cl', 'mppcore_rgy_filter_denoise_dct_cl'],
   ['rgy_filter_denoise_fft3d_cl', '../mppcore/rgy_filter_denoise_fft3d.cl', 'mppcore_rgy_filter_denoise_fft3d_cl'],
   ['rgy_filter_denoise_hqdn3d_cl', '../mppcore/rgy_filter_denoise_hqdn3d.cl', 'mppcore_rgy_filter_denoise_hqdn3d_cl'],
+  ['rgy_filter_descale_cl', '../mppcore/rgy_filter_descale.cl', 'mppcore_rgy_filter_descale_cl'],
   ['rgy_filter_denoise_knn_cl', '../mppcore/rgy_filter_denoise_knn.cl', 'mppcore_rgy_filter_denoise_knn_cl'],
   ['rgy_filter_denoise_nlmeans_cl', '../mppcore/rgy_filter_denoise_nlmeans.cl', 'mppcore_rgy_filter_denoise_nlmeans_cl'],
   ['rgy_filter_denoise_pmd_cl', '../mppcore/rgy_filter_denoise_pmd.cl', 'mppcore_rgy_filter_denoise_pmd_cl'],
