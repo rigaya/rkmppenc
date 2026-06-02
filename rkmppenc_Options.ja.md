@@ -2094,6 +2094,9 @@ yadifによるインタレ解除を行う。
   
   - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
     エッジ検出の閾値。
+
+  - threshold_c=&lt;float&gt;  (default=-1.0, -1.0 / 0.0 - 255.0)
+    色差成分のエッジ検出の閾値。-1.0 の場合は threshold と同じ値を使用。
   
   - highq=&lt;bool&gt;  (default=true)  
     trueの場合、4方向(対角+水平垂直)でエッジ検出を行う。falseの場合は対角2方向のみ。
@@ -2107,7 +2110,7 @@ yadifによるインタレ解除を行う。
   --vpp-msmooth
   
   例: 強めの平滑化
-  --vpp-msmooth strength=6,threshold=10.0
+  --vpp-msmooth strength=6,threshold=10.0,threshold_c=18.0
   ```
 
 ### --vpp-knn [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
