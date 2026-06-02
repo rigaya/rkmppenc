@@ -41,7 +41,7 @@
 namespace {
 static uint64_t degrain_cl_perf_now_ns() {
     return (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+        std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 static uint64_t degrain_cl_perf_begin(const bool enabled) {
@@ -829,12 +829,16 @@ RGY_ERR RGYFilterDegrain::attachAnalysisData(const RGYFrameInfo *sourceFrame, RG
         return RGY_ERR_INVALID_PARAM;
     }
 
-    auto mv = m_cl->createBuffer(m_analysis.mvBytes, CL_MEM_READ_WRITE);
+    auto mv = (m_sideDataBufferPool)
+        ? m_sideDataBufferPool->acquire(m_analysis.mvBytes, CL_MEM_READ_WRITE)
+        : m_cl->createBuffer(m_analysis.mvBytes, CL_MEM_READ_WRITE);
     if (!mv) {
         AddMessage(RGY_LOG_ERROR, _T("failed to allocate degrain frame MV side data buffer.\n"));
         return RGY_ERR_MEMORY_ALLOC;
     }
-    auto sad = m_cl->createBuffer(m_analysis.sadBytes, CL_MEM_READ_WRITE);
+    auto sad = (m_sideDataBufferPool)
+        ? m_sideDataBufferPool->acquire(m_analysis.sadBytes, CL_MEM_READ_WRITE)
+        : m_cl->createBuffer(m_analysis.sadBytes, CL_MEM_READ_WRITE);
     if (!sad) {
         AddMessage(RGY_LOG_ERROR, _T("failed to allocate degrain frame SAD side data buffer.\n"));
         return RGY_ERR_MEMORY_ALLOC;
@@ -863,7 +867,8 @@ RGY_ERR RGYFilterDegrain::attachAnalysisData(const RGYFrameInfo *sourceFrame, RG
         mvCopyEvent.reset_ptr());
     const auto mvCopyHostTime = degrain_cl_perf_end(perf_enabled, mvCopyStart);
     if (perf_enabled && clerr == CL_SUCCESS) {
-        perf_collector.recordCommand("clEnqueueCopyBuffer:degrain.mv_side_data", m_analysis.mvBytes, mvCopyHostTime, mvCopyEvent);
+        perf_collector.recordCommand("clEnqueueCopyBuffer:degrain.mv_side_data", m_analysis.mvBytes, mvCopyHostTime, mvCopyEvent,
+            mvCopyStart, mvCopyStart + mvCopyHostTime, (uint64_t)(uintptr_t)queue.get());
     }
     auto err = err_cl_to_rgy(clerr);
     if (err != RGY_ERR_NONE) {
@@ -885,7 +890,8 @@ RGY_ERR RGYFilterDegrain::attachAnalysisData(const RGYFrameInfo *sourceFrame, RG
         sadCopyEvent.reset_ptr());
     const auto sadCopyHostTime = degrain_cl_perf_end(perf_enabled, sadCopyStart);
     if (perf_enabled && clerr == CL_SUCCESS) {
-        perf_collector.recordCommand("clEnqueueCopyBuffer:degrain.sad_side_data", m_analysis.sadBytes, sadCopyHostTime, sadCopyEvent);
+        perf_collector.recordCommand("clEnqueueCopyBuffer:degrain.sad_side_data", m_analysis.sadBytes, sadCopyHostTime, sadCopyEvent,
+            sadCopyStart, sadCopyStart + sadCopyHostTime, (uint64_t)(uintptr_t)queue.get());
     }
     err = err_cl_to_rgy(clerr);
     if (err != RGY_ERR_NONE) {
@@ -905,7 +911,8 @@ RGY_ERR RGYFilterDegrain::attachAnalysisData(const RGYFrameInfo *sourceFrame, RG
         sourceFrame->inputFrameId,
         sourceFrame->timestamp,
         sourceFrame->duration,
-        m_analysis.lastAvailabilityDisableRefs);
+        m_analysis.lastAvailabilityDisableRefs,
+        m_sideDataBufferPool);
     rgy_degrain_erase_frame_data(outputFrame->dataList);
     outputFrame->dataList.push_back(frameData);
     if (event) {
@@ -989,7 +996,8 @@ RGY_ERR RGYFilterDegrain::prepareAnalysisStateMotionSearch(const RGYFrameInfo &p
             copyEvent->reset_ptr());
         const auto host_time = degrain_cl_perf_end(perf_enabled, host_start);
         if (perf_enabled && clerr == CL_SUCCESS) {
-            perf_collector.recordCommand("clEnqueueCopyBuffer:degrain.motion_search_vectors", bytes, host_time, *copyEvent);
+            perf_collector.recordCommand("clEnqueueCopyBuffer:degrain.motion_search_vectors", bytes, host_time, *copyEvent,
+                host_start, host_start + host_time, (uint64_t)(uintptr_t)queue.get());
         }
         auto err = err_cl_to_rgy(clerr);
         if (err != RGY_ERR_NONE) {
@@ -1063,7 +1071,8 @@ RGY_ERR RGYFilterDegrain::prepareAnalysisStateMotionSearch(const RGYFrameInfo &p
             frameAverageMVEvent.reset_ptr());
         const auto host_time = degrain_cl_perf_end(perf_enabled, host_start);
         if (perf_enabled && clerr == CL_SUCCESS) {
-            perf_collector.recordCommand("clEnqueueFillBuffer:degrain.frame_average_mv", ws.frameAverageMVBytes, host_time, frameAverageMVEvent);
+            perf_collector.recordCommand("clEnqueueFillBuffer:degrain.frame_average_mv", ws.frameAverageMVBytes, host_time, frameAverageMVEvent,
+                host_start, host_start + host_time, (uint64_t)(uintptr_t)queue.get());
         }
         auto err = err_cl_to_rgy(clerr);
         if (err != RGY_ERR_NONE) {
