@@ -2148,9 +2148,6 @@ Detail-preserving smoothing filter. Detects edges to create a mask, then applies
   
   - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
     Edge detection threshold.
-
-  - threshold_c=&lt;float&gt;  (default=-1.0, -1.0 - 255.0)  
-    Chroma edge detection threshold. -1.0 uses the same value as threshold.
   
   - highq=&lt;bool&gt;  (default=true)  
     When true, uses 4-direction edge detection (diagonal + horizontal/vertical). When false, uses only 2 diagonal directions.
@@ -2165,9 +2162,6 @@ Detail-preserving smoothing filter. Detects edges to create a mask, then applies
   
   Example: Stronger smoothing
   --vpp-msmooth strength=6,threshold=10.0
-
-  Example: Separate chroma threshold
-  --vpp-msmooth threshold=12.0,threshold_c=18.0
   ```
 
 ### --vpp-knn [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
@@ -2634,12 +2628,6 @@ Edge-selective sharpening filter.
   
   - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
     Edge detection threshold.
-
-  - slope=&lt;float&gt; (default=0.0, 0.0 disables)
-    Enables a sigmoid soft mask for smoother edge gating. Larger values make the transition sharper.
-
-  - luma_limit=&lt;float&gt; (default=0.0, 0.0 disables)
-    Reduces sharpening in dark luma regions below the specified 8-bit luma value.
   
   - highq=&lt;bool&gt;  (default=true)  
     When true, uses 4-direction edge detection (diagonal + horizontal/vertical). When false, uses only 2 diagonal directions.
@@ -2654,9 +2642,6 @@ Edge-selective sharpening filter.
   
   Example: Somewhat weaker
   --vpp-msharpen strength=0.5,threshold=20.0
-
-  Example: Use soft mask and dark luma attenuation
-  --vpp-msharpen strength=0.8,threshold=18.0,slope=8.0,luma_limit=32.0
   ```
 
 ### --vpp-warpsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
