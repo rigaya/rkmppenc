@@ -64,6 +64,7 @@ resource_specs = [
   ['rgy_filter_finedehalo_cl', '../mppcore/rgy_filter_finedehalo.cl', 'mppcore_rgy_filter_finedehalo_cl'],
   ['rgy_filter_hqdering_cl', '../mppcore/rgy_filter_hqdering.cl', 'mppcore_rgy_filter_hqdering_cl'],
   ['rgy_filter_deflicker_cl', '../mppcore/rgy_filter_deflicker.cl', 'mppcore_rgy_filter_deflicker_cl'],
+  ['rgy_filter_stab_cl', '../mppcore/rgy_filter_stab.cl', 'mppcore_rgy_filter_stab_cl'],
   ['rgy_filter_colorfix_cl', '../mppcore/rgy_filter_colorfix.cl', 'mppcore_rgy_filter_colorfix_cl'],
   ['rgy_filter_ivtc_cl', '../mppcore/rgy_filter_ivtc.cl', 'mppcore_rgy_filter_ivtc_cl'],
   ['rgy_filter_rtgmc_bob_cl', '../mppcore/rgy_filter_rtgmc_bob.cl', 'mppcore_rgy_filter_rtgmc_bob_cl'],

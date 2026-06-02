@@ -1264,6 +1264,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-chromashift](#--vpp-chromashift-param1value1param2value2)
   - [--vpp-deblock](#--vpp-deblock-param1value1param2value2)
   - [--vpp-deflicker](#--vpp-deflicker-param1value1param2value2)
+  - [--vpp-stab](#--vpp-stab-param1value1param2value2)
   - [--vpp-colorfix](#--vpp-colorfix-param1value1param2value2)
   - [--vpp-dehalo](#--vpp-dehalo-param1value1param2value2)
   - [--vpp-finedehalo](#--vpp-finedehalo-param1value1param2value2)
@@ -2371,6 +2372,32 @@ H.264のnon-strong style相当の空間デブロックフィルタ。エンコ�
   ```
   --vpp-deflicker
   --vpp-deflicker strength=0.8,damping=0.9,frames=60,predictor=false,chroma=true
+  ```
+
+### --vpp-stab [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+連続フレームの輝度プレーンから位相相関で平行移動量を推定し、手ぶれを補正するOpenCLフィルタ。
+MFXの `--vpp-image-stab` とは別のフィルタ。
+
+- **パラメータ**
+  - strength=&lt;float&gt; (default=1.0, 0.0-1.0)
+    補正の強度。0.0で補正なし、1.0で推定した移動量をそのまま適用する。
+
+  - damping=&lt;float&gt; (default=0.9, 0.0-1.0)
+    推定した移動量の時間方向スムージング。大きいほど変化が緩やかになる。
+
+  - trust=&lt;float&gt; (default=0.3, 0.0-1.0)
+    相関ピークの信頼度しきい値。しきい値未満のフレームでは直前の信頼できる補正量を維持する。
+
+  - max_shift=&lt;float&gt; (default=32.0, 1.0-256.0)
+    1フレームあたりの最大補正量を輝度ピクセル単位で制限する。
+
+  - border=&lt;black|clamp|mirror&gt; (default=black)
+    補正後にフレーム外を参照する画素の埋め方。
+
+- 使用例
+  ```
+  --vpp-stab
+  --vpp-stab strength=0.8,damping=0.95,trust=0.25,max_shift=48,border=mirror
   ```
 
 ### --vpp-colorfix [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
