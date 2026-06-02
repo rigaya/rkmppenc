@@ -518,6 +518,7 @@ mppcore_sources = files(
   'mppcore/rgy_filter_delogo.cpp',
   'mppcore/rgy_filter_denoise_dct.cpp',
   'mppcore/rgy_filter_denoise_fft3d.cpp',
+  'mppcore/rgy_filter_denoise_hqdn3d.cpp',
   'mppcore/rgy_filter_denoise_knn.cpp',
   'mppcore/rgy_filter_denoise_nlmeans.cpp',
   'mppcore/rgy_filter_denoise_pmd.cpp',
