@@ -1274,6 +1274,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-hqdering](#--vpp-hqdering-param1value1param2value2)
   - [--vpp-edgelevel](#--vpp-edgelevel-param1value1param2value2)
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
+  - [--vpp-cas](#--vpp-cas-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
   - [--vpp-maa](#--vpp-maa-param1value1param2value2)
   - [--vpp-curves](#--vpp-overlay-param1value1param2value2)
@@ -2705,6 +2706,28 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
 
   例: ソフトマスク、暗部抑制、ブロック保護を使用
   --vpp-msharpen strength=0.8,threshold=18.0,slope=8.0,luma_limit=32.0,block_protect=0.5
+  ```
+
+### --vpp-cas [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+輝度のみを処理するContrast Adaptive Sharpeningフィルタ。CASを輝度に適用し、色差はそのままコピーする。
+
+- **パラメータ**
+  - sharpness=&lt;float&gt; (default=0.4, 0.0 - 1.0)
+    シャープニングの強度。内部ではCASのpeak値に変換される。
+
+  - hdr=&lt;bool&gt; (default=false)
+    SDR向けのgamma 2.0輝度近似をスキップする。PQやHLGなどのHDR素材で有効にする。
+
+- 使用例
+  ```
+  例: デフォルト設定
+  --vpp-cas
+
+  例: 強め
+  --vpp-cas sharpness=0.7
+
+  例: HDR素材
+  --vpp-cas sharpness=0.5,hdr=true
   ```
 
 ### --vpp-warpsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
