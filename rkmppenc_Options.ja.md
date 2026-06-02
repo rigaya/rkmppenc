@@ -1261,6 +1261,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-subburn](#--vpp-subburn-param1value1param2value2)
   - [--vpp-resize](#--vpp-resize-string)
   - [--vpp-unsharp](#--vpp-unsharp-param1value1param2value2)
+  - [--vpp-vinverse](#--vpp-vinverse-param1value1param2value2)
   - [--vpp-chromashift](#--vpp-chromashift-param1value1param2value2)
   - [--vpp-deblock](#--vpp-deblock-param1value1param2value2)
   - [--vpp-deflicker](#--vpp-deflicker-param1value1param2value2)
@@ -2290,6 +2291,34 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
   ```
   例: やや強め
   --vpp-unsharp weight=1.0
+  ```
+
+### --vpp-vinverse [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+インタレ解除後に残った縞状の残留を軽減するフィルタ。
+
+- **パラメータ**
+  - mode=&lt;vinverse|vinverse2&gt; (default=vinverse)
+    フィルタの動作モード。
+
+  - sstr=&lt;float&gt; (default=2.7, 0.0 - 8.0)
+    contra reference の強度。
+
+  - amnt=&lt;float&gt; (default=255.0, 0.0 - 255.0)
+    8bit スケールでの画素ごとの最大変化量。255.0 で制限なし。
+
+  - scl=&lt;float&gt; (default=0.25, 0.0 - 4.0)
+    残留と参照差分の符号が逆の場合のソフトクリップ係数。
+
+  - thr=&lt;float&gt; (default=0.0, 0.0 - 255.0)
+    8bit スケールでの残留判定閾値。これ未満の画素は変更しない。
+
+  - chroma=&lt;bool&gt; (default=true)
+    色差プレーンにも処理を適用する。
+
+- 使用例
+  ```
+  --vpp-vinverse
+  --vpp-vinverse mode=vinverse2,sstr=2.0,amnt=160,thr=4,chroma=false
   ```
 
 ### --vpp-chromashift [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
