@@ -2571,6 +2571,15 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
   
   - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
     エッジ検出の閾値。
+
+  - slope=&lt;float&gt; (default=0.0, 0.0 -)
+    シグモイドによるソフトマスクの傾き。0.0では従来の二値マスクを使用する。
+
+  - luma_limit=&lt;float&gt; (default=0.0, 0.0 - 255.0)
+    指定値より暗い輝度領域でシャープ化を弱める。0.0では無効。
+
+  - block_protect=&lt;float&gt; (default=0.0, 0.0 - 1.0)
+    検出されたDCTブロック境界付近でシャープ化を弱める。0.0では無効。
   
   - highq=&lt;bool&gt;  (default=true)  
     trueの場合、4方向(対角+水平垂直)でエッジ検出を行う。falseの場合は対角2方向のみ。
@@ -2585,6 +2594,9 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
   
   例: やや弱め
   --vpp-msharpen strength=0.5,threshold=20.0
+
+  例: ソフトマスク、暗部抑制、ブロック保護を使用
+  --vpp-msharpen strength=0.8,threshold=18.0,slope=8.0,luma_limit=32.0,block_protect=0.5
   ```
 
 ### --vpp-warpsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
