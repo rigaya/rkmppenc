@@ -2291,10 +2291,20 @@ HQDN3D による空間・時間方向のノイズ除去を行う。`cl_khr_fp16`
   | lanczos2 | 4x4 lanczos補間 |
   | lanczos3 | 6x6 lanczos補間 |
   | lanczos4 | 8x8 lanczos補間 |
+  | fsr1     | AMD FidelityFX Super Resolution 1.0 (EASU + RCAS) |
   | rga_nearest  | 最近傍点を選択  |
   | rga_bilinear | 線形補間  |
   | rga_bicubic  | 双三次補間 |
 
+- fsr1 の追加パラメータ
+  - sharpness=&lt;float&gt;
+    RCASのシャープネス。(0.0 - 1.0、デフォルト = 0.5)
+
+- 使用例
+  ```
+  例: fsr1を使用する
+  --vpp-resize algo=fsr1,sharpness=0.8
+  ```
 
 ### --vpp-unsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 unsharpフィルタ。輪郭・ディテール強調用のフィルタ。

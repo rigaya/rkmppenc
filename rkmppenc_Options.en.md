@@ -2351,9 +2351,20 @@ Specify the resizing algorithm.
   | lanczos2 | 4x4 Lanczos resampling |
   | lanczos3 | 6x6 Lanczos resampling |
   | lanczos4 | 8x8 Lanczos resampling |
+  | fsr1     | AMD FidelityFX Super Resolution 1.0 (EASU + RCAS) |
   | rga_nearest  | set nearest pixel  |
   | rga_bilinear | linear interpolation  |
   | rga_bicubic  | bicubic interpolation |
+
+- Additional parameters for fsr1
+  - sharpness=&lt;float&gt;
+    RCAS sharpness. (0.0 - 1.0, default = 0.5)
+
+- examples
+  ```
+  Example: Use fsr1
+  --vpp-resize algo=fsr1,sharpness=0.8
+  ```
 
 ### --vpp-unsharp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 unsharp filter, for edge and detail enhancement.

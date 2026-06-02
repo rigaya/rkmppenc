@@ -2241,6 +2241,7 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         param->frameOut.height = resize.second;
         param->baseFps = m_encFps;
         param->bOutOverwrite = false;
+        param->fsr1 = inputParam->vpp.resize_fsr1;
         auto sts = filterResize->init(param, m_pLog);
         if (sts != RGY_ERR_NONE) {
             return sts;
