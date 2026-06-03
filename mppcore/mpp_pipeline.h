@@ -1511,11 +1511,7 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
     virtual int additionalOutputSurfaces() const override {
-        int frames = 0;
-        for (const auto& filter : m_vpFilters) {
-            frames += filter->requiredOutputFrames();
-        }
-        return frames;
+        return m_videoMetric->requiredOutputFrames();
     }
     virtual RGY_ERR sendFrame(std::unique_ptr<PipelineTaskOutput>& frame) override {
 #if 0
