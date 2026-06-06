@@ -1258,7 +1258,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-knn](#--vpp-knn-param1value1param2value2)
   - [--vpp-nlmeans](#--vpp-knn-param1value1param2value2)
   - [--vpp-pmd](#--vpp-pmd-param1value1param2value2)
-  - [--vpp-denoise-hqdn3d](#--vpp-denoise-hqdn3d-param1value1param2value2)
+  - [--vpp-hqdn3d](#--vpp-hqdn3d-param1value1param2value2)
   - [--vpp-descale](#--vpp-descale-param1value1param2value2)
   - [--vpp-subburn](#--vpp-subburn-param1value1param2value2)
   - [--vpp-resize](#--vpp-resize-string)
@@ -2198,7 +2198,7 @@ Non local meansを用いたノイズ除去フィルタ。
   --vpp-pmd apply_count=2,strength=90,threshold=120
   ```
 
-### --vpp-denoise-hqdn3d [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+### --vpp-hqdn3d [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 HQDN3D による空間・時間方向のノイズ除去を行う。`cl_khr_fp16` 対応デバイスでは中間バッファに FP16 を自動使用し、非対応デバイスでは FP32 にフォールバックする。
 
 - **パラメータ**
@@ -2216,7 +2216,7 @@ HQDN3D による空間・時間方向のノイズ除去を行う。`cl_khr_fp16`
 
 - 使用例
   ```
-  --vpp-denoise-hqdn3d luma_spatial=4.0,chroma_spatial=3.0,luma_temporal=6.0,chroma_temporal=4.5
+  --vpp-hqdn3d luma_spatial=4.0,chroma_spatial=3.0,luma_temporal=6.0,chroma_temporal=4.5
   ```
 
 ### --vpp-descale [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
