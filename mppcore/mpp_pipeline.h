@@ -752,7 +752,7 @@ public:
     PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, bool adjustTimestamp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
         m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_adjustTimestamp(adjustTimestamp),
-        m_firstBitstreamTimestamp(-1), m_firstFrameTimestamp(-1), m_queueTimestamp(), m_queueTimestampWrap(), m_queueHDR10plusMetadata(), m_dataFlag(),
+        m_firstBitstreamTimestamp(AV_NOPTS_VALUE), m_firstFrameTimestamp(AV_NOPTS_VALUE), m_queueTimestamp(), m_queueTimestampWrap(), m_queueHDR10plusMetadata(), m_dataFlag(),
         m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_abort(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
         m_dataFlag.init();
@@ -777,10 +777,11 @@ public:
 
     // あとで取得すために入力したフレームを設定しておく
     void addBitstreamTimestamp(const int64_t pts) {
-        if (!m_adjustTimestamp) {
+        if (!m_adjustTimestamp || pts == AV_NOPTS_VALUE) {
             return;
         }
-        if (m_firstBitstreamTimestamp < 0) {
+        // 33bit wrap後の負timestampは正当値なので、未初期化判定はAV_NOPTS_VALUEで行う。
+        if (m_firstBitstreamTimestamp == AV_NOPTS_VALUE) {
             m_firstBitstreamTimestamp = pts;
         }
         if (m_queueTimestamp.empty() && m_queueTimestampWrap.size() > 0) {
@@ -818,10 +819,11 @@ public:
             return pts;
         }
         if (m_adjustTimestamp) {
-            if (m_firstFrameTimestamp < 0) { // 最初のフレーム
+            // frame timestampも負値を取りうるため、初回判定はAV_NOPTS_VALUEで行う。
+            if (m_firstFrameTimestamp == AV_NOPTS_VALUE) { // 最初のフレーム
                 m_firstFrameTimestamp = pts;
                 const auto pos = std::find(m_queueTimestamp.begin(), m_queueTimestamp.end(), pts);
-                if (pos == m_queueTimestamp.end()) { //知らないtimestamp
+                if (pos == m_queueTimestamp.end() && m_firstBitstreamTimestamp != AV_NOPTS_VALUE) { //知らないtimestamp
                     pts = m_firstBitstreamTimestamp; // 入力bitstreamの最初のtimestampで代用
                 }
             } else {

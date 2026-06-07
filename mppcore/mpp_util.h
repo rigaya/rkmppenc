@@ -544,7 +544,8 @@ public:
     int y_stride() const { return mpp_frame_get_ver_stride(mppframe.get()); }
 
     virtual bool isempty() const { return !mppframe; }
-    virtual void setTimestamp(uint64_t timestamp) override { mpp_frame_set_pts(mppframe.get(), timestamp); }
+    // MPP frameのPTSも内部ではsigned timestampとして扱う。
+    virtual void setTimestamp(int64_t timestamp) override { mpp_frame_set_pts(mppframe.get(), timestamp); }
     virtual void setDuration(uint64_t duration) override { duration_ = duration; }
     virtual void setPicstruct(RGY_PICSTRUCT picstruct) override { mpp_frame_set_mode(mppframe.get(), picstruct_rgy_to_enc(picstruct)); }
     virtual void setInputFrameId(int id) override { mpp_frame_set_poc(mppframe.get(), id); }
