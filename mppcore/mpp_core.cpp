@@ -2276,7 +2276,8 @@ RGY_ERR MPPCore::AddFilterOpenCL(std::vector<std::unique_ptr<RGYFilter>>&clfilte
         param->bOutOverwrite = false;
         param->fsr1 = inputParam->vpp.resize_fsr1;
         param->nis = inputParam->vpp.resize_nis;
-        param->vui = VuiFiltered;
+        param->bicubic = inputParam->vpp.resize_bicubic;
+        param->vui = vuiInfo;
         auto sts = filterResize->init(param, m_pLog);
         if (sts != RGY_ERR_NONE) {
             return sts;
