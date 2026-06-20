@@ -1250,6 +1250,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-mpdecimate](#--vpp-mpdecimate-param1value1param2value2)
   - [--vpp-select-every](#--vpp-select-every-intparam1int)
   - [--vpp-transform/rotate](#--vpp-rotate-int)
+  - [--vpp-softlight](#--vpp-softlight-param1value1param2value2)
   - [--vpp-convolution3d](#--vpp-convolution3d-param1value1param2value2)
   - [--vpp-smooth](#--vpp-smooth-param1value1param2value2)
   - [--vpp-denoise-dct](#--vpp-denoise-dct-param1value1param2value2)
@@ -1975,6 +1976,36 @@ yadifによるインタレ解除を行う。
   - flip_y=&lt;bool&gt;
   
   - transpose=&lt;bool&gt;
+
+### --vpp-softlight [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
+フレーム全体の統計に基づく軽い色被り中和・明度正規化・コントラスト/彩度強調を行うフィルタ。
+
+- **パラメータ**
+  - mode=&lt;string&gt; (default=neutralize)
+    - neutralize: 色被りを中和し、元の明るさを維持する。
+    - lightness: 明るさを正規化し、元の色相・彩度を維持する。
+    - neutralize_boost_sat: 色被り中和に加えて彩度を強調する。
+    - neutralize_full: 色と明るさを中和し、明るさ復元を行わない。
+    - neutralize_boost: neutralize_full にRGBコントラスト強調を加える。
+    - boost: RGBコントラスト強調のみを行う。
+    - saturation: 彩度強調のみを行う。
+
+  - formula=&lt;string&gt; (default=pegtop)
+    - pegtop
+    - illusionshu
+    - w3c
+
+  - skipblack=&lt;bool&gt; (default=false)
+    平均値計算から純黒画素を除外する。レターボックス等の暗部が多いソース向け。
+
+- 使用例
+  ```
+  例:
+  --vpp-softlight
+  --vpp-softlight mode=lightness
+  --vpp-softlight mode=boost,formula=w3c
+  --vpp-softlight mode=neutralize,skipblack=true
+  ```
 
 ### --vpp-convolution3d [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 3次元ノイズ除去フィルタ。

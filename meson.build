@@ -540,6 +540,7 @@ mppcore_sources = files(
   'mppcore/rgy_filter_rtgmc_mmask.cpp',
   'mppcore/rgy_filter_cas.cpp',
   'mppcore/rgy_filter_detailsharpen.cpp',
+  'mppcore/rgy_filter_softlight.cpp',
   'mppcore/rgy_filter_edgelevel.cpp',
   'mppcore/rgy_filter_chromashift.cpp',
   'mppcore/rgy_filter_deblock.cpp',
