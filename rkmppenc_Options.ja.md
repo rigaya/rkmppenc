@@ -1276,6 +1276,7 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
   - [--vpp-msharpen](#--vpp-msharpen-param1value1param2value2)
   - [--vpp-cas](#--vpp-cas-param1value1param2value2)
   - [--vpp-warpsharp](#--vpp-warpsharp-param1value1param2value2)
+  - [--vpp-detailsharpen](#--vpp-detailsharpen-param1value1param2value2)
   - [--vpp-maa](#--vpp-maa-param1value1param2value2)
   - [--vpp-curves](#--vpp-overlay-param1value1param2value2)
   - [--vpp-tweak](#--vpp-tweak-param1value1param2value2)
@@ -2780,6 +2781,37 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
 
   例: adaptive depthを使う場合
   --vpp-warpsharp depth=8,depth_min=4,depth_max=12,edge_thr=192,gamma=0.7
+  ```
+
+### --vpp-detailsharpen [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+微細なディテールを強調するシャープニングフィルタ。大きな輪郭への強調を抑えつつ、テクスチャや低振幅成分を持ち上げる。
+
+- **パラメータ**
+  - z=&lt;float&gt;  (default=4.0, 0.001 - 64.0)
+    ゼロ点。値を大きくすると、小さな輝度差をより弱く扱う。
+
+  - sstr=&lt;float&gt;  (default=1.5, 0.0 - 16.0)
+    強調の強さ。値を大きくするとディテールがより強く持ち上がる。
+
+  - power=&lt;float&gt;  (default=4.0, 1.0 - 16.0)
+    非線形強調の指数。値を大きくすると中程度の振幅のディテールをより優先する。
+
+  - ldmp=&lt;float&gt;  (default=1.0, 0.0 - 1000.0)
+    低振幅成分の抑制。値を大きくするとノイズに近い小さな変化をより抑える。
+
+  - mode=&lt;int&gt;  (default=1, 0 - 1)
+    blur の種類。0 で 3x3 Gauss、1 で 3x3 Box。
+
+  - med=&lt;bool&gt;  (default=false)
+    blur に 3x3 median を追加適用する。
+
+- 使用例
+  ```
+  例: デフォルト設定
+  --vpp-detailsharpen
+
+  例: Gauss blur と median を使い、やや強める
+  --vpp-detailsharpen z=3,sstr=2.0,power=3,mode=0,med=true
   ```
 
 ### --vpp-maa [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
