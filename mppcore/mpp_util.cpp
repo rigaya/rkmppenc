@@ -183,7 +183,6 @@ void RGYBitstream::addFrameData(RGYFrameData *frameData) {
 }
 
 void RGYBitstream::clearFrameDataList() {
-    frameDataNum = 0;
     if (frameDataList) {
         for (int i = 0; i < frameDataNum; i++) {
             if (frameDataList[i]) {
@@ -193,6 +192,7 @@ void RGYBitstream::clearFrameDataList() {
         free(frameDataList);
         frameDataList = nullptr;
     }
+    frameDataNum = 0;
 }
 std::vector<RGYFrameData *> RGYBitstream::getFrameDataList() {
     return make_vector(frameDataList, frameDataNum);
