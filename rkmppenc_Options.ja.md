@@ -560,8 +560,7 @@ avhw読み込みでは、フレームの並び替えにタイムスタンプを�
 
 - **パラメータ**
   
-  - crop=&lt;bool&gt;
-
+  - crop=&lt;bool&gt;  
     RPUのactive area offsetsを0に設定する (レターボックスなしの意味)。
 
 - 使用例
@@ -908,7 +907,6 @@ mono, stereo, 2.1, 3.0, 3.0(back), 3.1, 4.0, quad, quad(side), 5.0, 5.1, 6.0, 6.
 - **ファイルのパラメータ**
   - format=&lt;string&gt;  
     入力ファイルのフォーマットを指定する。
-
   - input_opt=&lt;string&gt;  
     入力ファイル用のオプションを指定する。
 
@@ -1040,7 +1038,6 @@ nero形式、apple形式、matroska形式に対応する。--chapter-copyとは�
 - **ファイルのパラメータ**
   - format=&lt;string&gt;  
     入力ファイルのフォーマットを指定する。
-
   - input_opt=&lt;string&gt;  
     入力ファイル用のオプションを指定する。
 
