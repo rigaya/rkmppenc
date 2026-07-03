@@ -61,6 +61,10 @@ RGY_ERR RGYFilterFineDehalo::checkParam(const std::shared_ptr<RGYFilterParamFine
             prm->frameOut.width, prm->frameOut.height);
         return RGY_ERR_INVALID_PARAM;
     }
+    if (interlaced(prm->frameIn)) {
+        AddMessage(RGY_LOG_ERROR, _T("finedehalo does not support interlaced input. Please deinterlace before finedehalo.\n"));
+        return RGY_ERR_UNSUPPORTED;
+    }
     const auto csp = prm->frameIn.csp;
     const auto chromaFormat = RGY_CSP_CHROMA_FORMAT[csp];
     const auto dataType = RGY_CSP_DATA_TYPE[csp];
@@ -376,6 +380,10 @@ RGY_ERR RGYFilterFineDehalo::run_filter(const RGYFrameInfo *pInputFrame, RGYFram
     if (!prm) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid parameter type.\n"));
         return RGY_ERR_INVALID_PARAM;
+    }
+    if (interlaced(*pInputFrame)) {
+        AddMessage(RGY_LOG_ERROR, _T("finedehalo does not support interlaced input. Please deinterlace before finedehalo.\n"));
+        return RGY_ERR_UNSUPPORTED;
     }
 
     const int bitDepth = RGY_CSP_BIT_DEPTH[pInputFrame->csp];
