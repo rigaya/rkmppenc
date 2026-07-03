@@ -57,6 +57,8 @@ const char *get_encoder_version();
 #define AV1_TIMESTAMP_OVERRIDE 1
 #define ENABLE_AVOID_IDLE_CLOCK 0
 #define ENABLE_VPP_SMOOTH_QP_FRAME 0
+#define ENABLE_OPENVINO 0
+#define ENABLE_ONNXRUNTIME 0
 
 #if defined(_WIN32) || defined(_WIN64)
 
