@@ -3484,14 +3484,16 @@ VppCurves::VppCurves() :
     enable(false),
     preset(VppCurvesPreset::NONE),
     prm(),
-    all() {
+    all(),
+    interp(VppCurvesInterp::SPLINE) {
 }
 
 bool VppCurves::operator==(const VppCurves &x) const {
     return enable == x.enable
         && preset == x.preset
         && prm == x.prm
-        && all == x.all;
+        && all == x.all
+        && interp == x.interp;
 }
 bool VppCurves::operator!=(const VppCurves &x) const {
     return !(*this == x);
@@ -3506,6 +3508,9 @@ tstring VppCurves::print() const {
     if (prm.b.length() > 0) str += _T("\n") + indent + _T("b ") + prm.b;
     if (prm.m.length() > 0) str += _T("\n") + indent + _T("master ") + prm.m;
     if (all.length() > 0)   str += _T("\n") + indent + _T("all ") + all;
+    if (interp != VppCurvesInterp::SPLINE) {
+        str += strsprintf(_T(", interp %s"), get_cx_desc(list_vpp_curves_interp, (int)interp));
+    }
     return str;
 }
 

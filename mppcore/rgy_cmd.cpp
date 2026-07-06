@@ -8711,7 +8711,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         i++;
 
-        const auto paramList = std::vector<std::string>{ "r", "g", "b", "m", "red", "green", "blue", "master", "all", "preset" };
+        const auto paramList = std::vector<std::string>{ "r", "g", "b", "m", "red", "green", "blue", "master", "all", "preset", "interp" };
 
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
@@ -8746,7 +8746,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     continue;
                 }
                 if (param_arg == _T("all")) {
-                    vpp->curves.prm.m = param_val;
+                    vpp->curves.all = param_val;
                     continue;
                 }
                 if (param_arg == _T("preset")) {
@@ -8755,6 +8755,16 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                         vpp->curves.preset = (VppCurvesPreset)value;
                     } else {
                         print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_curves_preset);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("interp")) {
+                    int value = 0;
+                    if (get_list_value(list_vpp_curves_interp, param_val.c_str(), &value)) {
+                        vpp->curves.interp = (VppCurvesInterp)value;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_curves_interp);
                         return 1;
                     }
                     continue;
@@ -14101,6 +14111,7 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             ADD_STR(_T("g"), curves.prm.g);
             ADD_STR(_T("b"), curves.prm.b);
             ADD_STR(_T("all"), curves.all);
+            ADD_LST(_T("interp"), curves.interp, list_vpp_curves_interp);
         }
         if (!tmp.str().empty()) {
             cmd << _T(" --vpp-curves ") << tmp.str().substr(1);
@@ -16591,6 +16602,10 @@ tstring gen_cmd_help_vpp() {
         _T("        color_negative, process, darker, lighter, increase_contrast\n")
         _T("        linear_contrast, medium_contrast, strong_contrast\n")
         _T("        negative, vintage\n")
+        _T("      interp=<string>           interpolation between points (default=spline)\n")
+        _T("                                  spline, pchip\n")
+        _T("      all=<string>\n")
+        _T("        set fallback curve points for r/g/b when not set explicitly.\n")
         _T("      m=<string>\n")
         _T("        set master curve points, post process for luminance.\n")
         _T("      r=<string>\n")
@@ -16598,9 +16613,7 @@ tstring gen_cmd_help_vpp() {
         _T("      g=<string>\n")
         _T("        set curve points for green. Will override preset settings.\n")
         _T("      b=<string>\n")
-        _T("        set curve points for blue. Will override preset settings.\n")
-        _T("      all=<string>\n")
-        _T("        set curve points for r,g,b when not specified. Will override preset settings.\n"));
+        _T("        set curve points for blue. Will override preset settings.\n"));
 #endif
 #if ENABLE_VPP_FILTER_SOFTLIGHT
     str += strsprintf(_T("\n")
