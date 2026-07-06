@@ -8853,7 +8853,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         i++;
 
-        auto paramList = std::vector<std::string>{ "contrast", "brightness", "gamma", "saturation", "swapuv", "hue" };
+        auto paramList = std::vector<std::string>{ "contrast", "brightness", "gamma", "saturation", "swapuv", "hue", "coring", "start_hue", "end_hue" };
         for (auto& channel : { "y", "cb", "cr", "r", "g", "b" }) {
             paramList.push_back(std::string(channel) + "offset");
             paramList.push_back(std::string(channel) + "gain");
@@ -8931,6 +8931,34 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     }
                     continue;
                 }
+                if (param_arg == _T("coring")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->tweak.coring = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("start_hue")) {
+                    try {
+                        vpp->tweak.startHue = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("end_hue")) {
+                    try {
+                        vpp->tweak.endHue = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
                 bool parse_gamma = false; // gammaのパラメータをパースのは r, g, b のみで、 y, cb, crは対象外
                 auto param_subopt = param_arg;
                 VppTweakChannel *tweak_channel = nullptr;
@@ -8985,6 +9013,10 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             } else {
                 if (param == _T("swapuv")) {
                     vpp->tweak.swapuv = true;
+                    continue;
+                }
+                if (param == _T("coring")) {
+                    vpp->tweak.coring = true;
                     continue;
                 }
                 print_cmd_error_unknown_opt_param(option_name, param, paramList);
@@ -14147,6 +14179,9 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             ADD_FLOAT(_T("saturation"), tweak.saturation, 3);
             ADD_FLOAT(_T("hue"), tweak.hue, 3);
             ADD_BOOL(_T("swapuv"), tweak.swapuv);
+            ADD_BOOL(_T("coring"), tweak.coring);
+            ADD_FLOAT(_T("start_hue"), tweak.startHue, 3);
+            ADD_FLOAT(_T("end_hue"), tweak.endHue, 3);
             ADD_FLOAT(_T("y_offset"),  tweak.y.offset, 3);
             ADD_FLOAT(_T("y_gain"),    tweak.y.gain, 3);
             //ADD_FLOAT(_T("y_gamma"),   tweak.y.gamma, 3);
@@ -16637,6 +16672,9 @@ tstring gen_cmd_help_vpp() {
         _T("      gamma=<float>             (default=%.1f,  0.1 - 10.0)\n")
         _T("      saturation=<float>        (default=%.1f,  0.0 - 3.0)\n")
         _T("      hue=<float>               (default=%.1f, -180 - 180)\n")
+        _T("      coring=<bool>             clamp output to TV range (default=off)\n")
+        _T("      start_hue=<float>         limit hue/saturation to a hue range\n")
+        _T("      end_hue=<float>             in degrees (default 0-360 = everything)\n")
         _T("\n")
         _T("      [y,cb,cr,r,g,b]_offset=<float> (default=%.1f, -1.0 - 1.0)\n")
         _T("      [y,cb,cr,r,g,b]_gain=<float>   (default=%.1f, -2.0 - 2.0)\n")
