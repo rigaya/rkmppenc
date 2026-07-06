@@ -8363,7 +8363,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             return 0;
         }
         i++;
-        const auto paramList = std::vector<std::string>{ "enable", "sharpness", "hdr" };
+        const auto paramList = std::vector<std::string>{ "enable", "sharpness", "hdr", "chroma" };
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
             if (pos != std::string::npos) {
@@ -8392,6 +8392,16 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     bool b = false;
                     if (!cmd_string_to_bool(&b, param_val)) {
                         vpp->cas.hdr = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("chroma")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->cas.chroma = b;
                     } else {
                         print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                         return 1;
@@ -13934,6 +13944,7 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
         if (param->cas.enable || save_disabled_prm) {
             ADD_FLOAT(_T("sharpness"), cas.sharpness, 3);
             ADD_BOOL(_T("hdr"), cas.hdr);
+            ADD_BOOL(_T("chroma"), cas.chroma);
         }
         if (!tmp.str().empty()) {
             cmd << _T(" --vpp-cas ") << tmp.str().substr(1);
@@ -16416,7 +16427,8 @@ tstring gen_cmd_help_vpp() {
         _T("     luma-only Contrast Adaptive Sharpening filter.\n")
         _T("    params\n")
         _T("      sharpness=<float>         sharpening strength (default=%.2f, 0.0 - 1.0)\n")
-        _T("      hdr=<bool>                skip SDR gamma 2.0 luma approximation (default=%s)\n"),
+        _T("      hdr=<bool>                skip SDR gamma 2.0 luma approximation (default=%s)\n")
+        _T("      chroma=<bool>             also sharpen chroma planes (default=false)\n"),
         FILTER_DEFAULT_CAS_SHARPNESS,
         FILTER_DEFAULT_CAS_HDR ? _T("true") : _T("false"));
 #endif

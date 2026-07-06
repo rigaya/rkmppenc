@@ -3266,21 +3266,23 @@ tstring VppWarpsharp::print() const {
 VppCas::VppCas() :
     enable(false),
     sharpness(FILTER_DEFAULT_CAS_SHARPNESS),
-    hdr(FILTER_DEFAULT_CAS_HDR) {
+    hdr(FILTER_DEFAULT_CAS_HDR),
+    chroma(false) {
 }
 
 bool VppCas::operator==(const VppCas& x) const {
     return enable == x.enable
         && sharpness == x.sharpness
-        && hdr == x.hdr;
+        && hdr == x.hdr
+        && chroma == x.chroma;
 }
 bool VppCas::operator!=(const VppCas& x) const {
     return !(*this == x);
 }
 
 tstring VppCas::print() const {
-    return strsprintf(_T("cas: sharpness %.2f, hdr %s"),
-        sharpness, hdr ? _T("true") : _T("false"));
+    return strsprintf(_T("cas: sharpness %.2f, hdr %s%s"),
+        sharpness, hdr ? _T("true") : _T("false"), chroma ? _T(", chroma on") : _T(""));
 }
 
 VppDetailSharpen::VppDetailSharpen() :

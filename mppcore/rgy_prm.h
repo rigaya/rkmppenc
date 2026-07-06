@@ -3299,6 +3299,7 @@ struct VppCas {
     bool enable;
     float sharpness;
     bool hdr;
+    bool chroma;
 
     VppCas();
     bool operator==(const VppCas& x) const;
