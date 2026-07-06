@@ -1704,6 +1704,10 @@ VppIvtc::VppIvtc() :
                          //   sources. Opt-in via back=1 for cleaner deterministic film sources.
     y0(FILTER_DEFAULT_IVTC_Y0),
     y1(FILTER_DEFAULT_IVTC_Y1), // 0,0 = no exclusion band
+    nt(0),
+    cthresh(0),
+    combPel(0),
+    scThresh(0.0f),
     cadenceLock(FILTER_DEFAULT_IVTC_CADENCE_LOCK), // -1 = auto (enable when guide>=1 in init), 0 = off, 1 = on.
                          //   Auto-on is safe because guide>=1 implies the user expects
                          //   pulldown content; the tracker is inert on pure progressive
@@ -1744,6 +1748,10 @@ bool VppIvtc::operator==(const VppIvtc &x) const {
         && back == x.back
         && y0 == x.y0
         && y1 == x.y1
+        && nt == x.nt
+        && cthresh == x.cthresh
+        && combPel == x.combPel
+        && scThresh == x.scThresh
         && cadenceLock == x.cadenceLock
         && gthresh == x.gthresh
         && vthresh == x.vthresh
@@ -1793,10 +1801,9 @@ VppMpdecimate::VppMpdecimate() :
     lo(FILTER_DEFAULT_MPDECIMATE_LO),
     hi(FILTER_DEFAULT_MPDECIMATE_HI),
     max(FILTER_DEFAULT_MPDECIMATE_MAX),
+    keep(FILTER_DEFAULT_MPDECIMATE_KEEP),
     frac(FILTER_DEFAULT_MPDECIMATE_FRAC),
     log(FILTER_DEFAULT_MPDECIMATE_LOG) {
-
-    keep(FILTER_DEFAULT_MPDECIMATE_KEEP),
 }
 
 bool VppMpdecimate::operator==(const VppMpdecimate& x) const {
@@ -1804,10 +1811,10 @@ bool VppMpdecimate::operator==(const VppMpdecimate& x) const {
         && lo == x.lo
         && hi == x.hi
         && max == x.max
+        && keep == x.keep
         && frac == x.frac
         && log == x.log;
 }
-        && keep == x.keep
 bool VppMpdecimate::operator!=(const VppMpdecimate& x) const {
     return !(*this == x);
 }
@@ -1968,11 +1975,11 @@ VppDescale::VppDescale() :
     c(FILTER_DEFAULT_DESCALE_BICUBIC_C),
     src_left(FILTER_DEFAULT_DESCALE_SRC_LEFT),
     src_top(FILTER_DEFAULT_DESCALE_SRC_TOP),
+    src_width(0.0f),
+    src_height(0.0f),
     border(VppDescaleBorder::Mirror),
     autoDetect(false),
     search_min(0),
-    src_width(0.0f),
-    src_height(0.0f),
     search_max(0),
     search_step(FILTER_DEFAULT_DESCALE_SEARCH_STEP),
     detect_frames(FILTER_DEFAULT_DESCALE_DETECT_FRAMES),
@@ -1988,11 +1995,11 @@ bool VppDescale::operator==(const VppDescale &x) const {
         && c == x.c
         && src_left == x.src_left
         && src_top == x.src_top
+        && src_width == x.src_width
+        && src_height == x.src_height
         && border == x.border
         && autoDetect == x.autoDetect
         && search_min == x.search_min
-        && src_width == x.src_width
-        && src_height == x.src_height
         && search_max == x.search_max
         && search_step == x.search_step
         && detect_frames == x.detect_frames
@@ -3298,15 +3305,15 @@ tstring VppWarpsharp::print() const {
 VppCas::VppCas() :
     enable(false),
     sharpness(FILTER_DEFAULT_CAS_SHARPNESS),
-    hdr(FILTER_DEFAULT_CAS_HDR),
-    chroma(false) {
+    chroma(false),
+    hdr(FILTER_DEFAULT_CAS_HDR) {
 }
 
 bool VppCas::operator==(const VppCas& x) const {
     return enable == x.enable
         && sharpness == x.sharpness
-        && hdr == x.hdr
-        && chroma == x.chroma;
+        && chroma == x.chroma
+        && hdr == x.hdr;
 }
 bool VppCas::operator!=(const VppCas& x) const {
     return !(*this == x);
@@ -3404,12 +3411,12 @@ VppTweak::VppTweak() :
     saturation(FILTER_DEFAULT_TWEAK_SATURATION),
     hue(FILTER_DEFAULT_TWEAK_HUE),
     swapuv(false),
-    y(),
-    cb(),
-    cr(),
     coring(false),
     startHue(0.0f),
     endHue(360.0f),
+    y(),
+    cb(),
+    cr(),
     r(),
     g(),
     b() {
@@ -3423,12 +3430,12 @@ bool VppTweak::operator==(const VppTweak &x) const {
         && saturation == x.saturation
         && hue == x.hue
         && swapuv == x.swapuv
-        && y == x.y
-        && cb == x.cb
-        && cr == x.cr
         && coring == x.coring
         && startHue == x.startHue
         && endHue == x.endHue
+        && y == x.y
+        && cb == x.cb
+        && cr == x.cr
         && r == x.r
         && g == x.g
         && b == x.b;

@@ -2498,8 +2498,8 @@ struct VppDecomb {
 
 struct VppNnedi {
     bool enable;
-    VppNnediField field;
     std::array<bool, 3> planes; //Y, U, V
+    VppNnediField field;
     VppNnediNSize nsize;
     int nns;
     VppNnediQuality quality;
@@ -2624,11 +2624,11 @@ struct VppIvtc {
 struct VppMpdecimate {
     bool enable;
     int lo, hi, max;
+    int keep; //連続してsimilarなフレームをこの数まで保持してからドロップを開始する
     float frac;
     bool log;
 
     VppMpdecimate();
-    int keep; //連続してsimilarなフレームをこの数まで保持してからドロップを開始する
     bool operator==(const VppMpdecimate& x) const;
     bool operator!=(const VppMpdecimate& x) const;
     tstring print() const;
@@ -3310,8 +3310,8 @@ struct VppDetailSharpen {
 struct VppCas {
     bool enable;
     float sharpness;
+    bool chroma; //色差プレーンにも適用する (default: false = 従来のluma-only)
     bool hdr;
-    bool chroma;
 
     VppCas();
     bool operator==(const VppCas& x) const;

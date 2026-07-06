@@ -2228,7 +2228,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         i++;
         const auto paramList = std::vector<std::string>{ "enable", "guide", "post", "cycle", "drop", "combthresh", "cleanfrac",
-            "dthresh", "chroma", "back", "y0", "y1", "cadlock", "gthresh", "vthresh", "expand", "mixed", "hysteresis", "tff", "log" };
+            "dthresh", "chroma", "back", "y0", "y1", "nt", "cthresh", "combpel", "scthresh", "cadlock", "gthresh", "vthresh", "expand", "mixed", "hysteresis", "tff", "log" };
 
         for (const auto &param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
@@ -4868,7 +4868,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             return 0;
         }
         i++;
-        const auto paramList = std::vector<std::string>{ "lo", "hi", "max", "frac", "log" };
+        const auto paramList = std::vector<std::string>{ "lo", "hi", "max", "keep", "frac", "log" };
 
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
@@ -12957,6 +12957,13 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
         }
         if (param->nnedi.enable || save_disabled_prm) {
             ADD_LST(_T("field"), nnedi.field, list_vpp_nnedi_field);
+            if (param->nnedi.planes != defaultPrm->nnedi.planes) {
+                tstring p;
+                if (param->nnedi.planes[0]) p += _T(":y");
+                if (param->nnedi.planes[1]) p += _T(":u");
+                if (param->nnedi.planes[2]) p += _T(":v");
+                tmp << _T(",planes=") << (p.length() > 0 ? p.substr(1) : _T(""));
+            }
             ADD_LST(_T("nsize"), nnedi.nsize, list_vpp_nnedi_nsize);
             ADD_LST(_T("nns"), nnedi.nns, list_vpp_nnedi_nns);
             ADD_LST(_T("quality"), nnedi.quality, list_vpp_nnedi_quality);
@@ -13114,13 +13121,6 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
         }
         if (!tmp.str().empty()) {
             cmd << _T(" --vpp-kfm ") << tmp.str().substr(1);
-            if (param->nnedi.planes != defaultPrm->nnedi.planes) {
-                tstring p;
-                if (param->nnedi.planes[0]) p += _T(":y");
-                if (param->nnedi.planes[1]) p += _T(":u");
-                if (param->nnedi.planes[2]) p += _T(":v");
-                tmp << _T(",planes=") << (p.length() > 0 ? p.substr(1) : _T(""));
-            }
         } else if (param->kfm.enable) {
             cmd << _T(" --vpp-kfm");
         }
@@ -15520,6 +15520,8 @@ tstring gen_cmd_help_vpp() {
         _T("   --vpp-nnedi [<param1>=<value>][,<param2>=<value>][...]\n")
         _T("     enable nnedi deinterlacer\n")
         _T("    params\n")
+        _T("      planes=<string>       target planes (default=all)\n")
+        _T("                              all, or \":\"-separated list of y, u, v.\n")
         _T("      field=<string>         Select target field.\n")
         _T("                              bob, auto (default), top, bottom, bob_tff, bob_bff\n")
         _T("      nsize=<string>         8x6, 16x6, 32x6, 48x6, 8x4, 16x4, 32x4 (default)\n")
@@ -15700,8 +15702,6 @@ tstring gen_cmd_help_vpp() {
 #if ENABLE_VPP_FILTER_RTGMC_SEARCH_PREFILTER
     str += strsprintf(_T("\n")
         _T("   --vpp-rtgmc-search-prefilter [<param1>=<value>]\n")
-        _T("      planes=<string>       target planes (default=all)\n")
-        _T("                              all, or \":\"-separated list of y, u, v.\n")
         _T("     enable search reference prefilter scaffold.\n")
         _T("    params\n")
         _T("      tr0=<int>             temporal radius (default=%d, -1 - 2)\n")
@@ -16464,7 +16464,7 @@ tstring gen_cmd_help_vpp() {
         _T("   --vpp-edgelevel [<param1>=<value>][,<param2>=<value>][...]\n")
         _T("     edgelevel filter to enhance edge.\n")
         _T("    params\n")
-        _T("      strength=<float>          strength (default=%d, -31 - 31)\n")
+        _T("      strength=<float>          strength (default=%.1f, -31 - 31)\n")
         _T("      threshold=<float>         threshold to ignore noise (default=%.1f, 0-255)\n")
         _T("      black=<float>             allow edge to be darker on edge enhancement\n")
         _T("                                  (default=%.1f, 0-31)\n")
