@@ -5797,7 +5797,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
 
         const auto paramList = std::vector<std::string>{
             "enable", "model", "modelfile", "device", "interop", "prec", "precision",
-            "colormatrix", "colorrange", "colorspace", "noise", "out_res", "resize"
+            "colormatrix", "colormatrix_out", "colorrange", "colorspace", "noise", "out_res", "resize"
         };
 
         for (const auto& param : split(strInput[i], _T(","))) {
@@ -5821,7 +5821,8 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     continue;
                 }
                 if (param_arg == _T("device")) {
-                    vpp->onnx.device = param_val;
+                    //OpenVINOのデバイス名は大文字 (GPU.0/GPU/CPU/AUTO/NPU) - 小文字入力も受け付ける
+                    vpp->onnx.device = touppercase(param_val);
                     continue;
                 }
                 if (param_arg == _T("interop")) {
@@ -5845,21 +5846,39 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     continue;
                 }
                 if (param_arg == _T("colormatrix")) {
-                    const tstring v = tolowercase(param_val);
-                    if (v == _T("auto") || v == _T("bt601") || v == _T("bt709") || v == _T("bt2020")) {
-                        vpp->onnx.colormatrix = v;
+                    int value = 0;
+                    if (get_list_value(list_colormatrix, param_val.c_str(), &value)) {
+                        vpp->onnx.colormatrix = (CspMatrix)value;
                     } else {
-                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        const auto compatMatrix = tolowercase(param_val);
+                        // 互換性のため、公開済みの旧指定名だけは --vpp-onnx colormatrix で吸収する。
+                        if (compatMatrix == _T("bt601")) {
+                            vpp->onnx.colormatrix = RGY_MATRIX_ST170_M;
+                        } else if (compatMatrix == _T("bt2020")) {
+                            vpp->onnx.colormatrix = RGY_MATRIX_BT2020_NCL;
+                        } else {
+                            print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_colormatrix);
+                            return 1;
+                        }
+                    }
+                    continue;
+                }
+                if (param_arg == _T("colormatrix_out")) {
+                    int value = 0;
+                    if (get_list_value(list_colormatrix, param_val.c_str(), &value)) {
+                        vpp->onnx.colormatrixOut = (CspMatrix)value;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_colormatrix);
                         return 1;
                     }
                     continue;
                 }
                 if (param_arg == _T("colorrange")) {
-                    const tstring v = tolowercase(param_val);
-                    if (v == _T("auto") || v == _T("tv") || v == _T("limited") || v == _T("pc") || v == _T("full")) {
-                        vpp->onnx.colorrange = (v == _T("limited")) ? _T("tv") : (v == _T("full")) ? _T("pc") : v;
+                    int value = 0;
+                    if (get_list_value(list_colorrange, param_val.c_str(), &value)) {
+                        vpp->onnx.colorrange = (CspColorRange)value;
                     } else {
-                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_colorrange);
                         return 1;
                     }
                     continue;
@@ -5931,6 +5950,66 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
     if (IS_OPTION("vpp-onnx-model-dir") && ENABLE_VPP_FILTER_ONNX) {
         i++;
         vpp->onnxModelDir = tstring(strInput[i]);
+        return 0;
+    }
+    if (IS_OPTION("vpp-rife-ov") && ENABLE_VPP_FILTER_RIFE_OV) {
+        vpp->rife_ov.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "model", "device", "multi", "colormatrix", "colorrange" };
+        for (const auto& param : split(strInput[i], _T(","))) {
+            const auto pos = param.find_first_of(_T("="));
+            if (pos == tstring::npos) {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+            const auto name = tolowercase(param.substr(0, pos));
+            const auto value = param.substr(pos + 1);
+            if (name == _T("enable")) {
+                if (cmd_string_to_bool(&vpp->rife_ov.enable, value)) {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + name + _T("="), value);
+                    return 1;
+                }
+            } else if (name == _T("model")) {
+                vpp->rife_ov.modelFile = value;
+            } else if (name == _T("device")) {
+                vpp->rife_ov.device = touppercase(value);
+            } else if (name == _T("multi")) {
+                try {
+                    vpp->rife_ov.multi = std::stoi(value);
+                } catch (...) {
+                    vpp->rife_ov.multi = 0;
+                }
+                if (vpp->rife_ov.multi < 2) {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + name + _T("="), value, _T("multi must be an integer >= 2"));
+                    return 1;
+                }
+            } else if (name == _T("colormatrix")) {
+                const auto normalized = tolowercase(value);
+                if (normalized != _T("auto") && normalized != _T("bt601") && normalized != _T("bt709") && normalized != _T("bt2020")) {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + name + _T("="), value);
+                    return 1;
+                }
+                vpp->rife_ov.colormatrix = normalized;
+            } else if (name == _T("colorrange")) {
+                const auto normalized = tolowercase(value);
+                if (normalized != _T("auto") && normalized != _T("tv") && normalized != _T("limited") && normalized != _T("pc") && normalized != _T("full")) {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + name + _T("="), value);
+                    return 1;
+                }
+                vpp->rife_ov.colorrange = (normalized == _T("limited")) ? _T("tv") : (normalized == _T("full")) ? _T("pc") : normalized;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, name, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-onnx-cache-dir") && ENABLE_VPP_FILTER_ONNX && ENABLE_OPENVINO) {
+        i++;
+        vpp->onnx.cacheDir = tstring(strInput[i]);
         return 0;
     }
     if (IS_OPTION("vpp-denoise-dct") && ENABLE_VPP_FILTER_DENOISE_DCT) {
@@ -8181,10 +8260,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             return 0;
         }
         i++;
-        const auto paramList = std::vector<std::string>{
-            "enable", "mrad", "mthr", "sigma", "showmask", "protect", "edge",
-            "thr", "elast", "darkthr", "minp", "msmooth", "drrep", "sharp", "planes"
-        };
+        const auto paramList = std::vector<std::string>{ "enable", "mrad", "mthr", "sigma", "showmask", "protect", "edge" , "thr", "elast", "darkthr", "minp", "msmooth", "drrep", "sharp", "planes" };
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
             if (pos != std::string::npos) {
@@ -8446,7 +8522,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             return 0;
         }
         i++;
-        const auto paramList = std::vector<std::string>{ "enable", "sharpness", "hdr", "chroma" };
+        const auto paramList = std::vector<std::string>{ "enable", "sharpness", "chroma", "hdr" };
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
             if (pos != std::string::npos) {
@@ -8471,20 +8547,20 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     }
                     continue;
                 }
-                if (param_arg == _T("hdr")) {
+                if (param_arg == _T("chroma")) {
                     bool b = false;
                     if (!cmd_string_to_bool(&b, param_val)) {
-                        vpp->cas.hdr = b;
+                        vpp->cas.chroma = b;
                     } else {
                         print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                         return 1;
                     }
                     continue;
                 }
-                if (param_arg == _T("chroma")) {
+                if (param_arg == _T("hdr")) {
                     bool b = false;
                     if (!cmd_string_to_bool(&b, param_val)) {
-                        vpp->cas.chroma = b;
+                        vpp->cas.hdr = b;
                     } else {
                         print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                         return 1;
@@ -12473,6 +12549,24 @@ int parse_one_ctrl_option(const TCHAR *option_name, const TCHAR *strInput[], int
         ctrl->openclBuildThreads = value;
         return 0;
     }
+#if ENCODER_QSV
+    if (IS_OPTION("opencl-task-threads")) {
+        i++;
+        int value = -1;
+        if (_tcsicmp(strInput[i], _T("auto")) == 0) {
+            value = -1;
+        } else if (1 != _stscanf_s(strInput[i], _T("%d"), &value)) {
+            print_cmd_error_invalid_value(option_name, strInput[i]);
+            return 1;
+        }
+        if (value != -1 && value != 0 && value != 2 && value != 3) {
+            print_cmd_error_invalid_value(option_name, strInput[i], _T("opencl-task-threads should be auto, 0, 2, or 3."));
+            return 1;
+        }
+        ctrl->openclTaskThreads = value;
+        return 0;
+    }
+#endif
     if (IS_OPTION("cl-perf-dump")) {
         i++;
         ctrl->clPerfDumpDir = strInput[i];
@@ -12600,6 +12694,10 @@ int parse_one_ctrl_option(const TCHAR *option_name, const TCHAR *strInput[], int
                 continue;
             }
         }
+        return 0;
+    }
+    if (IS_OPTION("parallel-force-large-memory-filters") && ENABLE_PARALLEL_ENC) {
+        ctrl->parallelEnc.forceLargeMemoryFilters = true;
         return 0;
     }
     if (IS_OPTION("process-monitor-dev-usage")) {
@@ -13511,8 +13609,11 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             tmp << _T(",device=") << param->onnx.device;
             tmp << _T(",interop=") << param->onnx.interop;
             tmp << _T(",prec=") << param->onnx.precision;
-            tmp << _T(",colormatrix=") << param->onnx.colormatrix;
-            tmp << _T(",colorrange=") << param->onnx.colorrange;
+            tmp << _T(",colormatrix=") << get_cx_desc(list_colormatrix, param->onnx.colormatrix);
+            if (param->onnx.colormatrixOut != RGY_MATRIX_AUTO) {
+                tmp << _T(",colormatrix_out=") << get_cx_desc(list_colormatrix, param->onnx.colormatrixOut);
+            }
+            tmp << _T(",colorrange=") << get_cx_desc(list_colorrange, param->onnx.colorrange);
             tmp << _T(",colorspace=") << param->onnx.colorspace;
             tmp << _T(",noise=") << param->onnx.noise;
             if (param->onnx.postResizeW != 0 && param->onnx.postResizeH != 0) {
@@ -13528,6 +13629,23 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
     }
     if (!param->onnxModelDir.empty()) {
         cmd << _T(" --vpp-onnx-model-dir ") << param->onnxModelDir;
+    }
+    if (param->rife_ov != defaultPrm->rife_ov) {
+        tmp.str(tstring());
+        if (!param->rife_ov.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->rife_ov.enable || save_disabled_prm) {
+            if (!param->rife_ov.modelFile.empty()) tmp << _T(",model=") << param->rife_ov.modelFile;
+            tmp << _T(",device=") << param->rife_ov.device;
+            tmp << _T(",multi=") << param->rife_ov.multi;
+            tmp << _T(",colormatrix=") << param->rife_ov.colormatrix;
+            tmp << _T(",colorrange=") << param->rife_ov.colorrange;
+        }
+        cmd << _T(" --vpp-rife-ov ") << tmp.str().substr(1);
+    }
+    if (!param->onnx.cacheDir.empty()) {
+        cmd << _T(" --vpp-onnx-cache-dir ") << param->onnx.cacheDir;
     }
     if (param->dct != defaultPrm->dct) {
         tmp.str(tstring());
@@ -14029,11 +14147,6 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             ADD_NUM(_T("mrad"), dering.mrad);
             ADD_NUM(_T("mthr"), dering.mthr);
             ADD_FLOAT(_T("sigma"), dering.sigma, 3);
-            ADD_BOOL(_T("showmask"), dering.showmask);
-            ADD_BOOL(_T("protect"), dering.protect);
-            if (param->dering.edge != defaultPrm->dering.edge) {
-                tmp << _T(",edge=") << param->dering.edge.c_str();
-            }
             ADD_NUM(_T("thr"), dering.thr);
             ADD_FLOAT(_T("elast"), dering.elast, 2);
             ADD_NUM(_T("darkthr"), dering.darkthr);
@@ -14047,6 +14160,11 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
                 if (param->dering.planes[1]) p += _T(":u");
                 if (param->dering.planes[2]) p += _T(":v");
                 tmp << _T(",planes=") << ((p.length() > 0) ? p.substr(1) : _T(""));
+            }
+            ADD_BOOL(_T("showmask"), dering.showmask);
+            ADD_BOOL(_T("protect"), dering.protect);
+            if (param->dering.edge != defaultPrm->dering.edge) {
+                tmp << _T(",edge=") << param->dering.edge.c_str();
             }
         }
         if (!tmp.str().empty()) {
@@ -14082,8 +14200,8 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
         }
         if (param->cas.enable || save_disabled_prm) {
             ADD_FLOAT(_T("sharpness"), cas.sharpness, 3);
-            ADD_BOOL(_T("hdr"), cas.hdr);
             ADD_BOOL(_T("chroma"), cas.chroma);
+            ADD_BOOL(_T("hdr"), cas.hdr);
         }
         if (!tmp.str().empty()) {
             cmd << _T(" --vpp-cas ") << tmp.str().substr(1);
@@ -14178,10 +14296,10 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             ADD_FLOAT(_T("gamma"), tweak.gamma, 3);
             ADD_FLOAT(_T("saturation"), tweak.saturation, 3);
             ADD_FLOAT(_T("hue"), tweak.hue, 3);
-            ADD_BOOL(_T("swapuv"), tweak.swapuv);
             ADD_BOOL(_T("coring"), tweak.coring);
             ADD_FLOAT(_T("start_hue"), tweak.startHue, 3);
             ADD_FLOAT(_T("end_hue"), tweak.endHue, 3);
+            ADD_BOOL(_T("swapuv"), tweak.swapuv);
             ADD_FLOAT(_T("y_offset"),  tweak.y.offset, 3);
             ADD_FLOAT(_T("y_gain"),    tweak.y.gain, 3);
             //ADD_FLOAT(_T("y_gamma"),   tweak.y.gamma, 3);
@@ -14920,6 +15038,9 @@ tstring gen_cmd(const RGYParamControl *param, const RGYParamControl *defaultPrm,
         }
     }
     OPT_NUM(_T("--opencl-build-threads"), openclBuildThreads);
+#if ENCODER_QSV
+    OPT_NUM(_T("--opencl-task-threads"), openclTaskThreads);
+#endif
     OPT_TSTR(_T("--cl-perf-dump"), clPerfDumpDir);
     if (param->clPerfTimelineSec != defaultPrm->clPerfTimelineSec && param->clPerfTimelineSec != 0.0) {
         cmd << _T(" --cl-perf-timeline ") << param->clPerfTimelineSec;
@@ -14949,6 +15070,9 @@ tstring gen_cmd(const RGYParamControl *param, const RGYParamControl *defaultPrm,
         if (!tmp.str().empty()) {
             cmd << _T(" --parallel ") << tmp.str().substr(1);
         }
+#if ENABLE_PARALLEL_ENC
+        OPT_BOOL(_T("--parallel-force-large-memory-filters"), _T(""), parallelEnc.forceLargeMemoryFilters);
+#endif
     }
     return cmd.str();
 }
@@ -16113,19 +16237,28 @@ tstring gen_cmd_help_vpp() {
         FILTER_ANIME4K_STRENGTH_MIN, FILTER_ANIME4K_STRENGTH_MAX);
 #endif
 #if ENABLE_VPP_FILTER_ONNX
+#if ENCODER_VCEENC
     str += strsprintf(_T("\n")
         _T("   --vpp-onnx [<param1>=<value>][,<param2>=<value>][...]\n")
-        _T("     OpenVINO-backed CNN filter: loads an ONNX/IR model directly and runs\n")
-        _T("     it on the GPU.\n")
+        _T("     ONNX Runtime DirectML-backed CNN filter: loads an ONNX model and runs\n")
+        _T("     it on the GPU selected by VCEEnc.\n")
         _T("     The pre/post a model needs is inferred from its channel count:\n")
         _T("     1ch=luma SR, 3ch=RGB, 4ch=RGB+noise, 2ch=gray+noise, 3->2ch=chroma.\n")
         _T("    params\n")
-        _T("      model=<path>                path to the .onnx / .xml model (required)\n")
-        _T("      device=<string>             OpenVINO device: GPU.0 (default) / GPU / CPU / AUTO\n")
-        _T("      interop=<string>            auto (default) / ocl (zero-copy, shared GPU context) / host\n")
+        _T("      model=<path>                path to the .onnx model (required)\n")
+        _T("      device=<string>             compatibility parameter; DirectML binds\n")
+        _T("                                    inference to the selected encoder GPU\n")
+        _T("      interop=<string>            compatibility parameter: auto / ocl / host\n")
         _T("      prec=<string>               auto (default) / fp16 / fp32\n")
-        _T("      colormatrix=<string>        auto (default, bt601 SD / bt709 HD) / bt601 / bt709 / bt2020\n")
-        _T("      colorrange=<string>         auto (default, tv) / tv / pc\n")
+        _T("      colormatrix=<string>        same list as --colormatrix; onnx supports\n")
+        _T("                                    auto / auto_res / smpte170m / bt470bg\n")
+        _T("                                    / bt709 / bt2020nc\n")
+        _T("      colormatrix_out=<string>    matrix for the OUTPUT RGB->YUV conversion\n")
+        _T("                                    (same list as colormatrix; auto=same as input;\n")
+        _T("                                    set bt2020nc for models\n")
+        _T("                                    that convert SDR/709 to HDR/2020)\n")
+        _T("      colorrange=<string>         same list as --colorrange; onnx supports\n")
+        _T("                                    auto (default, tv) / tv / limited / pc / full\n")
         _T("      colorspace=<string>         3ch models: rgb (default) / ycbcr (ArtCNN *_YCbCr)\n")
         _T("      noise=<int>                 noise sigma 0-255 for noise models (default 15)\n")
         _T("      out_res=<WxH>               end-of-chain resize to an arbitrary final size,\n")
@@ -16134,8 +16267,53 @@ tstring gen_cmd_help_vpp() {
         _T("                                  value on one axis keeps the source aspect:\n")
         _T("                                  out_res=-2x1080 -> 1440x1080 (4:3) or 1920x1080 (16:9).\n")
         _T("      resize=<string>             resampler for out_res (default=lanczos4)\n"));
+#else
+    str += strsprintf(_T("\n")
+        _T("   --vpp-onnx [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     OpenVINO-backed CNN filter: loads an ONNX/IR model directly and runs\n")
+        _T("     it on the GPU.\n")
+        _T("     The pre/post a model needs is inferred from its channel count:\n")
+        _T("     1ch=luma SR, 3ch=RGB, 4ch=RGB+noise, 2ch=gray+noise, 3->2ch=chroma.\n")
+        _T("    params\n")
+        _T("      model=<path>                path to the .onnx / .xml model (required)\n")
+        _T("      device=<string>             OpenVINO device: GPU.0 (default) / GPU / CPU / AUTO / NPU\n")
+        _T("                                    NPU needs an NPU-enabled OpenVINO runtime (Core Ultra).\n")
+        _T("      interop=<string>            auto (default) / ocl (zero-copy, shared GPU context) / host\n")
+        _T("      prec=<string>               auto (default) / fp16 / fp32\n")
+        _T("      colormatrix=<string>        same list as --colormatrix; onnx supports\n")
+        _T("                                    auto / auto_res / smpte170m / bt470bg\n")
+        _T("                                    / bt709 / bt2020nc\n")
+        _T("      colormatrix_out=<string>    matrix for the OUTPUT RGB->YUV conversion\n")
+        _T("                                    (same list as colormatrix; auto=same as input;\n")
+        _T("                                    set bt2020nc for models\n")
+        _T("                                    that convert SDR/709 to HDR/2020)\n")
+        _T("      colorrange=<string>         same list as --colorrange; onnx supports\n")
+        _T("                                    auto (default, tv) / tv / limited / pc / full\n")
+        _T("      colorspace=<string>         3ch models: rgb (default) / ycbcr (ArtCNN *_YCbCr)\n")
+        _T("      noise=<int>                 noise sigma 0-255 for noise models (default 15)\n")
+        _T("      out_res=<WxH>               end-of-chain resize to an arbitrary final size,\n")
+        _T("                                  applied AFTER the network so CNN upscale + fit run\n")
+        _T("                                  in one pass, e.g. out_res=1440x1080. A negative\n")
+        _T("                                  value on one axis keeps the source aspect:\n")
+        _T("                                  out_res=-2x1080 -> 1440x1080 (4:3) or 1920x1080 (16:9).\n")
+        _T("      resize=<string>             resampler for out_res (default=lanczos4)\n"));
+#endif
     str += strsprintf(_T("\n")
         _T("   --vpp-onnx-model-dir <string>   Directory containing models.json for registered ONNX models.\n"));
+#if ENABLE_VPP_FILTER_RIFE_OV
+    str += strsprintf(_T("\n")
+        _T("   --vpp-rife-ov [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     RIFE v4.x frame interpolation via OpenVINO.\n")
+        _T("      model=<path>                RIFE v4.x ONNX/IR model path (required)\n")
+        _T("      multi=<int>                 frame-rate multiplier (>=2, default 2)\n")
+        _T("      device=<string>             GPU.0 (default) / GPU / CPU / AUTO / NPU\n")
+        _T("      colormatrix=<string>        auto / bt601 / bt709 / bt2020\n")
+        _T("      colorrange=<string>         auto / tv / pc\n"));
+#endif
+#if ENABLE_OPENVINO
+    str += strsprintf(_T("\n")
+        _T("   --vpp-onnx-cache-dir <string>   Cache compiled ONNX models in this folder.\n"));
+#endif
 #endif
 #if ENABLE_VPP_FILTER_SMOOTH
     str += strsprintf(_T("\n")
@@ -16783,6 +16961,8 @@ tstring gen_cmd_help_ctrl() {
     tstring str = strsprintf(_T("\n")
 #if ENABLE_PARALLEL_ENC
         _T("   --parallel <int> or auto     Enable parallel encoding by file splitting.\n")
+        _T("   --parallel-force-large-memory-filters\n")
+        _T("                                Disable large memory filter parallel count limit.\n")
 #endif
         _T("   --log <string>               set log file name\n")
         _T("   --log-level <string>         set log level\n")
@@ -16912,6 +17092,12 @@ tstring gen_cmd_help_ctrl() {
 #endif
 #if ENABLE_OPENCL
     str += strsprintf(_T("\n")
+#if ENCODER_QSV
+        _T("   --opencl-task-threads <auto|int>  set OpenCL task thread mode.\n")
+        _T("                                  auto: 2 on IceLake or HEVC FF capable GPUs, otherwise 0 (default)\n")
+        _T("                                  0: legacy single-thread path\n")
+        _T("                                  2: acquire + release workers\n")
+#endif
         _T("   --cl-perf-dump <dir>         dump OpenCL kernel performance data to <dir>.\n")
         _T("                                 enables CL_QUEUE_PROFILING_ENABLE automatically.\n")
         _T("                                 output: programs.jsonl, launches.jsonl, meta.json,\n")

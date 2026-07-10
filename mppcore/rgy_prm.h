@@ -83,6 +83,7 @@ static const int RGY_AUDIO_QUALITY_DEFAULT = 0;
 #define ENABLE_VPP_FILTER_DESCALE      (ENCODER_QSV   || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_ANIME4K      (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_ONNX         ((ENABLE_OPENVINO && ENCODER_QSV) || (ENABLE_ONNXRUNTIME && ENCODER_VCEENC))
+#define ENABLE_VPP_FILTER_RIFE_OV      ((ENABLE_OPENVINO && ENCODER_QSV) || (ENABLE_ONNXRUNTIME && ENCODER_VCEENC))
 #define ENABLE_VPP_FILTER_DENOISE_DCT  (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_SMOOTH       (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_FFT3D        (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
@@ -199,6 +200,7 @@ enum class VppType : int {
     CL_DESCALE,
     CL_ANIME4K,
     CL_ONNX,
+    CL_RIFE_OV,
 
     CL_DENOISE_DCT,
     CL_DENOISE_SMOOTH,
@@ -3519,11 +3521,14 @@ struct VppAnime4k {
 struct VppOnnx {
     bool    enable;
     tstring modelFile;   // path to the ONNX (or OpenVINO IR .xml) model
-    tstring device;      // OpenVINO device: "GPU.0" (default), "GPU", "CPU", "AUTO"
+    tstring device;      // OpenVINO device: "GPU.0" (default), "GPU", "CPU", "AUTO", "NPU"
     tstring interop;     // "auto" (default), "ocl" (zero-copy shared context), "host" (readback)
     tstring precision;   // "auto" (default), "fp16", "fp32"
-    tstring colormatrix; // "auto" (bt601 for SD, bt709 for HD), "bt601", "bt709", "bt2020"
-    tstring colorrange;  // "auto" (tv), "tv", "pc"
+    tstring cacheDir;    // OpenVINOのCACHE_DIR (コンパイル済みモデルのキャッシュ先, ""=無効=従来動作)
+    CspMatrix colormatrix;    // 入力側YUV->RGB変換のマトリクス。auto=SD/HDで自動判定。
+    CspMatrix colormatrixOut; // 出力側RGB->YUV変換のマトリクス。auto=入力と同じ=従来動作。
+                              // SDR->HDR等、モデルが色空間を変えるとき用 (例: bt709入力/bt2020nc出力)
+    CspColorRange colorrange; // auto=tv
     tstring colorspace;  // 3ch models: "rgb" (default) or "ycbcr" (ArtCNN *_YCbCr / JPEG-YCbCr)
     int     noise;       // noise sigma (0..255) fed to the conditioning channel of noise models (default 15)
     int                  postResizeW;
@@ -3533,6 +3538,20 @@ struct VppOnnx {
     VppOnnx();
     bool operator==(const VppOnnx &x) const;
     bool operator!=(const VppOnnx &x) const;
+    tstring print() const;
+};
+
+struct VppRifeOV {
+    bool    enable;
+    tstring modelFile;
+    tstring device;
+    int     multi;
+    tstring colormatrix;
+    tstring colorrange;
+
+    VppRifeOV();
+    bool operator==(const VppRifeOV &x) const;
+    bool operator!=(const VppRifeOV &x) const;
     tstring print() const;
 };
 
@@ -3662,15 +3681,6 @@ const CX_DESC list_vpp_curves_preset[] = {
     { NULL, 0 }
 };
 
-struct VppCurveParams {
-    tstring r, g, b, m;
-
-    VppCurveParams();
-    VppCurveParams(const tstring& r_, const tstring& g_, const tstring& b_, const tstring& m_);
-    bool operator==(const VppCurveParams &x) const;
-    bool operator!=(const VppCurveParams &x) const;
-};
-
 enum class VppCurvesInterp {
     SPLINE, //自然3次スプライン (従来)
     PCHIP,  //単調エルミート (Fritsch-Carlson): 点間でオーバーシュートしない
@@ -3680,6 +3690,15 @@ const CX_DESC list_vpp_curves_interp[] = {
     { _T("spline"), (int)VppCurvesInterp::SPLINE },
     { _T("pchip"),  (int)VppCurvesInterp::PCHIP  },
     { NULL, 0 }
+};
+
+struct VppCurveParams {
+    tstring r, g, b, m;
+
+    VppCurveParams();
+    VppCurveParams(const tstring& r_, const tstring& g_, const tstring& b_, const tstring& m_);
+    bool operator==(const VppCurveParams &x) const;
+    bool operator!=(const VppCurveParams &x) const;
 };
 
 struct VppCurves {
@@ -3694,6 +3713,7 @@ struct VppCurves {
     bool operator!=(const VppCurves &x) const;
     tstring print() const;
 };
+
 struct VppDeband {
     bool enable;
     int range;
@@ -3815,6 +3835,7 @@ struct RGYParamVpp {
     VppDescale descale;
     VppAnime4k anime4k;
     VppOnnx onnx;
+    VppRifeOV rife_ov;
     tstring onnxModelDir;
     bool    onnxListModels;
     VppDenoiseDct dct;
@@ -4190,6 +4211,7 @@ struct RGYParamParallelEnc {
     std::vector<RGYParamParallelEncPipeHandle> chunkPipeHandles; // 各チャンクの先頭のフレームID (raw読み込み時に使用)
     RGYParamParallelEncCache cacheMode;
     bool delayChildSync; // 親-子間のデータやり取りを少し遅らせる
+    bool forceLargeMemoryFilters; // GPUメモリ使用量が大きいフィルタでの並列数制限を無効化する
     RGYParallelEncSendData *sendData; // 並列処理時に親-子間のデータやり取り用
     RGYParamParallelEnc();
     bool operator==(const RGYParamParallelEnc &x) const;
@@ -4246,6 +4268,7 @@ struct RGYParamControl {
     bool enableOpenCL;
     RGYParamInitVulkan enableVulkan;
     int openclBuildThreads;
+    int openclTaskThreads;
     tstring clPerfDumpDir;          // --cl-perf-dump <dir>: OpenCL kernel perf dump 先ディレクトリ (空=無効)
     double  clPerfTimelineSec;      // --cl-perf-timeline [=<sec>]: timeline 収集の時間窓 (秒)。0 = 無効、負値 = 無制限
     tstring clPerfDisasmTool;       // --cl-perf-disasm-tool <auto|ocloc|rga|none>

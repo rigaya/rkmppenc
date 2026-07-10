@@ -111,6 +111,7 @@ static const auto VPPTYPE_TO_STR = make_array<std::pair<VppType, tstring>>(
     std::make_pair(VppType::CL_DESCALE,              _T("descale")),
     std::make_pair(VppType::CL_ANIME4K,              _T("anime4k")),
     std::make_pair(VppType::CL_ONNX,                 _T("onnx")),
+    std::make_pair(VppType::CL_RIFE_OV,              _T("rife-ov")),
     std::make_pair(VppType::CL_DENOISE_DCT,          _T("denoise-dct")),
     std::make_pair(VppType::CL_DENOISE_SMOOTH,       _T("smooth")),
     std::make_pair(VppType::CL_DENOISE_FFT3D,        _T("fft3d")),
@@ -1704,10 +1705,6 @@ VppIvtc::VppIvtc() :
                          //   sources. Opt-in via back=1 for cleaner deterministic film sources.
     y0(FILTER_DEFAULT_IVTC_Y0),
     y1(FILTER_DEFAULT_IVTC_Y1), // 0,0 = no exclusion band
-    nt(0),
-    cthresh(0),
-    combPel(0),
-    scThresh(0.0f),
     cadenceLock(FILTER_DEFAULT_IVTC_CADENCE_LOCK), // -1 = auto (enable when guide>=1 in init), 0 = off, 1 = on.
                          //   Auto-on is safe because guide>=1 implies the user expects
                          //   pulldown content; the tracker is inert on pure progressive
@@ -1804,6 +1801,7 @@ VppMpdecimate::VppMpdecimate() :
     keep(FILTER_DEFAULT_MPDECIMATE_KEEP),
     frac(FILTER_DEFAULT_MPDECIMATE_FRAC),
     log(FILTER_DEFAULT_MPDECIMATE_LOG) {
+
 }
 
 bool VppMpdecimate::operator==(const VppMpdecimate& x) const {
@@ -2037,8 +2035,10 @@ VppOnnx::VppOnnx() :
     device(_T("GPU.0")),
     interop(_T("auto")),
     precision(_T("auto")),
-    colormatrix(_T("auto")),
-    colorrange(_T("auto")),
+    cacheDir(),
+    colormatrix(RGY_MATRIX_AUTO),
+    colormatrixOut(RGY_MATRIX_AUTO),
+    colorrange(RGY_COLORRANGE_AUTO),
     colorspace(_T("rgb")),
     noise(15),
     postResizeW(0),
@@ -2053,7 +2053,9 @@ bool VppOnnx::operator==(const VppOnnx &x) const {
         && device == x.device
         && interop == x.interop
         && precision == x.precision
+        && cacheDir == x.cacheDir
         && colormatrix == x.colormatrix
+        && colormatrixOut == x.colormatrixOut
         && colorrange == x.colorrange
         && colorspace == x.colorspace
         && noise == x.noise
@@ -2070,8 +2072,14 @@ tstring VppOnnx::print() const {
     s += strsprintf(_T(",device=%s"), device.c_str());
     s += strsprintf(_T(",interop=%s"), interop.c_str());
     s += strsprintf(_T(",prec=%s"), precision.c_str());
-    s += strsprintf(_T(",colormatrix=%s"), colormatrix.c_str());
-    s += strsprintf(_T(",colorrange=%s"), colorrange.c_str());
+    if (!cacheDir.empty()) {
+        s += strsprintf(_T(",cache_dir=%s"), cacheDir.c_str());
+    }
+    s += strsprintf(_T(",colormatrix=%s"), get_cx_desc(list_colormatrix, colormatrix));
+    if (colormatrixOut != RGY_MATRIX_AUTO) {
+        s += strsprintf(_T(",colormatrix_out=%s"), get_cx_desc(list_colormatrix, colormatrixOut));
+    }
+    s += strsprintf(_T(",colorrange=%s"), get_cx_desc(list_colorrange, colorrange));
     s += strsprintf(_T(",colorspace=%s"), colorspace.c_str());
     s += strsprintf(_T(",noise=%d"), noise);
     if (postResizeW != 0 && postResizeH != 0) {
@@ -2079,6 +2087,33 @@ tstring VppOnnx::print() const {
         s += strsprintf(_T(",resize=%s"), get_cx_desc(list_vpp_resize, postResizeAlgo));
     }
     return s;
+}
+
+VppRifeOV::VppRifeOV() :
+    enable(false),
+    modelFile(),
+    device(_T("GPU.0")),
+    multi(2),
+    colormatrix(_T("auto")),
+    colorrange(_T("auto")) {
+}
+
+bool VppRifeOV::operator==(const VppRifeOV &x) const {
+    return enable == x.enable
+        && modelFile == x.modelFile
+        && device == x.device
+        && multi == x.multi
+        && colormatrix == x.colormatrix
+        && colorrange == x.colorrange;
+}
+
+bool VppRifeOV::operator!=(const VppRifeOV &x) const {
+    return !(*this == x);
+}
+
+tstring VppRifeOV::print() const {
+    return strsprintf(_T("model=%s,device=%s,multi=%d,colormatrix=%s,colorrange=%s"),
+        modelFile.c_str(), device.c_str(), multi, colormatrix.c_str(), colorrange.c_str());
 }
 
 VppAnime4k::VppAnime4k() :
@@ -3198,7 +3233,6 @@ bool VppDering::operator==(const VppDering& x) const {
         && sigma == x.sigma
         && showmask == x.showmask
         && protect == x.protect
-        && edge == x.edge
         && thr == x.thr
         && elast == x.elast
         && darkthr == x.darkthr
@@ -3206,7 +3240,8 @@ bool VppDering::operator==(const VppDering& x) const {
         && msmooth == x.msmooth
         && drrep == x.drrep
         && sharp == x.sharp
-        && planes == x.planes;
+        && planes == x.planes
+        && edge == x.edge;
 }
 bool VppDering::operator!=(const VppDering& x) const {
     return !(*this == x);
@@ -3217,8 +3252,7 @@ tstring VppDering::print() const {
         mrad, mthr, sigma,
         showmask ? _T("on") : _T("off"),
         protect ? _T("on") : _T("off"),
-        edge.c_str());
-    if (thr > 0) {
+        edge.c_str());    if (thr > 0) {
         str += strsprintf(_T(", thr %d, elast %.2f"), thr, elast);
         if (darkthr >= 0) str += strsprintf(_T(", darkthr %d"), darkthr);
     }
@@ -3234,6 +3268,7 @@ tstring VppDering::print() const {
         str += _T(", planes ") + ((p.length() > 0) ? p.substr(1) : _T("none"));
     }
     return str;
+
 }
 
 VppMsharpen::VppMsharpen() :
@@ -3473,10 +3508,10 @@ bool VppTweak::yuv_filter_enabled() const {
         || saturation != 1.0f
         || hue != 0.0f
         || swapuv
+        || coring
         || y.enabled()
         || cb.enabled()
-        || cr.enabled()
-        || coring;
+        || cr.enabled();
 }
 
 bool VppTweak::rgb_filter_enabled() const {
@@ -3780,6 +3815,7 @@ RGYParamVpp::RGYParamVpp() :
     anime4k(),
     descale(),
     onnx(),
+    rife_ov(),
     onnxModelDir(),
     onnxListModels(false),
     dct(),
@@ -3859,6 +3895,7 @@ bool RGYParamVpp::operator==(const RGYParamVpp& x) const {
         && descale == x.descale
         && anime4k == x.anime4k
         && onnx == x.onnx
+        && rife_ov == x.rife_ov
         && onnxModelDir == x.onnxModelDir
         && onnxListModels == x.onnxListModels
         && dct == x.dct
@@ -4248,6 +4285,7 @@ RGYParamParallelEnc::RGYParamParallelEnc() :
     chunkPipeHandles(),
     cacheMode(RGYParamParallelEncCache::Mem),
     delayChildSync(false),
+    forceLargeMemoryFilters(false),
     sendData(nullptr) {
 
 };
@@ -4258,7 +4296,8 @@ bool RGYParamParallelEnc::operator==(const RGYParamParallelEnc &x) const {
         && targetBFrames == x.targetBFrames
         && chunkPipeHandles.size() == x.chunkPipeHandles.size()
         && std::equal(chunkPipeHandles.begin(), chunkPipeHandles.end(), x.chunkPipeHandles.begin())
-        && cacheMode == x.cacheMode;
+        && cacheMode == x.cacheMode
+        && forceLargeMemoryFilters == x.forceLargeMemoryFilters;
 }
 bool RGYParamParallelEnc::operator!=(const RGYParamParallelEnc &x) const {
     return !(*this == x);
@@ -4308,6 +4347,7 @@ RGYParamControl::RGYParamControl() :
     enableOpenCL(true),
     enableVulkan(RGYParamInitVulkan::TargetVendor),
     openclBuildThreads(0),
+    openclTaskThreads(-1), // 自動選択
     clPerfDumpDir(),
     clPerfTimelineSec(0.0),
     clPerfDisasmTool(),
