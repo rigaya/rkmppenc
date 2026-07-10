@@ -582,6 +582,10 @@ RGY_ERR RGYFilterFineDehalo::run_filter(const RGYFrameInfo *pInputFrame, RGYFram
     if (!pInputFrame || !pInputFrame->ptr[0]) {
         return RGY_ERR_NONE;
     }
+    if (interlaced(*pInputFrame)) {
+        AddMessage(RGY_LOG_ERROR, _T("finedehalo does not support interlaced input. Please deinterlace before finedehalo.\n"));
+        return RGY_ERR_UNSUPPORTED;
+    }
 
     if (!m_finedehalo.get()) {
         AddMessage(RGY_LOG_ERROR, _T("finedehalo OpenCL program failed to build (options: %s).\n"),
@@ -597,10 +601,6 @@ RGY_ERR RGYFilterFineDehalo::run_filter(const RGYFrameInfo *pInputFrame, RGYFram
     if (!prm) {
         AddMessage(RGY_LOG_ERROR, _T("Invalid parameter type.\n"));
         return RGY_ERR_INVALID_PARAM;
-    }
-    if (interlaced(*pInputFrame)) {
-        AddMessage(RGY_LOG_ERROR, _T("finedehalo does not support interlaced input. Please deinterlace before finedehalo.\n"));
-        return RGY_ERR_UNSUPPORTED;
     }
 
     const int bitDepth = RGY_CSP_BIT_DEPTH[pInputFrame->csp];

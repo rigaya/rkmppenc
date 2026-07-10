@@ -941,7 +941,8 @@ RGYDegrainRefDisableArray RGYFilterDegrain::analysisAvailabilityDisableRefs(cons
 
 RGY_ERR RGYFilterDegrain::createAnalysisSideDataSnapshot(const RGYFrameInfo *frame, const int currentFrame,
     const RGYDegrainRefDisableArray &availabilityDisableRefs, RGYOpenCLQueue &queue,
-    const std::vector<RGYOpenCLEvent> &wait_events, std::shared_ptr<RGYFrameDataDegrain> &frameDataOut) {
+    const std::vector<RGYOpenCLEvent> &wait_events,
+    std::shared_ptr<RGYFrameDataDegrain> &frameDataOut) {
     if (!frame || !m_analysis.mv || !m_analysis.sad) {
         return RGY_ERR_INVALID_PARAM;
     }
@@ -1068,7 +1069,6 @@ RGY_ERR RGYFilterDegrain::attachAnalysisData(const RGYFrameInfo *sourceFrame, RG
     if (frameCopyEvent() != nullptr) {
         waitEvents.push_back(frameCopyEvent);
     }
-
     std::shared_ptr<RGYFrameDataDegrain> frameData;
     auto err = createAnalysisSideDataSnapshot(sourceFrame, currentFrame, m_analysis.lastAvailabilityDisableRefs, queue, waitEvents, frameData);
     if (err != RGY_ERR_NONE) {
