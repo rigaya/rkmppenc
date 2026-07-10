@@ -34,7 +34,11 @@
 #include <cstdlib>
 #include "rgy_util.h"
 #include "rgy_avutil.h"
+#if ENCODER_NVENC
+#include "NVEncFilterRtgmcSearchPrefilter.h"
+#else
 #include "rgy_filter_rtgmc_repair_profile.h"
+#endif
 #include "rgy_prm.h"
 #include "rgy_cmd.h"
 #include "rgy_language.h"
@@ -5601,10 +5605,8 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         return 0;
     }
     if (IS_OPTION("vpp-anime4k-shader") && ENABLE_VPP_FILTER_ANIME4K) {
-        VppAnime4k newAnime4k;
-        newAnime4k.enable = true;
+        vpp->anime4k.enable = true;
         if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
-            vpp->anime4k = newAnime4k;
             return 0;
         }
         i++;
@@ -5626,7 +5628,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("enable")) {
                 bool b = false;
                 if (!cmd_string_to_bool(&b, param_val)) {
-                    newAnime4k.enable = b;
+                    vpp->anime4k.enable = b;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5636,13 +5638,13 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("mode")) {
                 int value = 0;
                 if (get_list_value(list_vpp_anime4k_mode, param_val.c_str(), &value)) {
-                    newAnime4k.mode = (VppAnime4kMode)value;
+                    vpp->anime4k.mode = (VppAnime4kMode)value;
                     // deblur uses REFINE_STRENGTH=1.0 in the reference shader
                     // while original uses 0.5. Promote the default strength
                     // when the user picks deblur without an explicit value.
-                    if (newAnime4k.mode == VppAnime4kMode::Deblur
-                     && newAnime4k.strength == FILTER_DEFAULT_ANIME4K_STRENGTH) {
-                        newAnime4k.strength = 1.0f;
+                    if (vpp->anime4k.mode == VppAnime4kMode::Deblur
+                     && vpp->anime4k.strength == FILTER_DEFAULT_ANIME4K_STRENGTH) {
+                        vpp->anime4k.strength = 1.0f;
                     }
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_mode);
@@ -5652,7 +5654,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             }
             if (param_arg == _T("scale")) {
                 try {
-                    newAnime4k.scale = std::stoi(param_val);
+                    vpp->anime4k.scale = std::stoi(param_val);
                 } catch (...) {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5661,7 +5663,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             }
             if (param_arg == _T("strength")) {
                 try {
-                    newAnime4k.strength = std::stof(param_val);
+                    vpp->anime4k.strength = std::stof(param_val);
                 } catch (...) {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5671,7 +5673,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("chroma_resize")) {
                 int value = 0;
                 if (get_list_value(list_vpp_anime4k_chroma_resize, param_val.c_str(), &value)) {
-                    newAnime4k.chromaResize = (VppAnime4kChromaResize)value;
+                    vpp->anime4k.chromaResize = (VppAnime4kChromaResize)value;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_chroma_resize);
                     return 1;
@@ -5681,7 +5683,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("chroma")) {
                 bool b = false;
                 if (!cmd_string_to_bool(&b, param_val)) {
-                    newAnime4k.chroma = b;
+                    vpp->anime4k.chroma = b;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5709,14 +5711,14 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                         _T("expected WxH; a negative value keeps aspect (e.g. -2x1080); both cannot be negative"));
                     return 1;
                 }
-                newAnime4k.postResizeW = w;
-                newAnime4k.postResizeH = h;
+                vpp->anime4k.postResizeW = w;
+                vpp->anime4k.postResizeH = h;
                 continue;
             }
             if (param_arg == _T("resize")) {
                 int value = 0;
                 if (get_list_value(list_vpp_resize, param_val.c_str(), &value)) {
-                    newAnime4k.postResizeAlgo = (RGY_VPP_RESIZE_ALGO)value;
+                    vpp->anime4k.postResizeAlgo = (RGY_VPP_RESIZE_ALGO)value;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_resize);
                     return 1;
@@ -5726,7 +5728,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("darken")) {
                 int value = 0;
                 if (get_list_value(list_vpp_anime4k_darken, param_val.c_str(), &value)) {
-                    newAnime4k.darken = (VppAnime4kDarken)value;
+                    vpp->anime4k.darken = (VppAnime4kDarken)value;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_darken);
                     return 1;
@@ -5736,7 +5738,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("thin")) {
                 int value = 0;
                 if (get_list_value(list_vpp_anime4k_thin, param_val.c_str(), &value)) {
-                    newAnime4k.thin = (VppAnime4kThin)value;
+                    vpp->anime4k.thin = (VppAnime4kThin)value;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_thin);
                     return 1;
@@ -5746,7 +5748,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("denoise")) {
                 int value = 0;
                 if (get_list_value(list_vpp_anime4k_denoise, param_val.c_str(), &value)) {
-                    newAnime4k.denoise = (VppAnime4kDenoise)value;
+                    vpp->anime4k.denoise = (VppAnime4kDenoise)value;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_denoise);
                     return 1;
@@ -5755,7 +5757,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             }
             if (param_arg == _T("denoise_intensity")) {
                 try {
-                    newAnime4k.denoiseIntensity = std::stof(param_val);
+                    vpp->anime4k.denoiseIntensity = std::stof(param_val);
                 } catch (...) {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5764,7 +5766,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             }
             if (param_arg == _T("denoise_spatial")) {
                 try {
-                    newAnime4k.denoiseSpatial = std::stof(param_val);
+                    vpp->anime4k.denoiseSpatial = std::stof(param_val);
                 } catch (...) {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5773,7 +5775,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             }
             if (param_arg == _T("denoise_curve")) {
                 try {
-                    newAnime4k.denoiseCurve = std::stof(param_val);
+                    vpp->anime4k.denoiseCurve = std::stof(param_val);
                 } catch (...) {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5782,7 +5784,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             }
             if (param_arg == _T("denoise_hist_reg")) {
                 try {
-                    newAnime4k.denoiseHistReg = std::stof(param_val);
+                    vpp->anime4k.denoiseHistReg = std::stof(param_val);
                 } catch (...) {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5792,7 +5794,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("prefilter_denoise")) {
                 int value = 0;
                 if (get_list_value(list_vpp_anime4k_denoise, param_val.c_str(), &value)) {
-                    newAnime4k.prefilterDenoise = (VppAnime4kDenoise)value;
+                    vpp->anime4k.prefilterDenoise = (VppAnime4kDenoise)value;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_denoise);
                     return 1;
@@ -5802,7 +5804,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             if (param_arg == _T("clamp_highlights")) {
                 bool b = false;
                 if (!cmd_string_to_bool(&b, param_val)) {
-                    newAnime4k.clampHighlights = b;
+                    vpp->anime4k.clampHighlights = b;
                 } else {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5811,7 +5813,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             }
             if (param_arg == _T("antiring")) {
                 try {
-                    newAnime4k.antiring = std::stof(param_val);
+                    vpp->anime4k.antiring = std::stof(param_val);
                 } catch (...) {
                     print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                     return 1;
@@ -5821,7 +5823,6 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
             return 1;
         }
-        vpp->anime4k = newAnime4k;
         return 0;
     }
     if (IS_OPTION("vpp-onnx") && ENABLE_VPP_FILTER_ONNX) {
@@ -7754,6 +7755,9 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     continue;
                 }
                 print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
                 return 1;
             }
         }
@@ -15120,9 +15124,7 @@ tstring gen_cmd(const RGYParamControl *param, const RGYParamControl *defaultPrm,
         if (!tmp.str().empty()) {
             cmd << _T(" --parallel ") << tmp.str().substr(1);
         }
-#if ENABLE_PARALLEL_ENC
         OPT_BOOL(_T("--parallel-force-large-memory-filters"), _T(""), parallelEnc.forceLargeMemoryFilters);
-#endif
     }
     return cmd.str();
 }
@@ -17170,9 +17172,11 @@ tstring gen_cmd_help_ctrl() {
         _T("   --cl-perf-timeline [=<sec>]  enable per-event timeline capture for <sec> seconds (default 10).\n")
         _T("                                requires --cl-perf-dump. output: timeline.jsonl\n"));
 #endif
+#if ENCODER_QSV || ENCODER_VCEENC || ENCODER_MPP
     str += strsprintf(_T("\n")
         _T("   --python <string>            set python path for --perf-monitor-plot\n")
         _T("                                 and --cl-perf-dump report generation.\n"));
+#endif
     str += strsprintf(_T("\n")
         _T("   --disable-vulkan             disable vulkan features.\n"));
     str += strsprintf(_T("\n")
