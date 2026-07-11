@@ -550,6 +550,7 @@ mppcore_sources = files(
   'mppcore/rgy_filter_deflicker.cpp',
   'mppcore/rgy_filter_stab.cpp',
   'mppcore/rgy_filter_colorfix.cpp',
+  'mppcore/rgy_filter_anime4k.cpp',
   'mppcore/rgy_filter_vinverse.cpp',
   'mppcore/rgy_filter_ivtc.cpp',
   'mppcore/rgy_filter_rtgmc_bob.cpp',

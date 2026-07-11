@@ -74,6 +74,7 @@ resource_specs = [
   ['rgy_filter_vinverse_cl', '../mppcore/rgy_filter_vinverse.cl', 'mppcore_rgy_filter_vinverse_cl'],
   ['rgy_filter_ivtc_cl', '../mppcore/rgy_filter_ivtc.cl', 'mppcore_rgy_filter_ivtc_cl'],
   ['rgy_filter_rtgmc_bob_cl', '../mppcore/rgy_filter_rtgmc_bob.cl', 'mppcore_rgy_filter_rtgmc_bob_cl'],
+  ['rgy_filter_anime4k_cl', '../mppcore/rgy_filter_anime4k.cl', 'mppcore_rgy_filter_anime4k_cl'],
   ['rgy_filter_maa_cl', '../mppcore/rgy_filter_maa.cl', 'mppcore_rgy_filter_maa_cl'],
   ['rgy_filter_msharpen_cl', '../mppcore/rgy_filter_msharpen.cl', 'mppcore_rgy_filter_msharpen_cl'],
   ['rgy_filter_msmooth_cl', '../mppcore/rgy_filter_msmooth.cl', 'mppcore_rgy_filter_msmooth_cl'],
