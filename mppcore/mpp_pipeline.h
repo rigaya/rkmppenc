@@ -1892,6 +1892,26 @@ public:
         //auto meta = mpp_frame_get_meta(mppframe);
         //mpp_meta_set_packet(meta, KEY_OUTPUT_PACKET, packet);
 
+        // rk_mppの内部 rc.gop (igop) 経由での周期 IDR は、MPP/ファームウェアのバージョンによって
+        // 先頭1回しか発行されない場合がある。ffmpeg-rockchip と同様に、明示的に
+        // MPP_ENC_SET_IDR_FRAME を発行することで周期性を保証する。
+        //   - EOS フレームには発行しない
+        //   - poc == 0 (先頭フレーム) は MPP が自動的に IDR を発行するのでスキップ
+        //   - --gop-len auto (gop == 0) の時は MPP 側に委ねるため何もしない
+        //   - H.264 / HEVC のみ対象 (MJPEG には IDR の概念はない)
+        if (!mppframeeos && (m_encCodec == RGY_CODEC_H264 || m_encCodec == RGY_CODEC_HEVC)) {
+            const RK_S32 gop = m_encParams.rc.gop;
+            const RK_S32 poc = (RK_S32)mpp_frame_get_poc(mppframe);
+            if (gop > 0 && poc > 0 && (poc % gop) == 0) {
+                auto idr_ret = err_to_rgy(m_encoder->mpi->control(m_encoder->ctx, MPP_ENC_SET_IDR_FRAME, nullptr));
+                if (idr_ret != RGY_ERR_NONE) {
+                    PrintMes(RGY_LOG_WARN, _T("Failed to force IDR frame at poc %d (gop %d): %s.\n"), poc, gop, get_err_mes(idr_ret));
+                } else {
+                    PrintMes(RGY_LOG_DEBUG, _T("Forced periodic IDR frame at poc %d (gop %d).\n"), poc, gop);
+                }
+            }
+        }
+
         auto err = RGY_ERR_NONE;
         bool sendFrame = false;
         do {
