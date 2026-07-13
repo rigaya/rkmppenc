@@ -1180,7 +1180,9 @@ public:
             && ((m_avsync & (RGY_AVSYNC_VFR | RGY_AVSYNC_FORCE_CFR)) || m_vpp_rff || m_vpp_afs_rff_aware || m_timestampPassThrough)) {
             //CFR仮定ではなく、オリジナルの時間を見る
             const auto srcTimestamp = taskSurf->surf().frame()->timestamp();
-            outPtsSource = rational_rescale(srcTimestamp, m_srcTimebase, m_outputTimebase);
+            if (srcTimestamp != AV_NOPTS_VALUE) {
+                outPtsSource = rational_rescale(srcTimestamp, m_srcTimebase, m_outputTimebase);
+            }
             if (taskSurf->surf().frame()->duration() > 0) {
                 outDuration = rational_rescale(taskSurf->surf().frame()->duration(), m_srcTimebase, m_outputTimebase);
                 taskSurf->surf().frame()->setDuration(outDuration);
@@ -1215,7 +1217,7 @@ public:
                 // 少しのずれはrffによるものとみなし、基準値を修正する
                 m_tsOutEstimated = outPtsSource;
             }
-            if ((ENCODER_VCEENC || ENCODER_MPP) && m_framePosList) {
+            if ((ENCODER_VCEENC || ENCODER_MPP) && m_framePosList && taskSurf->surf().frame()->timestamp() != AV_NOPTS_VALUE) {
                 //cuvidデコード時は、timebaseの分子はかならず1なので、streamIn->time_baseとズレているかもしれないのでオリジナルを計算
                 const auto orig_pts = rational_rescale(taskSurf->surf().frame()->timestamp(), m_srcTimebase, m_streamTimebase);
                 //ptsからフレーム情報を取得する

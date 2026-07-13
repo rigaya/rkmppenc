@@ -3541,7 +3541,14 @@ RGY_ERR RGYInputAvcodec::LoadNextFrameInternal(RGYFrame *pSurface) {
         }
         pSurface->setFlags(flags);
         pSurface->setTimestamp(m_Demux.video.frame->pts);
-        pSurface->setDuration(rgy_avframe_get_duration(m_Demux.video.frame));
+        auto duration = rgy_avframe_get_duration(m_Demux.video.frame);
+        if (duration == AV_NOPTS_VALUE || duration <= 0) {
+            duration = (findPos.duration > 0) ? (int64_t)findPos.duration + findPos.duration2 : 0;
+        }
+        if (duration <= 0 && m_inputVideoInfo.fpsN > 0 && m_inputVideoInfo.fpsD > 0) {
+            duration = av_rescale_q(1, av_inv_q(av_make_q(m_inputVideoInfo.fpsN, m_inputVideoInfo.fpsD)), m_Demux.video.stream->time_base);
+        }
+        pSurface->setDuration(duration);
         pSurface->setPicstruct((m_inputVideoInfo.picstruct == RGY_PICSTRUCT_AUTO) ? picstruct_avframe_to_rgy(m_Demux.video.frame) : m_inputVideoInfo.picstruct);
         pSurface->dataList().clear();
 #if 0
