@@ -50,9 +50,20 @@ Debian/Ubuntu系
   - MPEG2
   - VP9
   - AV1
-- HW 2Dアクセラレータによるリサイズフィルタ(librga im2d API使用)
-- HWインタレ解除フィルタ (mpp iep v2 API使用)
-- OpenCLフィルタ
+- VPPフィルタ
+
+  | カテゴリ | フィルタ |
+  |:--|:--|
+  | インタレ解除 | deinterlace (MPP HW), afs, bwdif, yadif, nnedi, rtgmc, kfm |
+  | 逆テレシネ・間引き | rff, ivtc, decimate, mpdecimate |
+  | ノイズ除去 | knn, pmd, nlmeans, hqdn3d, smooth, denoise-dct, fft3d, msmooth, degrain, convolution3d |
+  | リサイズ | resize (HW 2Dアクセラレータ + 様々なアルゴリズム), descale, preprocess |
+  | 輪郭・ディテール強調 | unsharp, edgelevel, warpsharp, maa, cas, msharpen, detailsharpen, enhance |
+  | デハロ・リンギング除去 | dehalo, finedehalo, hqdering, vinverse |
+  | 色調補正 | tweak, curves, softlight, chromashift, colorfix |
+  | 色空間変換 | colorspace |
+  | バンディング低減 | deband |
+  | その他 | delogo, subburn, pad, overlay, rotate, transform, stab, deflicker, deblock |
 - ソースファイルからの音声抽出や音声エンコード
 - mp4,mkv,tsなどの多彩なコンテナに映像・音声をmuxしながら出力
 

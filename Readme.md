@@ -48,9 +48,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
   - MPEG2
   - VP9
   - AV1
-- Resize filter by 2d hw accerelator (via librga im2d API)
-- HW deinterlace filter (via mpp iep v2 API)
-- OpenCL filters
+- VPP (Video Pre-Processing) filters
+
+  | Category | Filters |
+  |:--|:--|
+  | Deinterlace | deinterlace (MPP HW), afs, bwdif, yadif, nnedi, rtgmc, kfm |
+  | Inverse Telecine / Decimation | rff, ivtc, decimate, mpdecimate |
+  | Noise Reduction | knn, pmd, nlmeans, hqdn3d, smooth, denoise-dct, fft3d, msmooth, degrain, convolution3d |
+  | Resize | resize (HW 2D accelerator + various algorithms), descale, preprocess |
+  | Edge / Detail Enhancement | unsharp, edgelevel, warpsharp, maa, cas, msharpen, detailsharpen, enhance |
+  | Dehalo / Deringing | dehalo, finedehalo, hqdering, vinverse |
+  | Color Adjustment | tweak, curves, softlight, chromashift, colorfix |
+  | Color Space | colorspace |
+  | Debanding | deband |
+  | Other | delogo, subburn, pad, overlay, rotate, transform, stab, deflicker, deblock |
 - Supports various formats such as avs, vpy, y4m, and raw
 - Supports demux/muxing using libavformat
 - Supports decode using libavcodec
