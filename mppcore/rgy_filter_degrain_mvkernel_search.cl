@@ -931,19 +931,8 @@ static inline degrain_motion_search_candidate_cost_t degrain_motion_search_final
     const int blockGridY,
     const int step,
     degrain_motion_search_candidate_cost_t best) {
-    const uint verifiedSad = degrain_motion_search_full_block_sad(
-        sourceBlockPixels,
-        referencePlane,
-        pitch,
-        width,
-        height,
-        blockGridX,
-        blockGridY,
-        step,
-        (int)best.pos_x,
-        (int)best.pos_y);
-    best.sad_metric = verifiedSad;
-    best.score_primary = verifiedSad;
+    // 探索時に保持したraw SADを再利用し、勝者位置の同一SAD計算を省略する。
+    best.score_primary = best.sad_metric;
     return degrain_motion_search_apply_flat_region_mv_correction(
         sourceBlockPixels,
         referencePlane,
