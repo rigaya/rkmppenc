@@ -699,6 +699,7 @@ VppLibplaceboShader::VppLibplaceboShader() :
     width(0),
     height(0),
     params(),
+    custom_params(),
     csp((VppLibplaceboInputCSP)FILTER_DEFAULT_LIBPLACEBO_SHADER_CSP),
     resize_algo((RGY_VPP_RESIZE_ALGO)get_cx_value(list_vpp_resize, FILTER_DEFAULT_LIBPLACEBO_SHADER_RESAMPLER_NAME)),
     colorsystem((VppLibplaceboColorsystem)FILTER_DEFAULT_LIBPLACEBO_SHADER_COLORSYSTEM),
@@ -721,6 +722,7 @@ bool VppLibplaceboShader::operator==(const VppLibplaceboShader &x) const {
         && width == x.width
         && height == x.height
         && params == x.params
+        && custom_params == x.custom_params
         && csp == x.csp
         && resize_algo == x.resize_algo
         && colorsystem == x.colorsystem
@@ -746,6 +748,9 @@ tstring VppLibplaceboShader::print() const {
     str += strsprintf(_T("%s, "), shader.c_str());
     for (const auto& param : params) {
         str += strsprintf(_T("%s=%s, "), param.first.c_str(), param.second.c_str());
+    }
+    for (const auto& param : custom_params) {
+        str += strsprintf(_T("custom=%s=%s, "), param.first.c_str(), param.second.c_str());
     }
     if (width > 0 && height > 0) {
         str += strsprintf(_T("res=%dx%d, "), width, height);

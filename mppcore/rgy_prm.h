@@ -1870,6 +1870,7 @@ struct VppLibplaceboShader {
     int width;
     int height;
     std::vector<std::pair<tstring, tstring>> params;
+    std::vector<std::pair<tstring, tstring>> custom_params;
     VppLibplaceboInputCSP csp;
     RGY_VPP_RESIZE_ALGO resize_algo;
     VppLibplaceboColorsystem colorsystem;
