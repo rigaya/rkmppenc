@@ -87,6 +87,8 @@ resource_specs = [
   ['rgy_filter_smooth_cl', '../mppcore/rgy_filter_smooth.cl', 'mppcore_rgy_filter_smooth_cl'],
   ['rgy_filter_subburn_cl', '../mppcore/rgy_filter_subburn.cl', 'mppcore_rgy_filter_subburn_cl'],
   ['rgy_filter_transform_cl', '../mppcore/rgy_filter_transform.cl', 'mppcore_rgy_filter_transform_cl'],
+  ['rgy_filter_lenscorrection_cl', '../mppcore/rgy_filter_lenscorrection.cl', 'mppcore_rgy_filter_lenscorrection_cl'],
+  ['rgy_filter_v360_cl', '../mppcore/rgy_filter_v360.cl', 'mppcore_rgy_filter_v360_cl'],
   ['rgy_filter_tweak_cl', '../mppcore/rgy_filter_tweak.cl', 'mppcore_rgy_filter_tweak_cl'],
   ['rgy_filter_unsharp_cl', '../mppcore/rgy_filter_unsharp.cl', 'mppcore_rgy_filter_unsharp_cl'],
   ['rgy_filter_warpsharp_cl', '../mppcore/rgy_filter_warpsharp.cl', 'mppcore_rgy_filter_warpsharp_cl'],

@@ -288,6 +288,8 @@ static inline degrain_motion_search_search_context_t degrain_motion_search_make_
 static inline uint degrain_motion_search_accumulate_luma_sad_lane(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     const int refPitch,
     const int width,
     const int height,
@@ -306,6 +308,21 @@ static inline uint degrain_motion_search_accumulate_luma_sad_lane(
     const int rowsPerLane = DEGRAIN_BLK_SIZE / lanesPerRow;
     const int firstLaneRow = sadLane / lanesPerRow;
     const int sourceStridePerLane = rowsPerLane * DEGRAIN_BLK_SIZE;
+#if DEGRAIN_PEL == 2 && DEGRAIN_PIXEL_BYTES == 1
+    // 事前計算済みの4位相サブペルプレーンがあれば、半ペル候補も整数座標のプレーン参照になる。
+    // プレーン値は degrain_pixel_load_pel_mirror と同一の補間結果なのでビット一致。
+    const int useSubpelPlanes = (subpelPlaneStride != 0);
+    const int subpelPhase = (motionOffsetX & 1) + ((motionOffsetY & 1) << 1);
+    __global const uchar *fastReferencePlane = useSubpelPlanes
+        ? subpelPlanes + (size_t)subpelPhase * (size_t)subpelPlaneStride
+        : referencePlane;
+    const int useFastPath =
+        (useSubpelPlanes || degrain_motion_search_ref_is_integer_pel(motionOffsetX, motionOffsetY))
+        && referenceX >= 0 && referenceY >= 0
+        && referenceX + DEGRAIN_BLK_SIZE <= width
+        && referenceY + DEGRAIN_BLK_SIZE <= height;
+#else
+    __global const uchar *fastReferencePlane = referencePlane;
     const int useFastPath =
 #if DEGRAIN_PIXEL_BYTES == 1
 #if DEGRAIN_PEL > 1
@@ -317,12 +334,13 @@ static inline uint degrain_motion_search_accumulate_luma_sad_lane(
 #else
         0;
 #endif
+#endif
     int sad = 0;
     if (useFastPath) {
 #if DEGRAIN_PIXEL_BYTES == 1
         __local const uchar *sourcePtr = (__local const uchar *)(sourceBlockPixels + firstLaneRow * DEGRAIN_BLK_SIZE + x);
         const int referenceStridePerLane = rowsPerLane * refPitch;
-        __global const uchar *referencePtr = referencePlane + (referenceY + firstLaneRow) * refPitch + referenceX + x;
+        __global const uchar *referencePtr = fastReferencePlane + (referenceY + firstLaneRow) * refPitch + referenceX + x;
         for (int y = firstLaneRow; y < DEGRAIN_BLK_SIZE; y += rowsPerLane) {
             const uchar4 sourceValue = vload4(0, sourcePtr);
             const uchar4 referenceValue = vload4(0, referencePtr);
@@ -406,6 +424,8 @@ static inline void degrain_motion_search_load_reference_window(
 static inline uint degrain_motion_search_accumulate_luma_sad_lane_cached_ref(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __local const uchar *referenceWindowPixels,
     const int refPitch,
     const int width,
@@ -454,6 +474,8 @@ static inline uint degrain_motion_search_accumulate_luma_sad_lane_cached_ref(
     return degrain_motion_search_accumulate_luma_sad_lane(
         sourceBlockPixels,
         referencePlane,
+        subpelPlanes,
+        subpelPlaneStride,
         refPitch,
         width,
         height,
@@ -656,6 +678,8 @@ static inline int degrain_motion_search_refine_has_valid_candidates(
 static inline void degrain_motion_search_refine_evaluate_candidates(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __local const degrain_motion_search_search_context_t *context,
     __local degrain_motion_search_candidate_cost_t *candidateCosts,
     __local uint *candidateLaneSums,
@@ -687,6 +711,8 @@ static inline void degrain_motion_search_refine_evaluate_candidates(
         sad = degrain_motion_search_accumulate_luma_sad_lane_cached_ref(
             sourceBlockPixels,
             referencePlane,
+            subpelPlanes,
+            subpelPlaneStride,
             referenceWindowPixels,
             refPitch,
             width,
@@ -704,6 +730,8 @@ static inline void degrain_motion_search_refine_evaluate_candidates(
         sad = degrain_motion_search_accumulate_luma_sad_lane(
             sourceBlockPixels,
             referencePlane,
+            subpelPlanes,
+            subpelPlaneStride,
             refPitch,
             width,
             height,
@@ -734,6 +762,8 @@ static inline void degrain_motion_search_refine_evaluate_candidates(
 static inline void degrain_motion_search_refine_prepared_candidates(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __local const degrain_motion_search_search_context_t *context,
     __local degrain_motion_search_candidate_cost_t *candidateCosts,
     __local uint *candidateLaneSums,
@@ -757,7 +787,7 @@ static inline void degrain_motion_search_refine_prepared_candidates(
 #endif
     ) {
     degrain_motion_search_refine_evaluate_candidates(
-        sourceBlockPixels, referencePlane, context, candidateCosts, candidateLaneSums, bestCandidateCost,
+        sourceBlockPixels, referencePlane, subpelPlanes, subpelPlaneStride, context, candidateCosts, candidateLaneSums, bestCandidateCost,
         localThreadId, sadLane, candidateGroupIndex, candidateCount, blockX, blockY, step, refPitch, width, height
 #if DEGRAIN_MOTION_SEARCH_REF_LOCAL_CACHE && DEGRAIN_PIXEL_BYTES == 1
         ,
@@ -772,6 +802,8 @@ static inline void degrain_motion_search_refine_prepared_candidates(
 static inline void degrain_motion_search_refine_hex2(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __local const degrain_motion_search_search_context_t *context,
     __local degrain_motion_search_candidate_cost_t *candidateCosts,
     __local uint *candidateLaneSums,
@@ -795,7 +827,7 @@ static inline void degrain_motion_search_refine_hex2(
     ) {
     degrain_motion_search_refine_prepare_hex_candidates(context, candidateCosts, bestCandidateCost, localThreadId, bestCandidateCost->pos_x, bestCandidateCost->pos_y);
     degrain_motion_search_refine_prepared_candidates(
-        sourceBlockPixels, referencePlane, context, candidateCosts, candidateLaneSums, bestCandidateCost,
+        sourceBlockPixels, referencePlane, subpelPlanes, subpelPlaneStride, context, candidateCosts, candidateLaneSums, bestCandidateCost,
         localThreadId, sadLane, candidateGroupIndex, blockX, blockY, step, refPitch, width, height, 6
 #if DEGRAIN_MOTION_SEARCH_REF_LOCAL_CACHE && DEGRAIN_PIXEL_BYTES == 1
         ,
@@ -810,6 +842,8 @@ static inline void degrain_motion_search_refine_hex2(
 static inline void degrain_motion_search_refine_square8(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __local const degrain_motion_search_search_context_t *context,
     __local degrain_motion_search_candidate_cost_t *candidateCosts,
     __local uint *candidateLaneSums,
@@ -833,7 +867,7 @@ static inline void degrain_motion_search_refine_square8(
     ) {
     degrain_motion_search_refine_prepare_square_candidates(context, candidateCosts, bestCandidateCost, localThreadId, bestCandidateCost->pos_x, bestCandidateCost->pos_y);
     degrain_motion_search_refine_prepared_candidates(
-        sourceBlockPixels, referencePlane, context, candidateCosts, candidateLaneSums, bestCandidateCost,
+        sourceBlockPixels, referencePlane, subpelPlanes, subpelPlaneStride, context, candidateCosts, candidateLaneSums, bestCandidateCost,
         localThreadId, sadLane, candidateGroupIndex, blockX, blockY, step, refPitch, width, height, 8
 #if DEGRAIN_MOTION_SEARCH_REF_LOCAL_CACHE && DEGRAIN_PIXEL_BYTES == 1
         ,
@@ -845,24 +879,73 @@ static inline void degrain_motion_search_refine_square8(
         );
 }
 
-static inline uint degrain_motion_search_source_block_variance(
-    __local const TypePixel *sourceBlockPixels) {
-    long sum = 0;
-    long sumSq = 0;
-    const int count = DEGRAIN_BLK_SIZE * DEGRAIN_BLK_SIZE;
-    for (int i = 0; i < count; i++) {
-        const int value = (int)sourceBlockPixels[i];
-        sum += value;
-        sumSq += (long)value * (long)value;
+// workgroup全体でuintの部分和を総和し、全スレッドへ同一の合計値を返す。
+// 整数加算のみのため加算順序に依らず結果は一意。
+// 内部でbarrierを使うので、workgroup全スレッドから一様に呼び出すこと。
+static inline uint degrain_motion_search_workgroup_reduce_add(
+    __local uint *laneSums,
+    const uint value,
+    const int localThreadId) {
+    laneSums[localThreadId] = value;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int offset = DEGRAIN_MOTION_SEARCH_SEARCH_LOCAL_SIZE >> 1; offset > 0; offset >>= 1) {
+        if (localThreadId < offset) {
+            laneSums[localThreadId] += laneSums[localThreadId + offset];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
     }
+    const uint total = laneSums[0];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return total;
+}
+
+// source blockの分散をworkgroup並列で求める。
+// 内部でbarrierを使うので、workgroup全スレッドから一様に呼び出すこと。
+static inline uint degrain_motion_search_source_block_variance_parallel(
+    __local const TypePixel *sourceBlockPixels,
+    __local uint *laneSums,
+    const int localThreadId) {
+    const int count = DEGRAIN_BLK_SIZE * DEGRAIN_BLK_SIZE;
+    uint partialSum = 0u;
+#if DEGRAIN_PIXEL_BYTES == 1
+    uint partialSumSq = 0u;
+#else
+    // 16bit画素は2乗和の合計が32bitを超えるため、v^2 (32bitに収まる) を上位/下位に分けて総和する
+    uint partialSumSqLo = 0u;
+    uint partialSumSqHi = 0u;
+#endif
+    for (int i = localThreadId; i < count; i += DEGRAIN_MOTION_SEARCH_SEARCH_LOCAL_SIZE) {
+        const uint value = (uint)sourceBlockPixels[i];
+        partialSum += value;
+#if DEGRAIN_PIXEL_BYTES == 1
+        partialSumSq += value * value;
+#else
+        const uint valueSq = value * value;
+        partialSumSqLo += valueSq & 0xffffu;
+        partialSumSqHi += valueSq >> 16;
+#endif
+    }
+    const long sum = (long)degrain_motion_search_workgroup_reduce_add(laneSums, partialSum, localThreadId);
+#if DEGRAIN_PIXEL_BYTES == 1
+    const long sumSq = (long)degrain_motion_search_workgroup_reduce_add(laneSums, partialSumSq, localThreadId);
+#else
+    const long sumSqLo = (long)degrain_motion_search_workgroup_reduce_add(laneSums, partialSumSqLo, localThreadId);
+    const long sumSqHi = (long)degrain_motion_search_workgroup_reduce_add(laneSums, partialSumSqHi, localThreadId);
+    const long sumSq = (sumSqHi << 16) + sumSqLo;
+#endif
     const long mean = sum / count;
     const long varianceNumer = sumSq - mean * sum;
     return (varianceNumer <= 0) ? 0u : (uint)(varianceNumer / count);
 }
 
-static inline uint degrain_motion_search_full_block_sad(
+// full-block SADをworkgroup並列で求める。レーン分割は探索時のSAD計算と同一。
+// 内部でbarrierを使うので、workgroup全スレッドから一様に呼び出すこと。
+static inline uint degrain_motion_search_full_block_sad_parallel(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
+    __local uint *laneSums,
     const int pitch,
     const int width,
     const int height,
@@ -870,12 +953,15 @@ static inline uint degrain_motion_search_full_block_sad(
     const int blockGridY,
     const int step,
     const int motionOffsetX,
-    const int motionOffsetY) {
-    uint sad = 0u;
-    for (int sadLane = 0; sadLane < DEGRAIN_BLK_SIZE; sadLane++) {
-        sad += degrain_motion_search_accumulate_luma_sad_lane(
+    const int motionOffsetY,
+    const int localThreadId) {
+    uint partialSad = 0u;
+    if (localThreadId < DEGRAIN_BLK_SIZE) {
+        partialSad = degrain_motion_search_accumulate_luma_sad_lane(
             sourceBlockPixels,
             referencePlane,
+            subpelPlanes,
+            subpelPlaneStride,
             pitch,
             width,
             height,
@@ -884,65 +970,53 @@ static inline uint degrain_motion_search_full_block_sad(
             step,
             motionOffsetX,
             motionOffsetY,
-            sadLane);
+            localThreadId);
     }
-    return sad;
+    return degrain_motion_search_workgroup_reduce_add(laneSums, partialSad, localThreadId);
 }
 
-static inline degrain_motion_search_candidate_cost_t degrain_motion_search_apply_flat_region_mv_correction(
+// 探索勝者のraw SAD確定とflat領域補正 (分散0のブロックはMVの信頼性がないためzero MVへ寄せる)。
+// 分散はworkgroup内で同一値になるため、flat分岐は全スレッド一様でbarrier安全。
+// 内部でbarrierを使うので、workgroup全スレッドから同一のbestを渡して一様に呼び出すこと。
+static inline degrain_motion_search_candidate_cost_t degrain_motion_search_finalize_candidate_cost_parallel(
     __local const TypePixel *sourceBlockPixels,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
+    __local uint *laneSums,
     const int pitch,
     const int width,
     const int height,
     const int blockGridX,
     const int blockGridY,
     const int step,
-    degrain_motion_search_candidate_cost_t best) {
-    if (degrain_motion_search_source_block_variance(sourceBlockPixels) != 0u) {
-        return best;
-    }
-
-    const uint sadZero = degrain_motion_search_full_block_sad(
-        sourceBlockPixels,
-        referencePlane,
-        pitch,
-        width,
-        height,
-        blockGridX,
-        blockGridY,
-        step,
-        0,
-        0);
-    best.pos_x = 0;
-    best.pos_y = 0;
-    best.sad_metric = sadZero;
-    best.score_primary = sadZero;
-    return best;
-}
-
-static inline degrain_motion_search_candidate_cost_t degrain_motion_search_finalize_candidate_cost(
-    __local const TypePixel *sourceBlockPixels,
-    __global const uchar *referencePlane,
-    const int pitch,
-    const int width,
-    const int height,
-    const int blockGridX,
-    const int blockGridY,
-    const int step,
-    degrain_motion_search_candidate_cost_t best) {
+    degrain_motion_search_candidate_cost_t best,
+    const int localThreadId) {
     // 探索時に保持したraw SADを再利用し、勝者位置の同一SAD計算を省略する。
     best.score_primary = best.sad_metric;
-    return degrain_motion_search_apply_flat_region_mv_correction(
-        sourceBlockPixels,
-        referencePlane,
-        pitch,
-        width,
-        height,
-        blockGridX,
-        blockGridY,
-        step,
-        best);
+
+    if (degrain_motion_search_source_block_variance_parallel(sourceBlockPixels, laneSums, localThreadId) == 0u) {
+        const uint sadZero = degrain_motion_search_full_block_sad_parallel(
+            sourceBlockPixels,
+            referencePlane,
+            subpelPlanes,
+            subpelPlaneStride,
+            laneSums,
+            pitch,
+            width,
+            height,
+            blockGridX,
+            blockGridY,
+            step,
+            0,
+            0,
+            localThreadId);
+        best.pos_x = 0;
+        best.pos_y = 0;
+        best.sad_metric = sadZero;
+        best.score_primary = sadZero;
+    }
+    return best;
 }
 
 static inline degrain_motion_search_candidate_t degrain_motion_search_load_base_candidate(
@@ -972,6 +1046,8 @@ static inline degrain_motion_search_candidate_t degrain_motion_search_load_base_
 static inline void degrain_motion_search_search_one_block(
     __global const uchar *sourcePlane,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __global degrain_mv_internal_t *vectors,
     const int pitch,
     const int width,
@@ -1041,6 +1117,8 @@ static inline void degrain_motion_search_search_one_block(
         sad = degrain_motion_search_accumulate_luma_sad_lane(
             sourceBlockPixels,
             referencePlane,
+            subpelPlanes,
+            subpelPlaneStride,
             pitch,
             width,
             height,
@@ -1089,6 +1167,8 @@ static inline void degrain_motion_search_search_one_block(
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
+// searchparam<=1はsquare8のみ、searchparam>=2はwide6+square8を実行する。
+#if DEGRAIN_SEARCH_PARAM >= 2
 #if DEGRAIN_MOTION_SEARCH_REF_LOCAL_CACHE && DEGRAIN_PIXEL_BYTES == 1
     degrain_motion_search_refine_prepare_hex_candidates(context, candidateCosts, bestCandidateCost, localThreadId, bestCandidateCost->pos_x, bestCandidateCost->pos_y);
     {
@@ -1110,7 +1190,7 @@ static inline void degrain_motion_search_search_one_block(
             degrain_motion_search_load_reference_window(referenceWindowPixels, referencePlane, pitch, width, height, referenceWindowX, referenceWindowY, referenceWindowIsValid, localThreadId, localSize);
         }
         degrain_motion_search_refine_evaluate_candidates(
-            sourceBlockPixels, referencePlane, context, candidateCosts, candidateLaneSums, bestCandidateCost,
+            sourceBlockPixels, referencePlane, subpelPlanes, subpelPlaneStride, context, candidateCosts, candidateLaneSums, bestCandidateCost,
             localThreadId, sadLane, candidateGroupIndex, 6, blockGridX, blockGridY, step, pitch, width, height,
             referenceWindowPixels, referenceWindowX, referenceWindowY, referenceWindowIsValid);
     }
@@ -1118,6 +1198,8 @@ static inline void degrain_motion_search_search_one_block(
     degrain_motion_search_refine_hex2(
         sourceBlockPixels,
         referencePlane,
+        subpelPlanes,
+        subpelPlaneStride,
         context,
         candidateCosts,
         candidateLaneSums,
@@ -1140,6 +1222,7 @@ static inline void degrain_motion_search_search_one_block(
 #endif
         );
 #endif
+#endif // DEGRAIN_SEARCH_PARAM >= 2
 
 #if DEGRAIN_MOTION_SEARCH_REF_LOCAL_CACHE && DEGRAIN_PIXEL_BYTES == 1
     degrain_motion_search_refine_prepare_square_candidates(context, candidateCosts, bestCandidateCost, localThreadId, bestCandidateCost->pos_x, bestCandidateCost->pos_y);
@@ -1162,7 +1245,7 @@ static inline void degrain_motion_search_search_one_block(
             degrain_motion_search_load_reference_window(referenceWindowPixels, referencePlane, pitch, width, height, referenceWindowX, referenceWindowY, referenceWindowIsValid, localThreadId, localSize);
         }
         degrain_motion_search_refine_evaluate_candidates(
-            sourceBlockPixels, referencePlane, context, candidateCosts, candidateLaneSums, bestCandidateCost,
+            sourceBlockPixels, referencePlane, subpelPlanes, subpelPlaneStride, context, candidateCosts, candidateLaneSums, bestCandidateCost,
             localThreadId, sadLane, candidateGroupIndex, 8, blockGridX, blockGridY, step, pitch, width, height,
             referenceWindowPixels, referenceWindowX, referenceWindowY, referenceWindowIsValid);
     }
@@ -1170,6 +1253,8 @@ static inline void degrain_motion_search_search_one_block(
     degrain_motion_search_refine_square8(
         sourceBlockPixels,
         referencePlane,
+        subpelPlanes,
+        subpelPlaneStride,
         context,
         candidateCosts,
         candidateLaneSums,
@@ -1193,25 +1278,32 @@ static inline void degrain_motion_search_search_one_block(
         );
 #endif
 
+    // bestCandidateCostは直前のsquare8 refine末尾のbarrierにより全スレッドから可視
+    const degrain_motion_search_candidate_cost_t finalizedBest = degrain_motion_search_finalize_candidate_cost_parallel(
+        sourceBlockPixels,
+        referencePlane,
+        subpelPlanes,
+        subpelPlaneStride,
+        candidateLaneSums,
+        pitch,
+        width,
+        height,
+        blockGridX,
+        blockGridY,
+        step,
+        *bestCandidateCost,
+        localThreadId);
     if (localThreadId == 0) {
-        *bestCandidateCost = degrain_motion_search_finalize_candidate_cost(
-            sourceBlockPixels,
-            referencePlane,
-            pitch,
-            width,
-            height,
-            blockGridX,
-            blockGridY,
-            step,
-            *bestCandidateCost);
         vectors[degrain_motion_search_vec_current_index(planeBase, blockCount, block)] =
-            degrain_motion_search_candidate_cost_to_saved_vector(*bestCandidateCost);
+            degrain_motion_search_candidate_cost_to_saved_vector(finalizedBest);
     }
 }
 
 __kernel void kernel_degrain_mv_search_parallel(
     __global const uchar *sourcePlane,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __global degrain_mv_internal_t *vectors,
     const int pitch,
     const int width,
@@ -1261,6 +1353,8 @@ __kernel void kernel_degrain_mv_search_parallel(
     degrain_motion_search_search_one_block(
         sourcePlane,
         referencePlane,
+        subpelPlanes,
+        subpelPlaneStride,
         vectors,
         pitch,
         kernelWidth,
@@ -1294,6 +1388,8 @@ __kernel void kernel_degrain_mv_search_parallel(
 __kernel void kernel_degrain_mv_spatial_refine(
     __global const uchar *sourcePlane,
     __global const uchar *referencePlane,
+    __global const uchar *subpelPlanes,
+    const int subpelPlaneStride,
     __global degrain_mv_internal_t *vectors,
     __global const degrain_mv_internal_t *vectorsPrev,
     __global degrain_mv_internal_t *vectorsFinal,
@@ -1400,6 +1496,8 @@ __kernel void kernel_degrain_mv_spatial_refine(
             sad = degrain_motion_search_accumulate_luma_sad_lane(
                 sourceBlockPixels,
                 referencePlane,
+                subpelPlanes,
+                subpelPlaneStride,
                 pitch,
                 kernelWidth,
                 kernelHeight,
@@ -1472,7 +1570,7 @@ __kernel void kernel_degrain_mv_spatial_refine(
             degrain_motion_search_load_reference_window(referenceWindowPixels, referencePlane, pitch, kernelWidth, kernelHeight, referenceWindowX, referenceWindowY, referenceWindowIsValid, localThreadId, localSize);
         }
         degrain_motion_search_refine_evaluate_candidates(
-            sourceBlockPixels, referencePlane, &context, candidateCosts, candidateLaneSums, &bestCandidateCost,
+            sourceBlockPixels, referencePlane, subpelPlanes, subpelPlaneStride, &context, candidateCosts, candidateLaneSums, &bestCandidateCost,
             localThreadId, sadLane, candidateGroupIndex, 8, blockGridX, blockGridY, kernelStep, pitch, kernelWidth, kernelHeight,
             referenceWindowPixels, referenceWindowX, referenceWindowY, referenceWindowIsValid);
     }
@@ -1480,6 +1578,8 @@ __kernel void kernel_degrain_mv_spatial_refine(
     degrain_motion_search_refine_square8(
         sourceBlockPixels,
         referencePlane,
+        subpelPlanes,
+        subpelPlaneStride,
         &context,
         candidateCosts,
         candidateLaneSums,
@@ -1503,19 +1603,24 @@ __kernel void kernel_degrain_mv_spatial_refine(
         );
 #endif
 
+    // bestCandidateCostは直前のrefine末尾のbarrierにより全スレッドから可視
+    const degrain_motion_search_candidate_cost_t finalizedBest = degrain_motion_search_finalize_candidate_cost_parallel(
+        sourceBlockPixels,
+        referencePlane,
+        subpelPlanes,
+        subpelPlaneStride,
+        candidateLaneSums,
+        pitch,
+        kernelWidth,
+        kernelHeight,
+        blockGridX,
+        blockGridY,
+        kernelStep,
+        bestCandidateCost,
+        localThreadId);
     if (localThreadId == 0) {
-        bestCandidateCost = degrain_motion_search_finalize_candidate_cost(
-            sourceBlockPixels,
-            referencePlane,
-            pitch,
-            kernelWidth,
-            kernelHeight,
-            blockGridX,
-            blockGridY,
-            kernelStep,
-            bestCandidateCost);
         vectorsFinal[degrain_motion_search_vec_final_index(finalBase, blockCount, block)] =
-            degrain_motion_search_candidate_cost_to_saved_vector(bestCandidateCost);
+            degrain_motion_search_candidate_cost_to_saved_vector(finalizedBest);
     }
 }
 

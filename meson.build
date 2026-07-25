@@ -569,6 +569,8 @@ mppcore_sources = files(
   'mppcore/rgy_filter_ssim.cpp',
   'mppcore/rgy_filter_subburn.cpp',
   'mppcore/rgy_filter_transform.cpp',
+  'mppcore/rgy_filter_lenscorrection.cpp',
+  'mppcore/rgy_filter_v360.cpp',
   'mppcore/rgy_filter_tweak.cpp',
   'mppcore/rgy_filter_unsharp.cpp',
   'mppcore/rgy_filter_warpsharp.cpp',

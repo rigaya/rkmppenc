@@ -97,12 +97,15 @@ static const auto VPPTYPE_TO_STR = make_array<std::pair<VppType, tstring>>(
     std::make_pair(VppType::CL_KFM,                  _T("kfm")),
     std::make_pair(VppType::CL_YADIF,                _T("yadif")),
     std::make_pair(VppType::CL_DECOMB,               _T("decomb")),
+    std::make_pair(VppType::CL_STDEINT,              _T("stdeint")),
     std::make_pair(VppType::CL_IVTC,                 _T("ivtc")),
     std::make_pair(VppType::CL_DECIMATE,             _T("decimate")),
     std::make_pair(VppType::CL_MPDECIMATE,           _T("mpdecimate")),
     std::make_pair(VppType::CL_RFF,                  _T("rff")),
     std::make_pair(VppType::CL_DELOGO,               _T("delogo")),
     std::make_pair(VppType::CL_TRANSFORM,            _T("transform")),
+    std::make_pair(VppType::CL_LENSCORRECTION,       _T("lenscorrection")),
+    std::make_pair(VppType::CL_V360,                 _T("v360")),
     std::make_pair(VppType::CL_CONVOLUTION3D,        _T("convolution3d")),
     std::make_pair(VppType::CL_DENOISE_KNN,          _T("knn")),
     std::make_pair(VppType::CL_DENOISE_NLMEANS,      _T("nlmeans")),
@@ -746,12 +749,6 @@ bool VppLibplaceboShader::operator!=(const VppLibplaceboShader &x) const {
 tstring VppLibplaceboShader::print() const {
     tstring str;
     str += strsprintf(_T("%s, "), shader.c_str());
-    for (const auto& param : params) {
-        str += strsprintf(_T("%s=%s, "), param.first.c_str(), param.second.c_str());
-    }
-    for (const auto& param : custom_params) {
-        str += strsprintf(_T("custom=%s=%s, "), param.first.c_str(), param.second.c_str());
-    }
     if (width > 0 && height > 0) {
         str += strsprintf(_T("res=%dx%d, "), width, height);
     }
@@ -772,6 +769,12 @@ tstring VppLibplaceboShader::print() const {
     }
     if (sigmoid_slope) {
         str += strsprintf(_T(", sigmoid_slope=%.3f"), *sigmoid_slope);
+    }
+    for (const auto& param : params) {
+        str += strsprintf(_T("%s=%s, "), param.first.c_str(), param.second.c_str());
+    }
+    for (const auto& param : custom_params) {
+        str += strsprintf(_T("custom=%s=%s, "), param.first.c_str(), param.second.c_str());
     }
 
     return str;
@@ -2058,6 +2061,8 @@ VppOnnx::VppOnnx() :
     colorrange(RGY_COLORRANGE_AUTO),
     colorspace(_T("rgb")),
     noise(15),
+    frames(1),
+    maskFile(),
     postResizeW(0),
     postResizeH(0),
     postResizeAlgo(RGY_VPP_RESIZE_AUTO) {
@@ -2077,6 +2082,8 @@ bool VppOnnx::operator==(const VppOnnx &x) const {
         && colorrange == x.colorrange
         && colorspace == x.colorspace
         && noise == x.noise
+        && frames == x.frames
+        && maskFile == x.maskFile
         && postResizeW == x.postResizeW
         && postResizeH == x.postResizeH
         && postResizeAlgo == x.postResizeAlgo;
@@ -2089,6 +2096,10 @@ tstring VppOnnx::print() const {
     tstring s = strsprintf(_T("model=%s"), modelFile.c_str());
 #if ENCODER_NVENC
     s += strsprintf(_T(",provider=%s"), provider.c_str());
+    s += strsprintf(_T(",prec=%s"), precision.c_str());
+    if (!cacheDir.empty()) {
+        s += strsprintf(_T(",cache_dir=%s"), cacheDir.c_str());
+    }
 #elif ENABLE_OPENVINO
     s += strsprintf(_T(",device=%s"), device.c_str());
     s += strsprintf(_T(",interop=%s"), interop.c_str());
@@ -2104,6 +2115,12 @@ tstring VppOnnx::print() const {
     s += strsprintf(_T(",colorrange=%s"), get_cx_desc(list_colorrange, colorrange));
     s += strsprintf(_T(",colorspace=%s"), colorspace.c_str());
     s += strsprintf(_T(",noise=%d"), noise);
+    if (frames > 1) {
+        s += strsprintf(_T(",frames=%d"), frames);
+    }
+    if (!maskFile.empty()) {
+        s += strsprintf(_T(",mask=%s"), maskFile.c_str());
+    }
     if (postResizeW != 0 && postResizeH != 0) {
         s += strsprintf(_T(",out_res=%dx%d"), postResizeW, postResizeH);
         s += strsprintf(_T(",resize=%s"), get_cx_desc(list_vpp_resize, postResizeAlgo));
@@ -2136,6 +2153,44 @@ bool VppRifeOV::operator!=(const VppRifeOV &x) const {
 tstring VppRifeOV::print() const {
     return strsprintf(_T("model=%s,device=%s,multi=%d,colormatrix=%s,colorrange=%s"),
         modelFile.c_str(), device.c_str(), multi, colormatrix.c_str(), colorrange.c_str());
+}
+
+const CX_DESC list_vpp_stdeint_mode[] = {
+    { _T("bob"),    (int)VppStDeintMode::Bob },
+    { _T("normal"), (int)VppStDeintMode::Normal },
+    { nullptr, 0 }
+};
+
+VppStDeint::VppStDeint() :
+    enable(false),
+    modelFile(),
+    device(_T("GPU.0")),
+    provider(_T("auto")),
+    precision(_T("fp32")),
+    mode(VppStDeintMode::Bob),
+    colormatrix(RGY_MATRIX_AUTO),
+    colorrange(RGY_COLORRANGE_AUTO) {
+}
+
+bool VppStDeint::operator==(const VppStDeint& x) const {
+    return enable == x.enable
+        && modelFile == x.modelFile
+        && device == x.device
+        && provider == x.provider
+        && precision == x.precision
+        && mode == x.mode
+        && colormatrix == x.colormatrix
+        && colorrange == x.colorrange;
+}
+
+bool VppStDeint::operator!=(const VppStDeint& x) const {
+    return !(*this == x);
+}
+
+tstring VppStDeint::print() const {
+    return strsprintf(_T("model=%s,device=%s,provider=%s,precision=%s,mode=%s,colormatrix=%s,colorrange=%s"),
+        modelFile.c_str(), device.c_str(), provider.c_str(), precision.c_str(), get_cx_desc(list_vpp_stdeint_mode, (int)mode),
+        get_cx_desc(list_colormatrix, colormatrix), get_cx_desc(list_colorrange, colorrange));
 }
 
 VppAnime4k::VppAnime4k() :
@@ -3653,6 +3708,64 @@ tstring VppTransform::print() const {
 #undef ON_OFF
 }
 
+VppLensCorrection::VppLensCorrection() :
+    enable(false),
+    k1(0.0f),
+    k2(0.0f),
+    cx(0.5f),
+    cy(0.5f) {
+}
+
+bool VppLensCorrection::operator==(const VppLensCorrection &x) const {
+    return enable == x.enable
+        && k1 == x.k1
+        && k2 == x.k2
+        && cx == x.cx
+        && cy == x.cy;
+}
+bool VppLensCorrection::operator!=(const VppLensCorrection &x) const {
+    return !(*this == x);
+}
+
+tstring VppLensCorrection::print() const {
+    return strsprintf(_T("lenscorrection: k1 %.4f, k2 %.4f, cx %.3f, cy %.3f"), k1, k2, cx, cy);
+}
+
+VppV360::VppV360() :
+    enable(false),
+    in_proj((int)VppV360Proj::EQUIRECT),
+    out_proj((int)VppV360Proj::FLAT),
+    yaw(0.0f),
+    pitch(0.0f),
+    roll(0.0f),
+    in_hfov(90.0f),
+    out_hfov(90.0f),
+    w(0),
+    h(0) {
+}
+
+bool VppV360::operator==(const VppV360 &x) const {
+    return enable == x.enable
+        && in_proj == x.in_proj
+        && out_proj == x.out_proj
+        && yaw == x.yaw
+        && pitch == x.pitch
+        && roll == x.roll
+        && in_hfov == x.in_hfov
+        && out_hfov == x.out_hfov
+        && w == x.w
+        && h == x.h;
+}
+bool VppV360::operator!=(const VppV360 &x) const {
+    return !(*this == x);
+}
+
+tstring VppV360::print() const {
+    return strsprintf(_T("v360: in %s, out %s, yaw %.1f, pitch %.1f, roll %.1f, h_fov %.1f, %dx%d"),
+        get_cx_desc(list_vpp_v360_proj, in_proj), get_cx_desc(list_vpp_v360_proj, out_proj),
+        yaw, pitch, roll, out_hfov, w, h);
+}
+
 VppOverlayAlphaKey::VppOverlayAlphaKey() :
     threshold(0.0f),
     tolerance(0.1f),
@@ -3823,6 +3936,7 @@ RGYParamVpp::RGYParamVpp() :
     kfm(),
     yadif(),
     decomb(),
+    stdeint(),
     ivtc(),
     rff(),
     selectevery(),
@@ -3905,6 +4019,7 @@ bool RGYParamVpp::operator==(const RGYParamVpp& x) const {
         && kfm == x.kfm
         && yadif == x.yadif
         && decomb == x.decomb
+        && stdeint == x.stdeint
         && ivtc == x.ivtc
         && rff == x.rff
         && selectevery == x.selectevery
