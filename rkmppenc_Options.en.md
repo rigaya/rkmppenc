@@ -1648,7 +1648,7 @@ Activate Auto Field Shift (AFS) deinterlacer.
 nnedi deinterlacer.
 
 - **parameters**
-  - planes=&lt;string&gt;
+  - planes=&lt;string&gt;  
     Target planes. `all`, or `:`-separated list of `y`, `u`, `v`. Default: `all`.
 
   - field
@@ -1972,13 +1972,13 @@ Inverse telecine for soft-telecine / hard-telecine sources.
       No post process.
     - 2  
       Per-pixel adaptive bob-deinterlace on second-field rows. Only pixels detected as combed are replaced with the vertical average of adjacent first-field rows. First-field rows are always passed through untouched.
-  - nt=&lt;int&gt;  (default: 10)
+  - nt=&lt;int&gt;  (default: 10)  
     Match-metric noise tolerance in 8-bit scale.
-  - cthresh=&lt;int&gt;  (default: 4)
+  - cthresh=&lt;int&gt;  (default: 4)  
     Per-pixel comb threshold used in match scoring in 8-bit scale.
-  - combpel=&lt;int&gt;  (default: 8)
+  - combpel=&lt;int&gt;  (default: 8)  
     Number of combed pixels per block before the block is counted as combed.
-  - scthresh=&lt;float&gt;  (default: 0.0)
+  - scthresh=&lt;float&gt;  (default: 0.0)  
     Scene-change threshold as a fraction of the maximum SAD. `0.0` uses the adaptive threshold.
 
 ### --vpp-decimate [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]  
@@ -2022,7 +2022,7 @@ Please note that [--avsync](./NVEncC_Options.en.md#--avsync-string) vfr is autom
   - max=&lt;int&gt;  (default: 0)  
     Max consecutive frames which can be dropped (if positive).  
     Min interval between dropped frames (if negative).
-  - keep=&lt;int&gt;  (default: 0)
+  - keep=&lt;int&gt;  (default: 0)  
     Number of similar consecutive frames to keep before starting to drop.
     
   - log=&lt;bool&gt;  
@@ -2158,8 +2158,7 @@ Neutralize color casts, normalize lightness, or boost contrast/saturation using 
 - **parameters**
   - sigma=&lt;float&gt;  
     Strength of filter. (default=1.0, 0.0 - 100.0)
-
-  - sigma2=&lt;float&gt; / sigma3=&lt;float&gt; / sigma4=&lt;float&gt;
+  - sigma2=&lt;float&gt; / sigma3=&lt;float&gt; / sigma4=&lt;float&gt;  
     Filter strength for mid-high / mid-low / low frequencies. 0.0 uses the same value as sigma. (default=0.0, 0.0 - 100.0)
   
   - amount=&lt;float&gt;  (default=1.0, 0.0 - 1.0)  
@@ -2190,24 +2189,18 @@ Neutralize color casts, normalize lightness, or boost contrast/saturation using 
     - 4 ... 2 previous + previous + current + next frame
     - -1 ... sharpen/degrid only
 
-  - sharpen=&lt;float&gt;
+  - sharpen=&lt;float&gt;  
     Frequency-domain sharpening strength. 0.0 disables it. (default=0.0, -10.0 - 10.0)
-
-  - scutoff=&lt;float&gt;
+  - scutoff=&lt;float&gt;  
     Sharpen cutoff frequency. (default=0.30, 0.0 - 1.0)
-
-  - svr=&lt;float&gt;
+  - svr=&lt;float&gt;  
     Sharpen vertical ratio. 0.0 disables vertical sharpening. (default=1.00, 0.0 - 10.0)
-
-  - smin=&lt;float&gt; / smax=&lt;float&gt;
+  - smin=&lt;float&gt; / smax=&lt;float&gt;  
     Minimum / maximum sharpening limits. (default=10.0/100.0)
-
-  - degrid=&lt;float&gt;
+  - degrid=&lt;float&gt;  
     Block grid compensation strength. 0.0 disables it, 1.0 applies the standard compensation. (default=0.0, 0.0 - 2.0)
-
-  - signorm=&lt;bool&gt;
+  - signorm=&lt;bool&gt;  
     Interpret sigma/smin/smax as real noise-power units. false keeps the legacy-compatible scale. (default=false)
-
   - prec=&lt;string&gt; (default = auto)
     - auto ... use fp16 if possible (faster)
     - fp32 ... always use fp32
@@ -2312,8 +2305,7 @@ Rather weak noise reduction by modified pmd method, aimed to preserve edge while
   
   - threshold=&lt;float&gt;  (default=100, 0-255)  
     Threshold for edge detection. The smaller the value is, more will be detected as edge, which will be preserved.
-
-  - useexp=&lt;bool&gt;  (default=true)
+  - useexp=&lt;bool&gt;  (default=true)  
     Use exp function for coefficient calculation. If set to false, a simplified formula will be used.
 
 - Examples
@@ -2356,7 +2348,7 @@ Undo upscaling by solving the inverse system for a known upscaler kernel and out
     Bicubic parameters. Default: b=0.0, c=0.5.
   - src_left=&lt;float&gt;, src_top=&lt;float&gt;  
     Source sub-pixel offsets. Default: 0.0.
-  - src_width=&lt;float&gt;, src_height=&lt;float&gt;
+  - src_width=&lt;float&gt;, src_height=&lt;float&gt;  
     Fractional active source width/height for sources whose native size is not integer. Default: 0.0 (off).
   - border_handling=&lt;string&gt;  
     Border extension mode. Default: mirror.
@@ -2639,7 +2631,7 @@ Corrects color cast and white balance.
 Halo removal filter. Applies correction to luma and copies chroma unchanged.
 
 - **Parameters**
-  - mode=&lt;string&gt; (default=legacy, legacy|alpha)
+  - mode=&lt;string&gt; (default=legacy, legacy|alpha)  
     Filter mode. `legacy` keeps the previous implementation, `alpha` uses the high-precision halo detection path.
   - rx=&lt;float&gt; (default=2.00, 0.5 - 10.0)  
     Horizontal halo radius.
@@ -2655,9 +2647,9 @@ Halo removal filter. Applies correction to luma and copies chroma unchanged.
     Sensitivity ramp upper anchor.
   - ss=&lt;float&gt; (default=1.50, 1.0 - 4.0)  
     Supersampling ratio.
-  - search_rade=&lt;int&gt; (default=auto, 1 - 10)
+  - search_rade=&lt;int&gt; (default=auto, 1 - 10)  
     Expand-side search radius for mask generation in `mode=alpha`. If omitted, uses `max(round(max(rx,ry)),3)`.
-  - search_radi=&lt;int&gt; (default=search_rade, 1 - 10)
+  - search_radi=&lt;int&gt; (default=search_rade, 1 - 10)  
     Inpand-side search radius for mask generation in `mode=alpha`. If omitted, uses `search_rade`.
 
 - examples
@@ -2670,7 +2662,7 @@ Halo removal filter. Applies correction to luma and copies chroma unchanged.
 Halo removal filter with a fine-line protection mask. Applies correction to luma and copies chroma unchanged.
 
 - **Parameters**
-  - mode=&lt;string&gt; (default=alpha, legacy|alpha)
+  - mode=&lt;string&gt; (default=alpha, legacy|alpha)  
     Internal dehalo mode.
   - rx=&lt;float&gt; (default=2.0, 0.5 - 10.0)  
     Horizontal halo radius.
@@ -2678,7 +2670,7 @@ Halo removal filter with a fine-line protection mask. Applies correction to luma
     Vertical halo radius.
   - darkstr=&lt;float&gt; (default=1.0, 0.0 - 1.0)  
     Strength for darkening bright halos.
-  - brightstr=&lt;float&gt; (default=1.0, 0.0 - 1.0)
+  - brightstr=&lt;float&gt; (default=1.0, 0.0 - 1.0)  
     Strength for brightening dark halos.
   - lowsens=&lt;int&gt; (default=50, 0 - 100)  
     Lower anchor of the dehalo sensitivity ramp.
@@ -2686,9 +2678,9 @@ Halo removal filter with a fine-line protection mask. Applies correction to luma
     Upper anchor of the dehalo sensitivity ramp.
   - ss=&lt;float&gt; (default=1.5, 1.0 - 4.0)  
     Supersampling ratio.
-  - search_rade=&lt;int&gt; (default=1, 1 - 10)
+  - search_rade=&lt;int&gt; (default=1, 1 - 10)  
     Expand-side search radius for the internal dehalo in `mode=alpha`.
-  - search_radi=&lt;int&gt; (default=search_rade, 1 - 10)
+  - search_radi=&lt;int&gt; (default=search_rade, 1 - 10)  
     Inpand-side search radius for the internal dehalo in `mode=alpha`. If omitted, uses `search_rade`.
   - thmi=&lt;int&gt; (default=80, 0 - 255)  
     Lower threshold of the edge mask.
@@ -2700,9 +2692,9 @@ Halo removal filter with a fine-line protection mask. Applies correction to luma
     Upper threshold of the light edge mask.
   - showmask=&lt;int&gt; (default=0, 0 - 4)  
     Debug mask output. 1=outside, 2=shrink, 3=edges, 4=strong.
-  - excl=&lt;bool&gt; (default=true)
+  - excl=&lt;bool&gt; (default=true)  
     Enable the exclusion zone around strong and nearby light edges.
-  - edgeproc=&lt;float&gt; (default=0.0, 0.0 - 1.0)
+  - edgeproc=&lt;float&gt; (default=0.0, 0.0 - 1.0)  
     Adds the strong edge mask to the outside mask.
   - edge=&lt;string&gt; (default=prewitt)  
     Edge detector, one of prewitt, sobel, scharr, kirsch, laplacian.
@@ -2729,21 +2721,21 @@ DCT ringing reduction filter. Applies correction to luma by default.
     Protect original edge pixels.
   - edge=&lt;string&gt; (default=log)  
     Edge detector, one of log, sobel, prewitt, scharr, kirsch, laplacian.
-  - thr=&lt;int&gt; (default=0)
+  - thr=&lt;int&gt; (default=0)  
     Limit for the change per pixel in 8-bit scale. `0` disables the limit.
-  - elast=&lt;float&gt; (default=2.0, 1.0 - 3.0)
+  - elast=&lt;float&gt; (default=2.0, 1.0 - 3.0)  
     Elastic falloff for `thr`.
-  - darkthr=&lt;int&gt; (default=-1)
+  - darkthr=&lt;int&gt; (default=-1)  
     Separate limit for darkening. `-1` follows `thr`.
-  - minp=&lt;int&gt; (default=0, 0 - 3)
+  - minp=&lt;int&gt; (default=0, 0 - 3)  
     Edge-core inpand iterations excluded from the ring mask.
-  - msmooth=&lt;int&gt; (default=0, 0 - 3)
+  - msmooth=&lt;int&gt; (default=0, 0 - 3)  
     Ring mask smoothing iterations.
-  - drrep=&lt;int&gt; (default=0)
+  - drrep=&lt;int&gt; (default=0)  
     Repair blurred clip. `0`=off, `1`=clamp to the source 3x3 min/max.
-  - sharp=&lt;int&gt; (default=0, 0 - 3)
+  - sharp=&lt;int&gt; (default=0, 0 - 3)  
     Contra-sharpening level. Restores line strength lost to blur without reintroducing ringing.
-  - planes=&lt;string&gt; (default=y)
+  - planes=&lt;string&gt; (default=y)  
     Target planes. `all`, or `:`-separated list of `y`, `u`, `v`.
 
 - examples
@@ -2819,7 +2811,7 @@ Contrast Adaptive Sharpening filter. Applies CAS to luma by default.
     Sharpening strength. Internally maps to the CAS peak value.
   - hdr=&lt;bool&gt; (default=false)  
     Skips the SDR gamma 2.0 luma approximation. Enable this for HDR sources such as PQ or HLG.
-  - chroma=&lt;bool&gt; (default=false)
+  - chroma=&lt;bool&gt; (default=false)  
     Also sharpen chroma planes.
 
 - examples
@@ -2965,7 +2957,7 @@ Apply color adjustments using curves.
   
   - all=&lt;string&gt;  
     Set curve points for r,g,b when not specified. Will override preset settings.
-  - interp=&lt;string&gt; (default=spline)
+  - interp=&lt;string&gt; (default=spline)  
     Interpolation method. `spline` uses natural cubic spline, `pchip` uses monotone cubic interpolation that avoids overshoot between points.
 
 - Examples
@@ -2990,9 +2982,8 @@ Apply color adjustments using curves.
   - coring=&lt;bool&gt;  (default=false)
 
   - start_hue=&lt;float&gt; (default=0.0, 0.0 - 360.0)
-  - end_hue=&lt;float&gt; (default=360.0, 0.0 - 360.0)
+  - end_hue=&lt;float&gt; (default=360.0, 0.0 - 360.0)  
     Limit hue/saturation adjustment to the hue angle range.
-
   - swapuv=&lt;bool&gt;  (default=false)
 
   - y_offset=&lt;float&gt; (default=0.0, -1.0 - 1.0)  
