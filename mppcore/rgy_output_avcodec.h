@@ -146,6 +146,9 @@ struct AVMuxVideo {
     int64_t               inputFirstKeyPts;     //入力映像の最初のpts
     AVRational            bitstreamTimebase;    //エンコーダのtimebase
     AVMuxTimestamp        timestampList;        //エンコーダから渡されたtimestampリスト
+    int64_t               lastPts;              //最後にmuxした映像pts
+    int64_t               lastDts;              //最後にmuxした映像dts
+    int64_t               lastDuration;         //最後にmuxした映像duration
     int                   fpsBaseNextDts;       //出力映像のfpsベースでのdts (API v1.6以下でdtsが計算されない場合に使用する)
     std::unique_ptr<FILE, fp_deleter> fpTsLogFile; //mux timestampログファイル
     RGYBitstream          hdrBitstream;         //追加のsei nal

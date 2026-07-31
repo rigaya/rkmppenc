@@ -190,6 +190,9 @@ AVMuxVideo::AVMuxVideo() :
     inputFirstKeyPts(0),
     bitstreamTimebase(av_make_q(0, 0)),
     timestampList(),
+    lastPts(AV_NOPTS_VALUE),
+    lastDts(AV_NOPTS_VALUE),
+    lastDuration(0),
     fpsBaseNextDts(0),
     fpTsLogFile(),
     hdrBitstream(),
@@ -1321,6 +1324,9 @@ RGY_ERR RGYOutputAvcodec::InitVideo(const VideoInfo *videoOutputInfo, const Avco
     }
 
     m_Mux.video.timestampList.clear();
+    m_Mux.video.lastPts = AV_NOPTS_VALUE;
+    m_Mux.video.lastDts = AV_NOPTS_VALUE;
+    m_Mux.video.lastDuration = 0;
 
     if (prm->hdrMetadataIn != nullptr && prm->hdrMetadataIn->getprm().hasPrmSet()) {
         if (videoOutputInfo->codec == RGY_CODEC_HEVC) {
@@ -3298,15 +3304,43 @@ RGY_ERR RGYOutputAvcodec::WriteNextFrameInternalOneFrame(RGYBitstream *bitstream
 #else
     pkt->duration = bitstream->duration();
 #endif
-    pkt->pts = bitstream->pts();
+#if ENCODER_QSV
+    const bool bitstreamDurationInvalid = pkt->duration <= 0 || pkt->duration == AV_NOPTS_VALUE || pkt->duration == MFX_TIMESTAMP_UNKNOWN;
+#else
+    const bool bitstreamDurationInvalid = pkt->duration <= 0 || pkt->duration == AV_NOPTS_VALUE;
+#endif
+    const auto bitstreamPts = bitstream->pts();
+#if ENCODER_QSV
+    const bool bitstreamPtsUnknown = (int64_t)bitstreamPts == AV_NOPTS_VALUE || bitstreamPts == MFX_TIMESTAMP_UNKNOWN;
+#else
+    const bool bitstreamPtsUnknown = (int64_t)bitstreamPts == AV_NOPTS_VALUE;
+#endif
+    pkt->pts = (bitstreamPtsUnknown) ? AV_NOPTS_VALUE : bitstreamPts;
 #if ENCODER_QSV
     //QSVエンコーダだけは、HW_NATIVE_TIMEBASEで送られてくる
     pkt->duration = av_rescale_q(pkt->duration, HW_NATIVE_TIMEBASE, m_Mux.video.bitstreamTimebase);
-    pkt->pts = av_rescale_q(pkt->pts, HW_NATIVE_TIMEBASE, m_Mux.video.bitstreamTimebase);
+    if (!bitstreamPtsUnknown) {
+        pkt->pts = av_rescale_q(pkt->pts, HW_NATIVE_TIMEBASE, m_Mux.video.bitstreamTimebase);
+    }
 #endif
     if (av_cmp_q(m_Mux.video.bitstreamTimebase, streamTimebase) != 0) {
         pkt->duration = av_rescale_q(pkt->duration, m_Mux.video.bitstreamTimebase, streamTimebase);
-        pkt->pts = av_rescale_q(pkt->pts, m_Mux.video.bitstreamTimebase, streamTimebase);
+        if (!bitstreamPtsUnknown) {
+            pkt->pts = av_rescale_q(pkt->pts, m_Mux.video.bitstreamTimebase, streamTimebase);
+        }
+    }
+    if (bitstreamDurationInvalid || pkt->duration <= 0 || pkt->duration > std::numeric_limits<int64_t>::max() / 1024) {
+        pkt->duration = (m_Mux.video.lastDuration > 0)
+            ? m_Mux.video.lastDuration
+            : std::max<int64_t>(1, av_rescale_q(1, av_inv_q(m_Mux.video.outputFps), streamTimebase));
+    }
+    if (bitstreamPtsUnknown) {
+        if (m_Mux.video.lastPts == AV_NOPTS_VALUE) {
+            AddMessage(RGY_LOG_ERROR, _T("Failed to determine timestamp for the first video frame.\n"));
+            return RGY_ERR_INVALID_PARAM;
+        }
+        pkt->pts = m_Mux.video.lastPts + m_Mux.video.lastDuration;
+        AddMessage(RGY_LOG_WARN, _T("Video packet has no timestamp, using %lld.\n"), pkt->pts);
     }
     if (false && !m_Mux.video.dtsUnavailable) {
         pkt->dts = av_rescale_q(bitstream->dts(), m_Mux.video.bitstreamTimebase, streamTimebase);
@@ -3314,12 +3348,23 @@ RGY_ERR RGYOutputAvcodec::WriteNextFrameInternalOneFrame(RGYBitstream *bitstream
         m_Mux.video.timestampList.add(pkt->pts);
         pkt->dts = m_Mux.video.timestampList.get_min_pts();
     }
+    if (m_Mux.video.lastDts != AV_NOPTS_VALUE && pkt->dts <= m_Mux.video.lastDts) {
+        const auto origDts = pkt->dts;
+        pkt->dts = m_Mux.video.lastDts + 1;
+        AddMessage(RGY_LOG_WARN, _T("Video packet dts is not monotonic, changing %lld -> %lld.\n"), origDts, pkt->dts);
+    }
+    if (pkt->pts < pkt->dts) {
+        pkt->pts = pkt->dts;
+    }
     if (WRITE_PTS_DEBUG) {
         AddMessage(RGY_LOG_WARN, _T("video pts %3d, %12s, dts %lld, pts, %lld (%d/%d) [%s]\n"),
             pkt->stream_index, char_to_tstring(avcodec_get_name(m_Mux.format.formatCtx->streams[pkt->stream_index]->codecpar->codec_id)).c_str(),
             pkt->dts, pkt->pts, streamTimebase.num, streamTimebase.den, getTimestampString(pkt->pts, streamTimebase).c_str());
     }
     const auto pts = pkt->pts, dts = pkt->dts, duration = pkt->duration;
+    m_Mux.video.lastPts = pkt->pts;
+    m_Mux.video.lastDts = pkt->dts;
+    m_Mux.video.lastDuration = pkt->duration;
     *writtenDts = av_rescale_q(pkt->dts, streamTimebase, QUEUE_DTS_TIMEBASE);
     const auto ret_write = av_interleaved_write_frame(m_Mux.format.formatCtx, pkt);
     if (ret_write != 0) {
