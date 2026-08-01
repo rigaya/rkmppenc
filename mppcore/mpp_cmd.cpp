@@ -647,7 +647,7 @@ int parse_cmd(MPPParam *pParams, int nArgNum, const TCHAR **strInput, bool ignor
     if (argsData.cachedlevel.length() > 0) {
         const auto desc = get_level_list(pParams->codec);
         if (is_list_empty(desc)) {
-            _ftprintf(stderr, _T("--level unsupported for %s encoding!\n"), CodecToStr(pParams->codec).c_str());
+            print_cmd_error_msg(strsprintf(_T("--level unsupported for %s encoding!"), CodecToStr(pParams->codec).c_str()).c_str());
             return 1;
         }
         int value = 0;
@@ -687,7 +687,7 @@ int parse_cmd(MPPParam *pParams, int nArgNum, const TCHAR **strInput, bool ignor
     if (argsData.cachedprofile.length() > 0) {
         const auto desc = get_profile_list(pParams->codec);
         if (is_list_empty(desc)) {
-            _ftprintf(stderr, _T("--profile unsupported for %s encoding!\n"), CodecToStr(pParams->codec).c_str());
+            print_cmd_error_msg(strsprintf(_T("--profile unsupported for %s encoding!"), CodecToStr(pParams->codec).c_str()).c_str());
             return 1;
         }
         int value = 0;
@@ -705,7 +705,7 @@ int parse_cmd(MPPParam *pParams, int nArgNum, const TCHAR **strInput, bool ignor
     if (argsData.cachedtier.length() > 0) {
         const auto desc = get_tier_list(pParams->codec);
         if (is_list_empty(desc)) {
-            _ftprintf(stderr, _T("--tier unsupported for %s encoding!\n"), CodecToStr(pParams->codec).c_str());
+            print_cmd_error_msg(strsprintf(_T("--tier unsupported for %s encoding!"), CodecToStr(pParams->codec).c_str()).c_str());
             return 1;
         }
         int value = 0;

@@ -91,6 +91,7 @@ jobs:
           docker exec build_pkg ldd ./build/rkmppenc
           docker exec build_pkg ./build/rkmppenc --version
           docker exec build_pkg ./check_options.py -exe ./build/rkmppenc
+          docker exec build_pkg ./build/rkmppenc --check-cmd-parse
           docker exec build_pkg cp ./build/rkmppenc ./rkmppenc
           docker exec build_pkg ./build_${{ env.PKG_TYPE }}.sh
           docker exec build_pkg bash -lc "cp -v ./*.${{ env.PKG_TYPE }} /output/"
