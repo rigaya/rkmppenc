@@ -54,6 +54,9 @@ const char *get_encoder_version();
 #define ENCODER_MPP    1
 #define CLFILTERS_AUF  0
 
+// 入力ファイル途中での解像度変更に追従する (0なら検出して明示エラーとする)
+#define ENABLE_INPUT_RESOLUTION_CHANGE 0
+
 #define AV1_TIMESTAMP_OVERRIDE 1
 #define ENABLE_AVOID_IDLE_CLOCK 0
 #define ENABLE_VPP_SMOOTH_QP_FRAME 0
