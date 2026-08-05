@@ -737,6 +737,8 @@ protected:
     RGYInput *m_input;
     RGYBitstream m_decInputBitstream;
     MppBufferGroup m_frameGrp;
+    int m_initialWidth;
+    int m_initialHeight;
     bool m_adjustTimestamp;
     int64_t m_firstBitstreamTimestamp; // bitstreamの最初のtimestamp
     int64_t m_firstFrameTimestamp; // frameの最初のtimestamp
@@ -751,7 +753,7 @@ protected:
 public:
     PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, bool adjustTimestamp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
-        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_adjustTimestamp(adjustTimestamp),
+        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_initialWidth(0), m_initialHeight(0), m_adjustTimestamp(adjustTimestamp),
         m_firstBitstreamTimestamp(AV_NOPTS_VALUE), m_firstFrameTimestamp(AV_NOPTS_VALUE), m_queueTimestamp(), m_queueTimestampWrap(), m_queueHDR10plusMetadata(), m_dataFlag(),
         m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_abort(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
@@ -861,6 +863,8 @@ public:
         const int buf_size = mpp_frame_get_buf_size(mppframe);
         if (mpp_frame_get_info_change(mppframe)) {
             if (m_frameGrp == nullptr) {
+                m_initialWidth = width;
+                m_initialHeight = height;
                 ret = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_ION));
                 if (ret != RGY_ERR_NONE) {
                     PrintMes(RGY_LOG_ERROR, _T("Get mpp buffer group failed : %s\n"), get_err_mes(ret));
@@ -874,6 +878,19 @@ public:
                     return ret;
                 }
             } else {
+                const bool resolutionChanged = width != m_initialWidth || height != m_initialHeight;
+                if (resolutionChanged) {
+#if ENABLE_INPUT_RESOLUTION_CHANGE
+                    PrintMes(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; updating MPP decoder output.\n"),
+                        m_initialWidth, m_initialHeight, width, height);
+#else
+                    PrintMes(RGY_LOG_ERROR, _T("input resolution changed from %dx%d to %dx%d, which is not supported yet.\n"),
+                        m_initialWidth, m_initialHeight, width, height);
+                    PrintMes(RGY_LOG_ERROR, _T("  Please split the input file at the resolution change point.\n"));
+                    mpp_frame_deinit(&mppframe);
+                    return RGY_ERR_UNSUPPORTED;
+#endif
+                }
                 // If old buffer group exist clear it
                 ret = err_to_rgy(mpp_buffer_group_clear(m_frameGrp));
                 if (ret != RGY_ERR_NONE) {
