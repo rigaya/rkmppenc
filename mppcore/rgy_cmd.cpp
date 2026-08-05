@@ -12061,6 +12061,22 @@ int parse_one_common_option(const TCHAR *option_name, const TCHAR *strInput[], i
         }
         return 0;
     }
+    if (IS_OPTION("adapt-resolution")) {
+        common->adaptResolution.enable = true;
+        if (i + 1 < nArgNum && strInput[i + 1][0] != _T('-')) {
+            i++;
+            int a[2] = { 0 };
+            if (   2 == _stscanf_s(strInput[i], _T("%dx%d"), &a[0], &a[1])
+                || 2 == _stscanf_s(strInput[i], _T("%d:%d"), &a[0], &a[1])) {
+                common->adaptResolution.maxWidth  = a[0];
+                common->adaptResolution.maxHeight = a[1];
+            } else {
+                print_cmd_error_invalid_value(option_name, strInput[i]);
+                return 1;
+            }
+        }
+        return 0;
+    }
 #if !ENCODER_MPP
     if (IS_OPTION("ssim")) {
         common->metric.ssim = true;
@@ -15454,6 +15470,12 @@ tstring gen_cmd(const RGYParamCommon *param, const RGYParamCommon *defaultPrm, b
     }
 
     OPT_LST(_T("--input-hevc-bsf"), hevcbsf, list_hevc_bsf_mode);
+    if (param->adaptResolution != defaultPrm->adaptResolution) {
+        cmd << _T(" --adapt-resolution");
+        if (param->adaptResolution.maxWidth > 0 && param->adaptResolution.maxHeight > 0) {
+            cmd << _T(" ") << param->adaptResolution.maxWidth << _T("x") << param->adaptResolution.maxHeight;
+        }
+    }
     OPT_STR_PATH(_T("--tcfile-in"), tcfileIn);
     if (param->timebase != defaultPrm->timebase) {
         cmd << _T(" --timebase ") << param->timebase.n() << _T("/") << param->timebase.d();
@@ -15963,7 +15985,9 @@ tstring gen_cmd_help_common() {
         _T("\n")
         _T("   --input-hevc-bsf <string>    switch hevc bitstream filter used for hw decoder input\n")
         _T("                                 - internal   ... use internal implementation (default)\n")
-        _T("                                 - libavcodec ... use hevc_mp4toannexb bsf\n"),
+        _T("                                 - libavcodec ... use hevc_mp4toannexb bsf\n")
+        _T("   --adapt-resolution [<int>x<int>]\n")
+        _T("                                follow input resolution changes\n"),
         DEFAULT_IGNORE_DECODE_ERROR);
     str += _T("\n")
         _T("   --input-pixel-format <string>  set input pixel format for avdevice\n")

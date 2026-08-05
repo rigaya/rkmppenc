@@ -4419,8 +4419,25 @@ RGYParamCommon::RGYParamCommon() :
     tcfileIn(),
     timebase({ 0, 0 }),
     hevcbsf(RGYHEVCBsf::INTERNAL),
+    adaptResolution(),
     metric() {
 
+}
+
+RGYParamAdaptResolution::RGYParamAdaptResolution() :
+    enable(false),
+    maxWidth(0),
+    maxHeight(0) {
+}
+
+bool RGYParamAdaptResolution::operator==(const RGYParamAdaptResolution &x) const {
+    return enable == x.enable
+        && maxWidth == x.maxWidth
+        && maxHeight == x.maxHeight;
+}
+
+bool RGYParamAdaptResolution::operator!=(const RGYParamAdaptResolution &x) const {
+    return !(*this == x);
 }
 
 RGYParamAvoidIdleClock::RGYParamAvoidIdleClock() :

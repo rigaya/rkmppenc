@@ -1018,6 +1018,14 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
             return RGY_ERR_INVALID_VIDEO_PARAM;
         }
     }
+    if (inputParam->common.adaptResolution.enable && inputParam->input.bitdepth > 8) {
+        PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution is not supported with 10-bit input.\n"));
+        return RGY_ERR_UNSUPPORTED;
+    }
+    if (inputParam->common.adaptResolution.enable && resizeRequired == RGY_VPP_RESIZE_TYPE_OPENCL) {
+        PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution is not supported with OpenCL resize.\n"));
+        return RGY_ERR_UNSUPPORTED;
+    }
     //picStructの設定
     //m_stPicStruct = picstruct_rgy_to_enc(inputParam->input.picstruct);
     //if (inputParam->vpp.deinterlace != cudaVideoDeinterlaceMode_Weave) {
@@ -1279,6 +1287,8 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.subburn.size()>0)     filterPipeline.push_back(VppType::CL_SUBBURN);
     if (     resizeRequired == RGY_VPP_RESIZE_TYPE_OPENCL) filterPipeline.push_back(VppType::CL_RESIZE);
     else if (resizeRequired != RGY_VPP_RESIZE_TYPE_NONE)   filterPipeline.push_back(VppType::RGA_RESIZE);
+    // 解像度変更時にフィルタブロックを増やせないため、等倍でも正規化用のRGA resizeを確保しておく。
+    else if (inputParam->common.adaptResolution.enable)    filterPipeline.push_back(VppType::RGA_RESIZE);
     if (inputParam->vpp.unsharp.enable)    filterPipeline.push_back(VppType::CL_UNSHARP);
     if (inputParam->vpp.chromashift.enable) filterPipeline.push_back(VppType::CL_CHROMASHIFT);
     if (inputParam->vpp.deblock.enable)    filterPipeline.push_back(VppType::CL_DEBLOCK);

@@ -4173,6 +4173,16 @@ struct RGYDebugLogFile {
     tstring getFilename(const tstring& outputFilename, const tstring& defaultAppendix) const;
 };
 
+struct RGYParamAdaptResolution {
+    bool enable;      // --adapt-resolution が指定されたか
+    int maxWidth;     // 0 = 自動（コンテナ宣言解像度から決定）
+    int maxHeight;    // 0 = 自動
+
+    RGYParamAdaptResolution();
+    bool operator==(const RGYParamAdaptResolution &x) const;
+    bool operator!=(const RGYParamAdaptResolution &x) const;
+};
+
 struct RGYParamInput {
     RGYResizeResMode resizeResMode;
     bool ignoreSAR;
@@ -4251,6 +4261,7 @@ struct RGYParamCommon {
     tstring tcfileIn;
     rgy_rational<int> timebase;
     RGYHEVCBsf hevcbsf;
+    RGYParamAdaptResolution adaptResolution;
 
     RGYVideoQualityMetric metric;
 
