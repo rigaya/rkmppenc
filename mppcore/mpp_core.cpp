@@ -1057,6 +1057,22 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     m_vpFilters.clear();
 
     std::vector<VppType> filterPipeline = InitFiltersCreateVppList(inputParam, cspConvRequired, cropRequired, resizeRequired);
+    if (inputParam->common.adaptResolution.enable) {
+        const bool hasIEPFilter = std::any_of(filterPipeline.begin(), filterPipeline.end(), [](const VppType type) {
+            return getVppFilterType(type) == VppFilterType::FILTER_IEP;
+        });
+        if (hasIEPFilter) {
+            PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution with IEP filters is not supported yet.\n"));
+            return RGY_ERR_UNSUPPORTED;
+        }
+        const bool hasOpenCLFilter = std::any_of(filterPipeline.begin(), filterPipeline.end(), [](const VppType type) {
+            return getVppFilterType(type) == VppFilterType::FILTER_OPENCL;
+        });
+        if (hasOpenCLFilter) {
+            PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution with OpenCL filters is not supported yet.\n"));
+            return RGY_ERR_UNSUPPORTED;
+        }
+    }
     if (filterPipeline.size() == 0) {
         PrintMes(RGY_LOG_DEBUG, _T("No filters required.\n"));
         return RGY_ERR_NONE;
@@ -3227,8 +3243,10 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
     m_pipelineTasks.clear();
 
     if (m_decoder) {
-        m_pipelineTasks.push_back(std::make_unique<PipelineTaskMPPDecode>(m_decoder.get(), 1, m_pFileReader.get(),
-            m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, m_pLog));
+        auto taskDecode = std::make_unique<PipelineTaskMPPDecode>(m_decoder.get(), 1, m_pFileReader.get(),
+            m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, m_pLog);
+        taskDecode->setAdaptResolution(prm->common.adaptResolution.enable);
+        m_pipelineTasks.push_back(std::move(taskDecode));
     } else {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(0, m_pFileReader.get(), m_cl, m_pLog));
     }

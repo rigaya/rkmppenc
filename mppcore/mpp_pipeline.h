@@ -47,6 +47,7 @@
 #include "rgy_output_avcodec.h"
 #include "rgy_opencl.h"
 #include "rgy_filter.h"
+#include "rgy_filter_resize.h"
 #include "rgy_filter_ssim.h"
 #include "rgy_thread.h"
 #include "rgy_timecode.h"
@@ -739,6 +740,7 @@ protected:
     MppBufferGroup m_frameGrp;
     int m_initialWidth;
     int m_initialHeight;
+    bool m_adaptResolution;
     bool m_adjustTimestamp;
     int64_t m_firstBitstreamTimestamp; // bitstreamの最初のtimestamp
     int64_t m_firstFrameTimestamp; // frameの最初のtimestamp
@@ -753,7 +755,7 @@ protected:
 public:
     PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, bool adjustTimestamp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
-        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_initialWidth(0), m_initialHeight(0), m_adjustTimestamp(adjustTimestamp),
+        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_initialWidth(0), m_initialHeight(0), m_adaptResolution(false), m_adjustTimestamp(adjustTimestamp),
         m_firstBitstreamTimestamp(AV_NOPTS_VALUE), m_firstFrameTimestamp(AV_NOPTS_VALUE), m_queueTimestamp(), m_queueTimestampWrap(), m_queueHDR10plusMetadata(), m_dataFlag(),
         m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_abort(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
@@ -768,6 +770,7 @@ public:
         m_decInputBitstream.clear();
     };
     void setDec(MPPContext *dec) { m_dec = dec; };
+    void setAdaptResolution(bool enable) { m_adaptResolution = enable; };
     virtual bool abort() { m_abort = true; return true; }; // 中断指示を受け取ったらtrueを返す
 
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
@@ -862,6 +865,7 @@ public:
         const int stride_h = mpp_frame_get_ver_stride(mppframe);
         const int buf_size = mpp_frame_get_buf_size(mppframe);
         if (mpp_frame_get_info_change(mppframe)) {
+            bool resolutionChanged = false;
             if (m_frameGrp == nullptr) {
                 m_initialWidth = width;
                 m_initialHeight = height;
@@ -878,18 +882,18 @@ public:
                     return ret;
                 }
             } else {
-                const bool resolutionChanged = width != m_initialWidth || height != m_initialHeight;
+                resolutionChanged = width != m_initialWidth || height != m_initialHeight;
                 if (resolutionChanged) {
-#if ENABLE_INPUT_RESOLUTION_CHANGE
-                    PrintMes(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; updating MPP decoder output.\n"),
-                        m_initialWidth, m_initialHeight, width, height);
-#else
-                    PrintMes(RGY_LOG_ERROR, _T("input resolution changed from %dx%d to %dx%d, which is not supported yet.\n"),
-                        m_initialWidth, m_initialHeight, width, height);
-                    PrintMes(RGY_LOG_ERROR, _T("  Please split the input file at the resolution change point.\n"));
-                    mpp_frame_deinit(&mppframe);
-                    return RGY_ERR_UNSUPPORTED;
-#endif
+                    if (m_adaptResolution) {
+                        PrintMes(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; updating MPP decoder output.\n"),
+                            m_initialWidth, m_initialHeight, width, height);
+                    } else {
+                        PrintMes(RGY_LOG_ERROR, _T("input resolution changed from %dx%d to %dx%d, which is not supported yet.\n"),
+                            m_initialWidth, m_initialHeight, width, height);
+                        PrintMes(RGY_LOG_ERROR, _T("  Please split the input file at the resolution change point.\n"));
+                        mpp_frame_deinit(&mppframe);
+                        return RGY_ERR_UNSUPPORTED;
+                    }
                 }
                 // If old buffer group exist clear it
                 ret = err_to_rgy(mpp_buffer_group_clear(m_frameGrp));
@@ -912,6 +916,10 @@ public:
             if (ret != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("Info change ready failed : %s\n"), get_err_mes(ret));
                 return ret;
+            }
+            if (resolutionChanged) {
+                m_initialWidth = width;
+                m_initialHeight = height;
             }
         } else if (mpp_frame_get_discard(mppframe)) {
             PrintMes(RGY_LOG_ERROR, _T("Received a discard frame.\n"));
@@ -1996,6 +2004,82 @@ protected:
     int m_vppOutFrames;
     std::unordered_map<int64_t, std::vector<std::shared_ptr<RGYFrameData>>> m_metadatalist;
     std::deque<std::unique_ptr<PipelineTaskOutput>> m_prevInputFrame; //前回投入されたフレーム、完了通知を待ってから解放するため、参照を保持する
+
+    RGY_ERR updateFilterParamsForResolutionChange(const RGYFrameInfo& inputFrame) {
+        if (m_vpFilters.empty()) {
+            PrintMes(RGY_LOG_ERROR, _T("RGA filter block is empty.\n"));
+            return RGY_ERR_UNDEFINED_BEHAVIOR;
+        }
+        const auto firstParam = m_vpFilters.front()->GetFilterParam();
+        if (firstParam == nullptr) {
+            PrintMes(RGY_LOG_ERROR, _T("Invalid RGA filter parameter.\n"));
+            return RGY_ERR_NULL_PTR;
+        }
+        if (inputFrame.width == firstParam->frameIn.width && inputFrame.height == firstParam->frameIn.height) {
+            return RGY_ERR_NONE;
+        }
+        PrintMes(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; updating RGA filter parameters.\n"),
+            firstParam->frameIn.width, firstParam->frameIn.height, inputFrame.width, inputFrame.height);
+
+        int currentWidth = inputFrame.width;
+        int currentHeight = inputFrame.height;
+        for (size_t i = 0; i < m_vpFilters.size(); i++) {
+            auto& filter = m_vpFilters[i];
+            RGY_ERR err = RGY_ERR_NONE;
+            if (dynamic_cast<RGAFilterCrop *>(filter.get()) != nullptr) {
+                const auto currentParam = dynamic_cast<const RGYFilterParamCrop *>(filter->GetFilterParam());
+                if (currentParam == nullptr) {
+                    PrintMes(RGY_LOG_ERROR, _T("Invalid crop filter parameter.\n"));
+                    return RGY_ERR_INVALID_PARAM;
+                }
+                auto updatedParam = std::make_shared<RGYFilterParamCrop>(*currentParam);
+                updatedParam->frameIn.width = currentWidth;
+                updatedParam->frameIn.height = currentHeight;
+                if (updatedParam->crop.e.left + updatedParam->crop.e.right >= currentWidth
+                    || updatedParam->crop.e.up + updatedParam->crop.e.bottom >= currentHeight) {
+                    PrintMes(RGY_LOG_ERROR, _T("input crop is too large for the changed resolution %dx%d.\n"),
+                        currentWidth, currentHeight);
+                    return RGY_ERR_INVALID_PARAM;
+                }
+                updatedParam->frameOut.width = currentWidth - updatedParam->crop.e.left - updatedParam->crop.e.right;
+                updatedParam->frameOut.height = currentHeight - updatedParam->crop.e.up - updatedParam->crop.e.bottom;
+                currentWidth = updatedParam->frameOut.width;
+                currentHeight = updatedParam->frameOut.height;
+                err = filter->init(updatedParam, m_log);
+            } else if (dynamic_cast<RGAFilterCspConv *>(filter.get()) != nullptr) {
+                const auto currentParam = dynamic_cast<const RGYFilterParamCrop *>(filter->GetFilterParam());
+                if (currentParam == nullptr) {
+                    PrintMes(RGY_LOG_ERROR, _T("Invalid colorspace conversion filter parameter.\n"));
+                    return RGY_ERR_INVALID_PARAM;
+                }
+                auto updatedParam = std::make_shared<RGYFilterParamCrop>(*currentParam);
+                updatedParam->frameIn.width = currentWidth;
+                updatedParam->frameIn.height = currentHeight;
+                updatedParam->frameOut.width = currentWidth;
+                updatedParam->frameOut.height = currentHeight;
+                err = filter->init(updatedParam, m_log);
+            } else if (dynamic_cast<RGAFilterResize *>(filter.get()) != nullptr) {
+                const auto currentParam = dynamic_cast<const RGYFilterParamResize *>(filter->GetFilterParam());
+                if (currentParam == nullptr || i + 1 != m_vpFilters.size()) {
+                    PrintMes(RGY_LOG_ERROR, _T("Invalid normalization resize filter configuration.\n"));
+                    return RGY_ERR_UNSUPPORTED;
+                }
+                auto updatedParam = std::make_shared<RGYFilterParamResize>(*currentParam);
+                updatedParam->frameIn.width = currentWidth;
+                updatedParam->frameIn.height = currentHeight;
+                // 正規化 resize の出力解像度は初期値に固定する。
+                err = filter->init(updatedParam, m_log);
+            } else {
+                PrintMes(RGY_LOG_ERROR, _T("Unsupported RGA filter in --adapt-resolution block: %s.\n"), filter->name().c_str());
+                return RGY_ERR_UNSUPPORTED;
+            }
+            if (err != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("Failed to update filter \"%s\": %s.\n"), filter->name().c_str(), get_err_mes(err));
+                return err;
+            }
+        }
+        return RGY_ERR_NONE;
+    }
 public:
     PipelineTaskRGA(std::vector<std::unique_ptr<RGAFilter>>& vppfilter, std::shared_ptr<RGYOpenCLContext>& cl, int threadCsp, RGYParamThread threadParamCsp, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
         PipelineTask(PipelineTaskType::MPPVPP, outMaxQueueSize, log), m_vpFilters(vppfilter), m_cl(cl),
@@ -2031,6 +2115,10 @@ public:
                 return RGY_ERR_NULL_PTR;
             }
             if (auto surfVppInMpp = taskSurf->surf().mpp(); surfVppInMpp != nullptr) {
+                const auto err = updateFilterParamsForResolutionChange(surfVppInMpp->frameInfo());
+                if (err != RGY_ERR_NONE) {
+                    return err;
+                }
                 filterframes.push_back(std::make_pair(surfVppInMpp, 0u));
             } else if (auto surfVppInCL = taskSurf->surf().cl(); surfVppInCL != nullptr) {
                 // 入力がOpenCLのフレームの場合、mapされているはずのhost側のバッファを読み取る
