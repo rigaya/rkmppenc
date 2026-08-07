@@ -1058,11 +1058,20 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
 
     std::vector<VppType> filterPipeline = InitFiltersCreateVppList(inputParam, cspConvRequired, cropRequired, resizeRequired);
     if (inputParam->common.adaptResolution.enable) {
-        const bool hasOpenCLFilter = std::any_of(filterPipeline.begin(), filterPipeline.end(), [](const VppType type) {
-            return getVppFilterType(type) == VppFilterType::FILTER_OPENCL;
+        const auto normalizationResize = std::find(filterPipeline.begin(), filterPipeline.end(), VppType::RGA_RESIZE);
+        const auto unsupportedOpenCLFilter = std::find_if(filterPipeline.begin(), normalizationResize, [](const VppType type) {
+            if (getVppFilterType(type) != VppFilterType::FILTER_OPENCL) {
+                return false;
+            }
+            // M6ではparamの安全な複製と時間方向状態の破棄を確認できたフィルタだけ追従させる。
+            return type != VppType::CL_CROP
+                && type != VppType::CL_AFS
+                && type != VppType::CL_NNEDI
+                && type != VppType::CL_YADIF;
         });
-        if (hasOpenCLFilter) {
-            PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution with OpenCL filters is not supported yet.\n"));
+        if (unsupportedOpenCLFilter != normalizationResize) {
+            PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution does not yet support the OpenCL filter before normalization resize: %s.\n"),
+                vppfilter_type_to_str(*unsupportedOpenCLFilter).c_str());
             return RGY_ERR_UNSUPPORTED;
         }
     }

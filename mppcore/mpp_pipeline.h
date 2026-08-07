@@ -47,8 +47,12 @@
 #include "rgy_output_avcodec.h"
 #include "rgy_opencl.h"
 #include "rgy_filter.h"
+#include "rgy_filter_afs.h"
+#include "rgy_filter_nnedi.h"
+#include "rgy_filter_nnedi_field.h"
 #include "rgy_filter_resize.h"
 #include "rgy_filter_ssim.h"
+#include "rgy_filter_yadif.h"
 #include "rgy_thread.h"
 #include "rgy_timecode.h"
 #include "rgy_device.h"
@@ -151,13 +155,15 @@ private:
     private:
         std::unique_ptr<RGYFrame> surf_;
         std::atomic<int> ref;
+        uint64_t generation_;
     public:
-        PipelineTaskSurfacesPair(std::unique_ptr<RGYFrame> s) : surf_(std::move(s)), ref(0) {};
+        PipelineTaskSurfacesPair(std::unique_ptr<RGYFrame> s, const uint64_t generation) : surf_(std::move(s)), ref(0), generation_(generation) {};
         
         bool isFree() const { return ref == 0; } // 使用されていないフレームかを返す
         PipelineTaskSurface getRef() { return PipelineTaskSurface(surf_.get(), &ref); };
         const RGYFrame *surf() const { return surf_.get(); }
         RGYFrame *surf() { return surf_.get(); }
+        uint64_t generation() const { return generation_; }
         PipelineTaskSurfaceType type() const {
             if (!surf_) return PipelineTaskSurfaceType::UNKNOWN;
             if (dynamic_cast<const RGYCLFrame*>(surf_.get())) return PipelineTaskSurfaceType::CL;
@@ -166,8 +172,9 @@ private:
         }
     };
     std::vector<std::unique_ptr<PipelineTaskSurfacesPair>> m_surfaces; // フレームと参照カウンタ
+    uint64_t m_generation;
 public:
-    PipelineTaskSurfaces() : m_surfaces() {};
+    PipelineTaskSurfaces() : m_surfaces(), m_generation(0) {};
     ~PipelineTaskSurfaces() {}
 
     void clear() {
@@ -175,25 +182,40 @@ public:
     }
     void setSurfaces(std::vector<std::unique_ptr<RGYFrame>>& surfs) {
         clear();
+        m_generation++;
         m_surfaces.resize(surfs.size());
         for (size_t i = 0; i < m_surfaces.size(); i++) {
-            m_surfaces[i] = std::make_unique<PipelineTaskSurfacesPair>(std::move(surfs[i]));
+            m_surfaces[i] = std::make_unique<PipelineTaskSurfacesPair>(std::move(surfs[i]), m_generation);
         }
+    }
+    // 旧世代を参照中の出力を保持したまま、新しい寸法のプールへ切り替える。
+    void replaceSurfaces(std::vector<std::unique_ptr<RGYFrame>>& surfs) {
+        m_generation++;
+        deleteFreedRetiredSurfaces();
+        for (auto& surf : surfs) {
+            m_surfaces.push_back(std::make_unique<PipelineTaskSurfacesPair>(std::move(surf), m_generation));
+        }
+    }
+    // drain中の一時的な枯渇に備え、空きサーフェスを削除せず現世代へ追加する。
+    PipelineTaskSurface appendSurface(std::unique_ptr<RGYFrame>& surf) {
+        m_surfaces.push_back(std::make_unique<PipelineTaskSurfacesPair>(std::move(surf), m_generation));
+        return m_surfaces.back()->getRef();
     }
     PipelineTaskSurface addSurface(std::unique_ptr<RGYFrame>& surf) {
         deleteFreedSurface();
-        m_surfaces.push_back(std::move(std::unique_ptr<PipelineTaskSurfacesPair>(new PipelineTaskSurfacesPair(std::move(surf)))));
+        m_surfaces.push_back(std::make_unique<PipelineTaskSurfacesPair>(std::move(surf), m_generation));
         return m_surfaces.back()->getRef();
     }
     PipelineTaskSurface addSurface(std::unique_ptr<RGYFrameMpp>& surf) {
         deleteFreedSurface();
-        m_surfaces.push_back(std::move(std::unique_ptr<PipelineTaskSurfacesPair>(new PipelineTaskSurfacesPair(std::move(surf)))));
+        m_surfaces.push_back(std::make_unique<PipelineTaskSurfacesPair>(std::move(surf), m_generation));
         return m_surfaces.back()->getRef();
     }
 
     PipelineTaskSurface getFreeSurf() {
+        deleteFreedRetiredSurfaces();
         for (auto& s : m_surfaces) {
-            if (s->isFree()) {
+            if (s->generation() == m_generation && s->isFree()) {
                 return s->getRef();
             }
         }
@@ -206,7 +228,11 @@ public:
         }
         return PipelineTaskSurface();
     }
-    size_t bufCount() const { return m_surfaces.size(); }
+    size_t bufCount() const {
+        return std::count_if(m_surfaces.begin(), m_surfaces.end(), [this](const auto& surf) {
+            return surf->generation() == m_generation;
+        });
+    }
 
     bool isAllFree() const {
         for (const auto& s : m_surfaces) {
@@ -217,10 +243,21 @@ public:
         return true;
     }
     PipelineTaskSurfaceType type() const {
-        if (m_surfaces.size() == 0) return PipelineTaskSurfaceType::UNKNOWN;
-        return m_surfaces.front()->type();
+        const auto current = std::find_if(m_surfaces.begin(), m_surfaces.end(), [this](const auto& surf) {
+            return surf->generation() == m_generation;
+        });
+        return (current == m_surfaces.end()) ? PipelineTaskSurfaceType::UNKNOWN : (*current)->type();
     }
 protected:
+    void deleteFreedRetiredSurfaces() {
+        for (auto it = m_surfaces.begin(); it != m_surfaces.end();) {
+            if ((*it)->generation() != m_generation && (*it)->isFree()) {
+                it = m_surfaces.erase(it);
+            } else {
+                it++;
+            }
+        }
+    }
     void deleteFreedSurface() {
         for (auto it = m_surfaces.begin(); it != m_surfaces.end();) {
             if ((*it)->isFree()) {
@@ -564,6 +601,22 @@ public:
         m_workSurfs.setSurfaces(frames);
         return RGY_ERR_NONE;
     }
+protected:
+    RGY_ERR workSurfacesReplaceCL(const int numFrames, const RGYFrameInfo& frame, RGYOpenCLContext *cl) {
+        std::vector<std::unique_ptr<RGYFrame>> frames(numFrames);
+        for (auto& workFrame : frames) {
+            workFrame = cl->createFrameBuffer(frame, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR);
+            if (!workFrame) {
+                PrintMes(RGY_LOG_ERROR, _T("解像度変更後のOpenCL作業サーフェスを確保できませんでした。\n"));
+                return RGY_ERR_MEMORY_ALLOC;
+            }
+        }
+        // drainで生成した旧寸法の出力は下流が参照しうるため、旧世代を破棄せず新世代を追加する。
+        m_workSurfs.replaceSurfaces(frames);
+        PrintMes(RGY_LOG_DEBUG, _T("解像度変更後のOpenCL作業サーフェスを%d枚確保しました。\n"), numFrames);
+        return RGY_ERR_NONE;
+    }
+public:
 #if 0
     RGY_ERR workSurfacesAllocMpp(const int numFrames, const RGYFrameInfo &frame) {
         auto sts = workSurfacesClear();
@@ -2168,6 +2221,16 @@ public:
                     return RGY_ERR_UNKNOWN;
                 }
                 const auto mappedHost = surfVppInCL->mappedHost()->frameInfo();
+                const auto errUpdate = updateFilterParamsForResolutionChange(mappedHost);
+                if (errUpdate != RGY_ERR_NONE) {
+                    return errUpdate;
+                }
+                // OpenCL側の解像度変更後に旧寸法の一時バッファへ書き込まないよう、コピー前に作り直す。
+                if (m_inputFrameTmp
+                    && (m_inputFrameTmp->width() != mappedHost.width
+                        || m_inputFrameTmp->height() != mappedHost.height)) {
+                    m_inputFrameTmp.reset();
+                }
                 if (!m_inputFrameTmp) {
                     m_inputFrameTmp = std::make_unique<RGYFrameMpp>();
                     if (!m_frameGrp) {
@@ -2533,10 +2596,172 @@ protected:
     RGYFilterSsim *m_videoMetric;
     std::unique_ptr<RGYCLFrame> m_clFrameInput;
     std::unique_ptr<RGYCLFrame> m_clFrameOutput;
+    std::vector<rgy_rational<int>> m_filterBaseFpsBeforeInit;
+    std::vector<rgy_rational<int>> m_filterBaseFpsAfterInit;
+    bool m_inputFrameSubmitted;
+    bool m_resolutionChangeDraining;
+    size_t m_drainWorkSurfaceLimit;
+
+    rgy_rational<int> baseFpsBeforeInit(const RGYFilterParam *param) const {
+        auto fps = param->baseFps;
+        if (const auto afs = dynamic_cast<const RGYFilterParamAfs *>(param); afs && afs->afs.force24) {
+            fps *= rgy_rational<int>(5, 4);
+        } else if (const auto nnedi = dynamic_cast<const RGYFilterParamNnedi *>(param); nnedi) {
+            RGYNnediTopology topology = {};
+            if (rgy_nnedi_resolve_topology(&topology, (int)nnedi->nnedi.field, (nnedi->frameIn.picstruct & RGY_PICSTRUCT_BFF) == 0) == RGY_ERR_NONE) {
+                fps /= topology.fpsMultiplier;
+            }
+        } else if (const auto yadif = dynamic_cast<const RGYFilterParamYadif *>(param); yadif && (yadif->yadif.mode & VPP_YADIF_MODE_BOB)) {
+            fps /= 2;
+        }
+        return fps;
+    }
+
+    std::shared_ptr<RGYFilterParam> copyFilterParam(const RGYFilterParam *param) const {
+        if (const auto crop = dynamic_cast<const RGYFilterParamCrop *>(param)) {
+            return std::make_shared<RGYFilterParamCrop>(*crop);
+        }
+        if (const auto afs = dynamic_cast<const RGYFilterParamAfs *>(param)) {
+            return std::make_shared<RGYFilterParamAfs>(*afs);
+        }
+        if (const auto nnedi = dynamic_cast<const RGYFilterParamNnedi *>(param)) {
+            return std::make_shared<RGYFilterParamNnedi>(*nnedi);
+        }
+        if (const auto yadif = dynamic_cast<const RGYFilterParamYadif *>(param)) {
+            return std::make_shared<RGYFilterParamYadif>(*yadif);
+        }
+        return nullptr;
+    }
+
+    RGY_ERR drainForResolutionChange() {
+        static constexpr int drainIterationLimit = 1024;
+        const auto initialSurfaceCount = m_workSurfs.bufCount();
+        m_resolutionChangeDraining = true;
+        m_drainWorkSurfaceLimit = std::max<size_t>(1, initialSurfaceCount * 2);
+        for (int iteration = 1; iteration <= drainIterationLimit; iteration++) {
+            std::unique_ptr<PipelineTaskOutput> drainFrame;
+            const auto sts = sendFrame(drainFrame);
+            if (sts == RGY_ERR_MORE_DATA) {
+                m_resolutionChangeDraining = false;
+                PrintMes(RGY_LOG_DEBUG, _T("OpenCLフィルタのdrainが%d回で完了しました。\n"), iteration);
+                return RGY_ERR_NONE;
+            }
+            if (sts != RGY_ERR_NONE) {
+                m_resolutionChangeDraining = false;
+                return sts;
+            }
+        }
+        m_resolutionChangeDraining = false;
+        PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタのdrainが規定回数内に完了しませんでした。\n"));
+        return RGY_ERR_UNDEFINED_BEHAVIOR;
+    }
+
+    RGY_ERR reconfigureForResolutionChange(const RGYFrameInfo& inputFrame) {
+        if (m_vpFilters.empty()) {
+            return RGY_ERR_NONE;
+        }
+        const auto currentParam = m_vpFilters.front()->GetFilterParam();
+        if (currentParam == nullptr) {
+            PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタの入力パラメータが取得できません。\n"));
+            return RGY_ERR_NULL_PTR;
+        }
+        if (currentParam->frameIn.width == inputFrame.width && currentParam->frameIn.height == inputFrame.height) {
+            return RGY_ERR_NONE;
+        }
+        PrintMes(RGY_LOG_DEBUG, _T("入力解像度が%dx%dから%dx%dへ変更されたため、OpenCLフィルタを再初期化します。\n"),
+            currentParam->frameIn.width, currentParam->frameIn.height, inputFrame.width, inputFrame.height);
+
+        RGY_ERR sts = RGY_ERR_NONE;
+        // drain中に一時拡張しても、変更後の通常プールは元の枚数へ戻す。
+        const auto replacementSurfaceCount = (int)m_workSurfs.bufCount();
+        if (m_inputFrameSubmitted) {
+            sts = drainForResolutionChange();
+            if (sts != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタのdrainに失敗しました: %s\n"), get_err_mes(sts));
+                return sts;
+            }
+            if ((sts = m_cl->queue().finish()) != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("OpenCLキューの完了待ちに失敗しました: %s\n"), get_err_mes(sts));
+                return sts;
+            }
+        } else {
+            PrintMes(RGY_LOG_DEBUG, _T("OpenCLフィルタへのフレーム投入前のためdrainを省略します。\n"));
+        }
+
+        RGYFrameInfo currentFrame = inputFrame;
+        for (size_t i = 0; i < m_vpFilters.size(); i++) {
+            auto& filter = m_vpFilters[i];
+            auto updatedParam = copyFilterParam(filter->GetFilterParam());
+            if (!updatedParam) {
+                PrintMes(RGY_LOG_ERROR, _T("--adapt-resolutionでの再初期化に未対応のOpenCLフィルタです: %s\n"), filter->name().c_str());
+                return RGY_ERR_UNSUPPORTED;
+            }
+            updatedParam->frameIn.width = currentFrame.width;
+            updatedParam->frameIn.height = currentFrame.height;
+            updatedParam->frameOut.width = currentFrame.width;
+            updatedParam->frameOut.height = currentFrame.height;
+            updatedParam->baseFps = m_filterBaseFpsBeforeInit[i];
+
+            if (auto crop = std::dynamic_pointer_cast<RGYFilterParamCrop>(updatedParam)) {
+                if (crop->crop.e.left + crop->crop.e.right >= currentFrame.width
+                    || crop->crop.e.up + crop->crop.e.bottom >= currentFrame.height) {
+                    PrintMes(RGY_LOG_ERROR, _T("入力cropが変更後の解像度%dx%dに対して大きすぎます。\n"), currentFrame.width, currentFrame.height);
+                    return RGY_ERR_INVALID_PARAM;
+                }
+                crop->frameOut.width -= crop->crop.e.left + crop->crop.e.right;
+                crop->frameOut.height -= crop->crop.e.up + crop->crop.e.bottom;
+            }
+
+            // AFSのログファイルは既存ハンドルを継続利用し、再initによる切り詰めを避ける。
+            int afsTimecode = 0;
+            bool afsLog = false;
+            int64_t afsNextOutputTimestamp = 0;
+            if (auto afs = std::dynamic_pointer_cast<RGYFilterParamAfs>(updatedParam)) {
+                afsTimecode = afs->afs.timecode;
+                afsLog = afs->afs.log;
+                afs->afs.timecode = 0;
+                afs->afs.log = false;
+                afsNextOutputTimestamp = dynamic_cast<RGYFilterAfs *>(filter.get())->nextOutputTimestamp();
+            }
+            filter->resetTemporalState();
+            sts = filter->init(updatedParam, m_log);
+            if (auto afs = std::dynamic_pointer_cast<RGYFilterParamAfs>(updatedParam)) {
+                afs->afs.timecode = afsTimecode;
+                afs->afs.log = afsLog;
+                dynamic_cast<RGYFilterAfs *>(filter.get())->setNextOutputTimestamp(afsNextOutputTimestamp);
+            }
+            if (sts != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタの再初期化に失敗しました: %s: %s\n"), filter->name().c_str(), get_err_mes(sts));
+                return sts;
+            }
+            if (updatedParam->baseFps != m_filterBaseFpsAfterInit[i]) {
+                PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタ再初期化後のfpsが初期値と一致しません: %s\n"), filter->name().c_str());
+                return RGY_ERR_UNDEFINED_BEHAVIOR;
+            }
+            currentFrame = updatedParam->frameOut;
+        }
+
+        if (replacementSurfaceCount <= 0) {
+            PrintMes(RGY_LOG_ERROR, _T("OpenCL作業サーフェスが初期化されていません。\n"));
+            return RGY_ERR_UNDEFINED_BEHAVIOR;
+        }
+        if ((sts = workSurfacesReplaceCL(replacementSurfaceCount, currentFrame, m_cl.get())) != RGY_ERR_NONE) {
+            return sts;
+        }
+        m_clFrameInput.reset();
+        m_clFrameOutput.reset();
+        PrintMes(RGY_LOG_DEBUG, _T("OpenCLフィルタを%dx%d入力向けに再初期化しました。\n"), inputFrame.width, inputFrame.height);
+        return RGY_ERR_NONE;
+    }
 public:
     PipelineTaskOpenCL(std::vector<std::unique_ptr<RGYFilter>>& vppfilters, RGYFilterSsim *videoMetric, std::shared_ptr<RGYOpenCLContext> cl, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
-        PipelineTask(PipelineTaskType::OPENCL, outMaxQueueSize, log), m_cl(cl), m_vpFilters(vppfilters), m_prevInputFrame(), m_videoMetric(videoMetric), m_clFrameInput(), m_clFrameOutput() {
-
+        PipelineTask(PipelineTaskType::OPENCL, outMaxQueueSize, log), m_cl(cl), m_vpFilters(vppfilters), m_prevInputFrame(), m_videoMetric(videoMetric), m_clFrameInput(), m_clFrameOutput(),
+        m_filterBaseFpsBeforeInit(), m_filterBaseFpsAfterInit(), m_inputFrameSubmitted(false), m_resolutionChangeDraining(false), m_drainWorkSurfaceLimit(0) {
+        for (const auto& filter : m_vpFilters) {
+            const auto param = filter->GetFilterParam();
+            m_filterBaseFpsAfterInit.push_back(param->baseFps);
+            m_filterBaseFpsBeforeInit.push_back(baseFpsBeforeInit(param));
+        }
     };
     virtual ~PipelineTaskOpenCL() {
         m_clFrameInput.reset();
@@ -2578,6 +2803,9 @@ public:
             }
             if (auto surfVppInMpp = taskSurf->surf().mpp(); surfVppInMpp != nullptr) {
                 auto mppInInfoCopy = surfVppInMpp->getInfoCopy();
+                if (auto sts = reconfigureForResolutionChange(mppInInfoCopy); sts != RGY_ERR_NONE) {
+                    return sts;
+                }
                 if (!m_clFrameInput) {
                     m_clFrameInput = m_cl->createFrameBuffer(mppInInfoCopy);
                     if (!m_clFrameInput) {
@@ -2594,6 +2822,9 @@ public:
                 taskSurf->addClEvent(clevent);
                 filterframes.push_back(std::make_pair(m_clFrameInput->frameInfo(), 0u));
             } else if (auto surfVppInCL = taskSurf->surf().cl(); surfVppInCL != nullptr) {
+                if (auto sts = reconfigureForResolutionChange(surfVppInCL->frameInfo()); sts != RGY_ERR_NONE) {
+                    return sts;
+                }
                 filterframes.push_back(std::make_pair(surfVppInCL->frameInfo(), 0u));
             } else {
                 PrintMes(RGY_LOG_ERROR, _T("Invalid task surface (not opencl or mpp).\n"));
@@ -2602,6 +2833,7 @@ public:
             //ここでinput frameの参照を m_prevInputFrame で保持するようにして、OpenCLによるフレームの処理が完了しているかを確認できるようにする
             //これを行わないとこのフレームが再度使われてしまうことになる
             m_prevInputFrame.push_back(std::move(frame));
+            m_inputFrameSubmitted = true;
         }
 
         std::vector<std::unique_ptr<PipelineTaskOutputSurf>> outputSurfs;
@@ -2666,7 +2898,29 @@ public:
             }
             
             //最後のフィルタ
-            auto surfVppOut = getWorkSurf();
+            auto &lastFilter = m_vpFilters[m_vpFilters.size() - 1];
+            auto surfVppOut = m_resolutionChangeDraining ? m_workSurfs.getFreeSurf() : getWorkSurf();
+            if (surfVppOut == nullptr && m_resolutionChangeDraining) {
+                if (m_workSurfs.bufCount() >= m_drainWorkSurfaceLimit) {
+                    PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタのdrainに必要な作業サーフェスが上限%d枚を超えました。\n"),
+                        (int)m_drainWorkSurfaceLimit);
+                    return RGY_ERR_NOT_ENOUGH_BUFFER;
+                }
+                const auto outputParam = lastFilter->GetFilterParam();
+                if (outputParam == nullptr) {
+                    PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタの出力パラメータが取得できません。\n"));
+                    return RGY_ERR_NULL_PTR;
+                }
+                std::unique_ptr<RGYFrame> drainSurface = m_cl->createFrameBuffer(
+                    outputParam->frameOut, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR);
+                if (!drainSurface) {
+                    PrintMes(RGY_LOG_ERROR, _T("OpenCLフィルタのdrain用作業サーフェスを確保できませんでした。\n"));
+                    return RGY_ERR_MEMORY_ALLOC;
+                }
+                surfVppOut = m_workSurfs.appendSurface(drainSurface);
+                PrintMes(RGY_LOG_DEBUG, _T("OpenCLフィルタのdrain用作業サーフェスを追加しました（%d/%d枚）。\n"),
+                    (int)m_workSurfs.bufCount(), (int)m_drainWorkSurfaceLimit);
+            }
             if (surfVppOut == nullptr) {
                 PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
                 return RGY_ERR_NOT_ENOUGH_BUFFER;
@@ -2676,7 +2930,6 @@ public:
                 return RGY_ERR_NOT_ENOUGH_BUFFER;
             }
             auto surfVppOutInfo = surfVppOut.cl()->frameInfo();
-            auto &lastFilter = m_vpFilters[m_vpFilters.size() - 1];
             //最後のフィルタはRGYFilterCspCropでなければならない
             if (typeid(*lastFilter.get()) != typeid(RGYFilterCspCrop)) {
                 PrintMes(RGY_LOG_ERROR, _T("Last filter setting invalid.\n"));

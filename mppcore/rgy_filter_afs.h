@@ -223,6 +223,7 @@ public:
     ~afsStreamStatus();
 
     int open_log(const tstring& log_filename);
+    void resetTemporalState();
     void init(uint8_t status, int drop24);
     int set_status(int iframe, uint8_t status, int drop24, int64_t orig_pts);
     int64_t get_duration(int64_t iframe);
@@ -247,6 +248,9 @@ public:
     RGYFilterAfs(shared_ptr<RGYOpenCLContext> context);
     virtual ~RGYFilterAfs();
     virtual RGY_ERR init(shared_ptr<RGYFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
+    virtual void resetTemporalState() override;
+    int64_t nextOutputTimestamp() const { return m_nPts; }
+    void setNextOutputTimestamp(const int64_t timestamp) { m_nPts = timestamp; }
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event) override;
     virtual void close() override;

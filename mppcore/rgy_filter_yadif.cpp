@@ -145,6 +145,12 @@ RGYFilterYadif::~RGYFilterYadif() {
     close();
 }
 
+void RGYFilterYadif::resetTemporalState() {
+    m_nFrame = 0;
+    m_pts = 0;
+    m_source.clear();
+}
+
 RGY_ERR RGYFilterYadif::checkParam(const std::shared_ptr<RGYFilterParamYadif> prm) {
     //パラメータチェック
     if (prm->frameOut.height <= 0 || prm->frameOut.width <= 0) {
