@@ -3319,6 +3319,25 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
         return RGY_ERR_INVALID_OPERATION;
     }
 
+    if (prm->common.adaptResolution.enable) {
+        const auto inputInfo = m_pFileReader->GetInputFrameInfo();
+        // 宣言解像度と実際の符号化寸法がずれる場合に備え、省略時だけ32の倍数へ切り上げる。
+        const int inputMaxWidth = (prm->common.adaptResolution.maxWidth > 0)
+            ? prm->common.adaptResolution.maxWidth
+            : ALIGN(inputInfo.srcWidth, 32);
+        const int inputMaxHeight = (prm->common.adaptResolution.maxHeight > 0)
+            ? prm->common.adaptResolution.maxHeight
+            : ALIGN(inputInfo.srcHeight, 32);
+        // getNewWorkSurfMpp()は入力だけでなく正規化resizeの出力にも使うため、エンコード解像度も上限に含める。
+        const int maxWidth = std::max(inputMaxWidth, m_encWidth);
+        const int maxHeight = std::max(inputMaxHeight, m_encHeight);
+        const RGYFrameInfo maxFrame(maxWidth, maxHeight, inputInfo.csp, inputInfo.bitdepth, inputInfo.picstruct, RGY_MEM_TYPE_MPP);
+        for (auto& task : m_pipelineTasks) {
+            task->setMaxWorkSurfaceSize(maxFrame);
+        }
+        PrintMes(RGY_LOG_DEBUG, _T("Maximum work surface resolution for --adapt-resolution: %dx%d.\n"), maxWidth, maxHeight);
+    }
+
     PrintMes(RGY_LOG_DEBUG, _T("Created pipeline.\n"));
     for (auto& p : m_pipelineTasks) {
         PrintMes(RGY_LOG_DEBUG, _T("  %s\n"), p->print().c_str());

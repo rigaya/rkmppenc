@@ -230,7 +230,8 @@ RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup
     if (!mppframe) {
         return RGY_ERR_MEMORY_ALLOC;
     }
-    const int frameSize = mpp_frame_size(frame, y_stride);
+    // 旧コードはy_strideをx_strideの引数位置に渡しており、縦strideが高さとして使われていなかった。
+    const int frameSize = mpp_frame_size(frame, x_stride, y_stride);
     MppBuffer mppbuffer = nullptr;
     auto ret = err_to_rgy(mpp_buffer_get(frmGroup, &mppbuffer, frameSize));
     if (ret != RGY_ERR_NONE) {

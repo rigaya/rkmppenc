@@ -456,7 +456,8 @@ static int mpp_frame_pitch(RGY_CSP csp, const int width) {
 }
 
 static int mpp_frame_size(const RGYFrameInfo &frame, const int x_stride = 0, const int y_stride = 0) {
-    const int memPitch = (x_stride) ? frame.pitch[0] : mpp_frame_pitch(frame.csp, frame.width);
+    // 明示されたstrideをそのまま使い、実際に確保するレイアウト全体のサイズを求める。
+    const int memPitch = (x_stride) ? x_stride : mpp_frame_pitch(frame.csp, frame.width);
     const int frameSize = memPitch * ((y_stride) ? y_stride : frame.height) * RGY_CSP_PLANES[frame.csp];
     return frameSize;
 }

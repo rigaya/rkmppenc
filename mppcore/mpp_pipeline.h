@@ -454,11 +454,13 @@ protected:
     int m_outFrames;
     int m_outMaxQueueSize;
     MppBufferGroup m_frameGrp;
+    int m_maxWorkSurfWidth;
+    int m_maxWorkSurfHeight;
     std::shared_ptr<RGYLog> m_log;
 public:
-    PipelineTask() : m_type(PipelineTaskType::UNKNOWN), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(0), m_log() {};
+    PipelineTask() : m_type(PipelineTaskType::UNKNOWN), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(0), m_frameGrp(nullptr), m_maxWorkSurfWidth(0), m_maxWorkSurfHeight(0), m_log() {};
     PipelineTask(PipelineTaskType type, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
-        m_type(type), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(outMaxQueueSize), m_frameGrp(nullptr), m_log(log) {
+        m_type(type), m_outQeueue(), m_workSurfs(), m_inFrames(0), m_outFrames(0), m_outMaxQueueSize(outMaxQueueSize), m_frameGrp(nullptr), m_maxWorkSurfWidth(0), m_maxWorkSurfHeight(0), m_log(log) {
     };
     virtual ~PipelineTask() {
         m_outQeueue.clear();
@@ -615,13 +617,43 @@ public:
     }
 
     std::unique_ptr<RGYFrameMpp> getNewWorkSurfMpp(const RGYFrameInfo &frame, const int x_stride = 0, const int y_stride = 0) {
+        if (m_maxWorkSurfWidth > 0 && m_maxWorkSurfHeight > 0
+            && (frame.width > m_maxWorkSurfWidth || frame.height > m_maxWorkSurfHeight)) {
+            PrintMes(RGY_LOG_ERROR, _T("requested work surface resolution %dx%d exceeds the configured maximum %dx%d.\n"),
+                frame.width, frame.height, m_maxWorkSurfWidth, m_maxWorkSurfHeight);
+            PrintMes(RGY_LOG_ERROR, _T("  Please specify --adapt-resolution %dx%d or larger.\n"), frame.width, frame.height);
+            return nullptr;
+        }
         if (!m_frameGrp) {
             auto sts = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
             if (sts != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(sts));
                 return nullptr;
             }
-            mpp_buffer_group_limit_config(m_frameGrp, mpp_frame_size(frame, x_stride, y_stride), 32);
+            int maxBufferSize = mpp_frame_size(frame, x_stride, y_stride);
+            if (m_maxWorkSurfWidth > 0 && m_maxWorkSurfHeight > 0) {
+                auto maxFrame = frame;
+                maxFrame.width = m_maxWorkSurfWidth;
+                maxFrame.height = m_maxWorkSurfHeight;
+                const int actualStrideX = (x_stride) ? x_stride : mpp_frame_pitch(frame.csp, frame.width);
+                const int actualStrideY = (y_stride) ? y_stride : frame.height;
+                const int calcStrideX = mpp_frame_pitch(maxFrame.csp, maxFrame.width);
+                const int calcStrideY = ALIGN(maxFrame.height, 16);
+                // MPPの実strideが計算上のalignmentより大きい場合に備え、初回実測比を最大寸法へ適用する。
+                const int scaledStrideX = (int)(((int64_t)actualStrideX * m_maxWorkSurfWidth + std::max(frame.width, 1) - 1) / std::max(frame.width, 1));
+                const int scaledStrideY = (int)(((int64_t)actualStrideY * m_maxWorkSurfHeight + std::max(frame.height, 1) - 1) / std::max(frame.height, 1));
+                const int maxStrideX = std::max(calcStrideX, scaledStrideX);
+                const int maxStrideY = std::max(calcStrideY, scaledStrideY);
+                maxBufferSize = mpp_frame_size(maxFrame, maxStrideX, maxStrideY);
+                PrintMes(RGY_LOG_DEBUG, _T("work surface: %dx%d, stride %dx%d (calc %dx%d), max %dx%d, stride %dx%d, limit %d bytes.\n"),
+                    frame.width, frame.height, actualStrideX, actualStrideY, mpp_frame_pitch(frame.csp, frame.width), ALIGN(frame.height, 16),
+                    m_maxWorkSurfWidth, m_maxWorkSurfHeight, maxStrideX, maxStrideY, maxBufferSize);
+            }
+            sts = err_to_rgy(mpp_buffer_group_limit_config(m_frameGrp, maxBufferSize, 32));
+            if (sts != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("failed to set mpp buffer group limit : %s\n"), get_err_mes(sts));
+                return nullptr;
+            }
         }
         auto surface = std::make_unique<RGYFrameMpp>(frame, m_frameGrp, x_stride, y_stride);
         if (!surface->isAllocated()) {
@@ -632,6 +664,10 @@ public:
     }
 
     void setOutputMaxQueueSize(int size) { m_outMaxQueueSize = size; }
+    void setMaxWorkSurfaceSize(const RGYFrameInfo& maxFrame) {
+        m_maxWorkSurfWidth = maxFrame.width;
+        m_maxWorkSurfHeight = maxFrame.height;
+    }
 
     PipelineTaskType taskType() const { return m_type; }
     int inputFrames() const { return m_inFrames; }
