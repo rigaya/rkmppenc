@@ -764,11 +764,15 @@ public:
             //Unlockする必要があるので、ここに入ってもすぐにreturnしてはいけない
             if (err == RGY_ERR_MORE_DATA) { // EOF
                 err = RGY_ERR_MORE_BITSTREAM; // EOF を PipelineTaskMFXDecode のreturnコードに合わせる
+            } else if (err == RGY_ERR_MORE_SURFACE) {
+                // 解像度変更後のCL作業サーフェスへ切り替えてから、保留中のAVFrameを再取得する。
             } else {
                 PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(err));
             }
         }
-        clframe->setPropertyFrom(mappedframe);
+        if (err == RGY_ERR_NONE) {
+            clframe->setPropertyFrom(mappedframe);
+        }
         auto clerr = clframe->unmapBuffer();
         if (clerr != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to unmap buffer: %s.\n"), get_err_mes(err));
@@ -785,6 +789,22 @@ public:
             surfWork.frame()->setDataList(mappedframe->dataList());
             surfWork.frame()->setInputFrameId(m_inFrames++);
             m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfWork));
+        } else if (err == RGY_ERR_MORE_SURFACE) {
+            const auto inputFrameInfo = m_input->GetInputFrameInfo();
+            const RGYFrameInfo replacementFrame(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight,
+                inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
+            const int replacementSurfaceCount = static_cast<int>(m_workSurfs.bufCount());
+            if (replacementSurfaceCount <= 0) {
+                PrintMes(RGY_LOG_ERROR, _T("OpenCL入力作業サーフェスが初期化されていません。\n"));
+                return RGY_ERR_UNDEFINED_BEHAVIOR;
+            }
+            // surfWorkを含む旧世代は下流参照がなくなるまで保持し、次回から新寸法の世代だけを使用する。
+            const auto replaceErr = workSurfacesReplaceCL(replacementSurfaceCount, replacementFrame, m_cl.get());
+            if (replaceErr != RGY_ERR_NONE) {
+                return replaceErr;
+            }
+            PrintMes(RGY_LOG_DEBUG, _T("OpenCL入力作業サーフェスを%dx%dへ切り替えました。\n"),
+                replacementFrame.width, replacementFrame.height);
         }
         return err;
     }
@@ -799,6 +819,8 @@ public:
         auto err = m_input->LoadNextFrame(surfWork.get());
         if (err == RGY_ERR_MORE_DATA) {// EOF
             err = RGY_ERR_MORE_BITSTREAM; // EOF を PipelineTaskMFXDecode のreturnコードに合わせる
+        } else if (err == RGY_ERR_MORE_SURFACE) {
+            // 解像度変更後の実寸で次回呼び出し時に再確保する。
         } else if (err != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(err));
         } else {

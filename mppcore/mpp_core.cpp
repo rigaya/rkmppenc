@@ -3244,6 +3244,10 @@ bool MPPCore::VppAfsRffAware() const {
 RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
     m_pipelineTasks.clear();
 
+    if (auto avcodecReader = dynamic_cast<RGYInputAvcodec *>(m_pFileReader.get()); avcodecReader != nullptr) {
+        avcodecReader->setAdaptResolution(prm->common.adaptResolution.enable);
+    }
+
     if (m_decoder) {
         auto taskDecode = std::make_unique<PipelineTaskMPPDecode>(m_decoder.get(), 1, m_pFileReader.get(),
             m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, m_pLog);

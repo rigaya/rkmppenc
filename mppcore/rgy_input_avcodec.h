@@ -963,6 +963,8 @@ public:
     //並列エンコードの親側で不要なデコーダを終了させる
     void CloseVideoDecoder();
 
+    void setAdaptResolution(bool enable) { m_adaptResolution = enable; }
+
     //swデコーダの初期化
     RGY_ERR initSWVideoDecoder(const tstring& avswDecoder);
 
@@ -1074,6 +1076,8 @@ protected:
     //入力初期解像度。下流のサーフェスはこの解像度で確保されるため、途中でこれを超える解像度になった場合は対応できず明示エラーとする
     int              m_initialSrcWidth;
     int              m_initialSrcHeight;
+    bool             m_adaptResolution;
+    bool             m_pendingResolutionChangeFrame;
     bool             m_suppressPulldownDetect;     // true: skip avgDuration *= 1.25 after bPulldown is detected. bPulldown itself is still set so log/diagnostic paths see it. Mirrors RGYInputAvcodecPrm::suppressPulldownMutation.
     bool             m_pulldownDetected;           // true when getFirstFramePosAndFrameRate detected soft pulldown.
 
