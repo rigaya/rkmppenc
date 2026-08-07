@@ -1058,13 +1058,6 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
 
     std::vector<VppType> filterPipeline = InitFiltersCreateVppList(inputParam, cspConvRequired, cropRequired, resizeRequired);
     if (inputParam->common.adaptResolution.enable) {
-        const bool hasIEPFilter = std::any_of(filterPipeline.begin(), filterPipeline.end(), [](const VppType type) {
-            return getVppFilterType(type) == VppFilterType::FILTER_IEP;
-        });
-        if (hasIEPFilter) {
-            PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution with IEP filters is not supported yet.\n"));
-            return RGY_ERR_UNSUPPORTED;
-        }
         const bool hasOpenCLFilter = std::any_of(filterPipeline.begin(), filterPipeline.end(), [](const VppType type) {
             return getVppFilterType(type) == VppFilterType::FILTER_OPENCL;
         });

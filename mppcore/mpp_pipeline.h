@@ -619,11 +619,16 @@ public:
             auto sts = err_to_rgy(mpp_buffer_group_get_internal(&m_frameGrp, MPP_BUFFER_TYPE_DRM));
             if (sts != RGY_ERR_NONE) {
                 PrintMes(RGY_LOG_ERROR, _T("failed to get mpp buffer group : %s\n"), get_err_mes(sts));
-                return std::make_unique<RGYFrameMpp>();
+                return nullptr;
             }
             mpp_buffer_group_limit_config(m_frameGrp, mpp_frame_size(frame, x_stride, y_stride), 32);
         }
-        return std::make_unique<RGYFrameMpp>(frame, m_frameGrp, x_stride, y_stride);
+        auto surface = std::make_unique<RGYFrameMpp>(frame, m_frameGrp, x_stride, y_stride);
+        if (!surface->isAllocated()) {
+            PrintMes(RGY_LOG_ERROR, _T("failed to allocate mpp work surface: %dx%d.\n"), frame.width, frame.height);
+            return nullptr;
+        }
+        return surface;
     }
 
     void setOutputMaxQueueSize(int size) { m_outMaxQueueSize = size; }
@@ -2252,11 +2257,131 @@ protected:
     int m_vppOutFrames;
     std::unordered_map<int64_t, std::vector<std::shared_ptr<RGYFrameData>>> m_metadatalist;
     std::deque<std::unique_ptr<PipelineTaskOutput>> m_prevInputFrame; //前回投入されたフレーム、完了通知を待ってから解放するため、参照を保持する
+    rgy_rational<int> m_baseFpsBeforeDeinterlace;
+
+    static bool isBobMode(const IEPDeinterlaceMode mode) {
+        return mode == IEPDeinterlaceMode::BOB_I5 || mode == IEPDeinterlaceMode::BOB_I2;
+    }
+
+    RGY_ERR runIEPFilter(RGYFrameMpp *inputFrame, int& nOutFrames) {
+        nOutFrames = 0;
+        RGYFrameMpp *ptrOutInfo[2] = { 0 }; // 最大で2フレーム出力がある
+        std::vector<std::unique_ptr<RGYFrameMpp>> surfOut;
+        for (size_t i = 0; i < _countof(ptrOutInfo); i++) {
+            auto surfVppOut = getNewWorkSurfMpp(m_inputFrameInfo, m_stride_x, m_stride_y); // IEPはx_stride, y_strideが入出力で同じでないとおかしなことになる
+            if (surfVppOut == nullptr) {
+                PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
+                return RGY_ERR_NOT_ENOUGH_BUFFER;
+            }
+            ptrOutInfo[i] = surfVppOut.get();
+            surfOut.push_back(std::move(surfVppOut));
+        }
+        unique_event sync = unique_event(nullptr, CloseEvent);
+        auto stsFilter = m_vpFilters.front()->filter_iep(inputFrame, (RGYFrameMpp **)&ptrOutInfo, &nOutFrames, sync);
+        if (stsFilter != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Error while running filter \"%s\".\n"), m_vpFilters.front()->name().c_str());
+            return stsFilter;
+        }
+        for (int i = 0; i < nOutFrames; i++) {
+            auto outSurf = std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(surfOut[i]));
+            outSurf->addEvent(sync);
+            m_outQeueue.push_back(std::move(outSurf));
+        }
+        return RGY_ERR_NONE;
+    }
+
+    RGY_ERR drainIEPFilter() {
+        static constexpr int MAX_DRAIN_ITERATIONS = 1024;
+        int drainedFrames = 0;
+        for (int iteration = 0; iteration < MAX_DRAIN_ITERATIONS; iteration++) {
+            int nOutFrames = 0;
+            const auto err = runIEPFilter(nullptr, nOutFrames);
+            if (err != RGY_ERR_NONE) {
+                return err;
+            }
+            if (nOutFrames == 0) {
+                PrintMes(RGY_LOG_DEBUG, _T("IEP drain completed after %d iteration(s), %d frame(s) queued.\n"),
+                    iteration + 1, drainedFrames);
+                return RGY_ERR_NONE;
+            }
+            drainedFrames += nOutFrames;
+            PrintMes(RGY_LOG_TRACE, _T("IEP drain iteration %d: %d frame(s) queued.\n"), iteration + 1, nOutFrames);
+        }
+        PrintMes(RGY_LOG_ERROR, _T("IEP drain did not complete within %d iterations.\n"), MAX_DRAIN_ITERATIONS);
+        return RGY_ERR_UNKNOWN;
+    }
+
+    RGY_ERR reinitIEPFilterForResolutionChange(const RGYFrameInfo& inputFrame) {
+        auto iepFilter = dynamic_cast<RGAFilterDeinterlaceIEP *>(m_vpFilters.front().get());
+        const auto currentParam = dynamic_cast<const RGYFilterParamDeinterlaceIEP *>(m_vpFilters.front()->GetFilterParam());
+        if (iepFilter == nullptr || currentParam == nullptr) {
+            PrintMes(RGY_LOG_ERROR, _T("Invalid IEP filter configuration.\n"));
+            return RGY_ERR_INVALID_PARAM;
+        }
+        if (inputFrame.width == currentParam->frameIn.width && inputFrame.height == currentParam->frameIn.height) {
+            return RGY_ERR_NONE;
+        }
+
+        const auto mode = currentParam->mode;
+        auto updatedParam = std::make_shared<RGYFilterParamDeinterlaceIEP>(*currentParam);
+        updatedParam->frameIn.width = inputFrame.width;
+        updatedParam->frameIn.height = inputFrame.height;
+        updatedParam->frameOut.width = inputFrame.width;
+        updatedParam->frameOut.height = inputFrame.height;
+        // init()でbob時に2倍される前のfpsを毎回設定する。
+        updatedParam->baseFps = m_baseFpsBeforeDeinterlace;
+
+        PrintMes(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; draining IEP filter.\n"),
+            currentParam->frameIn.width, currentParam->frameIn.height, inputFrame.width, inputFrame.height);
+        RGY_ERR err = RGY_ERR_NONE;
+        if (m_inputFrameInfo.width > 0 && m_inputFrameInfo.height > 0) {
+            err = drainIEPFilter();
+            if (err != RGY_ERR_NONE) {
+                return err;
+            }
+        } else {
+            // IEPへの入力前は保持フレームがなく、旧寸法の出力サーフェスも確保できないためdrainを省略する。
+            PrintMes(RGY_LOG_DEBUG, _T("IEP drain skipped because no frame has been submitted yet.\n"));
+        }
+        if (!iepFilter->isInitialized()) {
+            PrintMes(RGY_LOG_ERROR, _T("IEP filter is not initialized before resolution change.\n"));
+            return RGY_ERR_INVALID_CALL;
+        }
+        iepFilter->close();
+
+        PrintMes(RGY_LOG_DEBUG, _T("reinitializing IEP filter for %dx%d with base fps %d/%d.\n"),
+            inputFrame.width, inputFrame.height, updatedParam->baseFps.n(), updatedParam->baseFps.d());
+        err = iepFilter->init(updatedParam, m_log);
+        if (err != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to reinitialize IEP filter: %s.\n"), get_err_mes(err));
+            return err;
+        }
+        auto expectedOutputFps = m_baseFpsBeforeDeinterlace;
+        if (isBobMode(mode)) {
+            expectedOutputFps *= 2;
+        }
+        if (updatedParam->baseFps != expectedOutputFps) {
+            PrintMes(RGY_LOG_ERROR, _T("Unexpected IEP output fps after reinitialization: %d/%d, expected %d/%d.\n"),
+                updatedParam->baseFps.n(), updatedParam->baseFps.d(), expectedOutputFps.n(), expectedOutputFps.d());
+            return RGY_ERR_UNDEFINED_BEHAVIOR;
+        }
+        PrintMes(RGY_LOG_DEBUG, _T("IEP reinitialization completed for %dx%d, output fps %d/%d.\n"),
+            inputFrame.width, inputFrame.height, updatedParam->baseFps.n(), updatedParam->baseFps.d());
+        return RGY_ERR_NONE;
+    }
 public:
     PipelineTaskIEP(std::vector<std::unique_ptr<RGAFilter>>& vppfilter, std::shared_ptr<RGYOpenCLContext>& cl, int threadCsp, RGYParamThread threadParamCsp, int outMaxQueueSize, std::shared_ptr<RGYLog> log) :
         PipelineTask(PipelineTaskType::MPPIEP, outMaxQueueSize, log), m_vpFilters(vppfilter), m_cl(cl),
-        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_inputFrameInfo(), m_stride_x(0), m_stride_y(0), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame() {
-
+        m_convert(std::make_unique<RGYConvertCSP>(threadCsp, threadParamCsp)), m_inputFrameInfo(), m_stride_x(0), m_stride_y(0), m_vppOutFrames(), m_metadatalist(), m_prevInputFrame(), m_baseFpsBeforeDeinterlace() {
+        if (m_vpFilters.size() == 1) {
+            const auto param = dynamic_cast<const RGYFilterParamDeinterlaceIEP *>(m_vpFilters.front()->GetFilterParam());
+            if (param != nullptr) {
+                m_baseFpsBeforeDeinterlace = param->baseFps;
+                if (isBobMode(param->mode)) {
+                    m_baseFpsBeforeDeinterlace /= 2;
+                }
+            }
+        }
     };
     virtual ~PipelineTaskIEP() {
         m_prevInputFrame.clear();
@@ -2338,6 +2463,10 @@ public:
                 PrintMes(RGY_LOG_ERROR, _T("Invalid task surface (not mpp).\n"));
                 return RGY_ERR_NULL_PTR;
             }
+            const auto err = reinitIEPFilterForResolutionChange(filterframes.front().first->frameInfo());
+            if (err != RGY_ERR_NONE) {
+                return err;
+            }
             //ここでinput frameの参照を m_prevInputFrame で保持するようにして、OpenCLによるフレームの処理が完了しているかを確認できるようにする
             //これを行わないとこのフレームが再度使われてしまうことになる
             m_prevInputFrame.push_back(std::move(frame));
@@ -2347,37 +2476,14 @@ public:
         }
 
 
-        //エンコードバッファのポインタを渡す
-        int nOutFrames = 1;
-        RGYFrameMpp *ptrOutInfo[2] = { 0 }; // 最大で2フレーム出力がある
-        std::vector<std::unique_ptr<RGYFrameMpp>> surfOut;
-        for (size_t i = 0; i < _countof(ptrOutInfo); i++) {
-            auto surfVppOut = getNewWorkSurfMpp(m_inputFrameInfo, m_stride_x, m_stride_y); // IEPはx_stride, y_strideが入出力で同じでないとおかしなことになる
-            if (surfVppOut == nullptr) {
-                PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for input.\n"));
-                return RGY_ERR_NOT_ENOUGH_BUFFER;
-            }
-            ptrOutInfo[i] = surfVppOut.get();
-            surfOut.push_back(std::move(surfVppOut));
-        }
-        unique_event sync = unique_event(nullptr, CloseEvent);
-        int dummy = 0;
-        auto sts_filter = m_vpFilters.front()->filter_iep(filterframes.front().first, (RGYFrameMpp **)&ptrOutInfo, &nOutFrames, sync);
-        if (sts_filter != RGY_ERR_NONE) {
-            PrintMes(RGY_LOG_ERROR, _T("Error while running filter \"%s\".\n"), m_vpFilters.front()->name().c_str());
-            return sts_filter;
+        int nOutFrames = 0;
+        const auto err = runIEPFilter(filterframes.front().first, nOutFrames);
+        if (err != RGY_ERR_NONE) {
+            return err;
         }
         filterframes.pop_front();
         if (drain && nOutFrames == 0) {
             return RGY_ERR_MORE_DATA; //最後までdrain = trueなら、drain完了
-        }
-
-        //WaitForSingleObject(sync.get(), INFINITE);
-
-        for (int i = 0; i < nOutFrames; i++) {
-            auto outSurf = std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(surfOut[i]));
-            outSurf->addEvent(sync);
-            m_outQeueue.push_back(std::move(outSurf));
         }
         return RGY_ERR_NONE;
     }

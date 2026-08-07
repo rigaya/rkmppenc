@@ -227,6 +227,9 @@ RGY_ERR RGYFrameMpp::allocate(const RGYFrameInfo &frame, MppBufferGroup frmGroup
         return RGY_ERR_NULL_PTR;
     }
     mppframe = createMPPFrame();
+    if (!mppframe) {
+        return RGY_ERR_MEMORY_ALLOC;
+    }
     const int frameSize = mpp_frame_size(frame, y_stride);
     MppBuffer mppbuffer = nullptr;
     auto ret = err_to_rgy(mpp_buffer_get(frmGroup, &mppbuffer, frameSize));

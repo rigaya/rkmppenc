@@ -154,6 +154,8 @@ public:
     RGAFilterDeinterlaceIEP();
     virtual ~RGAFilterDeinterlaceIEP();
     virtual RGY_ERR init(shared_ptr<RGYFilterParam> param, shared_ptr<RGYLog> pPrintMes) override;
+    bool isInitialized() const { return m_threadWorker != nullptr; }
+    virtual void close() override;
 protected:
     struct IepBufferOutInfo {
         RGYFrameMpp *mpp;
@@ -167,7 +169,6 @@ protected:
     RGY_ERR setImage(RGYFrameMpp *frame, const IepCmd cmd);
     RGY_ERR runFilter(std::vector<RGYFrameMpp*> dst, const std::vector<RGYFrameMpp*> src);
     RGY_ERR workerThreadFunc();
-    virtual void close() override;
 
     std::unique_ptr<RGYFrameMpp>& getBufSrc(const int64_t idx) { return m_mppBufSrc[idx % m_mppBufSrc.size()]; }
  

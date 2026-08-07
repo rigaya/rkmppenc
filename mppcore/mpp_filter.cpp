@@ -520,11 +520,12 @@ RGAFilterDeinterlaceIEP::~RGAFilterDeinterlaceIEP() {
 }
 
 void RGAFilterDeinterlaceIEP::close() {
-    if (m_threadWorker->joinable()) {
+    if (m_threadWorker && m_threadWorker->joinable()) {
         m_threadAbort = true;
         SetEvent(m_eventThreadStart.get());
         m_threadWorker->join();
     }
+    m_threadWorker.reset();
     m_eventThreadStart.reset();
     m_eventThreadFin.reset();
     m_threadAbort = false;
@@ -533,6 +534,11 @@ void RGAFilterDeinterlaceIEP::close() {
         buf.reset();
     }
     m_mppBufSrc.clear();
+    {
+        std::lock_guard<std::mutex> lock(m_mtxBufDst);
+        // 再初期化に備えて明示的に空にする。正常にdrain済みなら元から空になっている。
+        m_mppBufDst.clear();
+    }
     if (m_iepCtx) {
         m_iepCtx->ops->deinit(m_iepCtx->priv);
         m_iepCtx.reset();
@@ -574,8 +580,6 @@ RGY_ERR RGAFilterDeinterlaceIEP::init(shared_ptr<RGYFilterParam> param, shared_p
     if (err != RGY_ERR_NONE) {
         return err;
     }
-
-    auto iep = get_iep_ctx();
 
     if (!m_iepCtx) {
         m_iepCtx = std::unique_ptr<iep_com_ctx, decltype(&put_iep_ctx)>(get_iep_ctx(), put_iep_ctx);

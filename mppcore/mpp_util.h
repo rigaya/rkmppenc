@@ -562,6 +562,12 @@ public:
     int x_stride() const { return mpp_frame_get_hor_stride(mppframe.get()); }
     int y_stride() const { return mpp_frame_get_ver_stride(mppframe.get()); }
 
+    bool isAllocated() const {
+        return mppframe
+            && mpp_frame_get_width(mppframe.get()) > 0
+            && mpp_frame_get_height(mppframe.get()) > 0
+            && mpp_frame_get_buffer(mppframe.get()) != nullptr;
+    }
     virtual bool isempty() const { return !mppframe; }
     // MPP frameのPTSも内部ではsigned timestampとして扱う。
     virtual void setTimestamp(int64_t timestamp) override { mpp_frame_set_pts(mppframe.get(), timestamp); }
