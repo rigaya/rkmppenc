@@ -26,8 +26,6 @@
 //
 // ------------------------------------------------------------------------------------------
 
-#pragma once
-
 #include "rgy_filter_cl.h"
 #include "rgy_prm.h"
 #include <array>
@@ -72,7 +70,6 @@ public:
     RGYFilterYadif(shared_ptr<RGYOpenCLContext> context);
     virtual ~RGYFilterYadif();
     virtual RGY_ERR init(shared_ptr<RGYFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
-    virtual void resetTemporalState() override;
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, RGYOpenCLQueue &queue, const std::vector<RGYOpenCLEvent> &wait_events, RGYOpenCLEvent *event) override;
     virtual void close() override;

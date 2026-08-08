@@ -1018,11 +1018,13 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
             return RGY_ERR_INVALID_VIDEO_PARAM;
         }
     }
-    if (inputParam->common.adaptResolution.enable && inputParam->input.bitdepth > 8) {
+    const bool adaptResolution = inputParam->common.adaptResolution.first > 0
+        && inputParam->common.adaptResolution.second > 0;
+    if (adaptResolution && inputParam->input.bitdepth > 8) {
         PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution is not supported with 10-bit input.\n"));
         return RGY_ERR_UNSUPPORTED;
     }
-    if (inputParam->common.adaptResolution.enable && resizeRequired == RGY_VPP_RESIZE_TYPE_OPENCL) {
+    if (adaptResolution && resizeRequired == RGY_VPP_RESIZE_TYPE_OPENCL) {
         PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution is not supported with OpenCL resize.\n"));
         return RGY_ERR_UNSUPPORTED;
     }
@@ -1057,20 +1059,14 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     m_vpFilters.clear();
 
     std::vector<VppType> filterPipeline = InitFiltersCreateVppList(inputParam, cspConvRequired, cropRequired, resizeRequired);
-    if (inputParam->common.adaptResolution.enable) {
+    if (adaptResolution) {
         const auto normalizationResize = std::find(filterPipeline.begin(), filterPipeline.end(), VppType::RGA_RESIZE);
         const auto unsupportedOpenCLFilter = std::find_if(filterPipeline.begin(), normalizationResize, [](const VppType type) {
-            if (getVppFilterType(type) != VppFilterType::FILTER_OPENCL) {
-                return false;
-            }
-            // M6ではparamの安全な複製と時間方向状態の破棄を確認できたフィルタだけ追従させる。
-            return type != VppType::CL_CROP
-                && type != VppType::CL_AFS
-                && type != VppType::CL_NNEDI
-                && type != VppType::CL_YADIF;
+            return getVppFilterType(type) == VppFilterType::FILTER_OPENCL;
         });
         if (unsupportedOpenCLFilter != normalizationResize) {
-            PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution does not yet support the OpenCL filter before normalization resize: %s.\n"),
+            // swデコードでcropとcspconvの両方が必要な場合だけ、先頭のCL_CROPがここへ来る。
+            PrintMes(RGY_LOG_ERROR, _T("--adapt-resolution does not yet support the leading OpenCL filter before normalization resize: %s.\n"),
                 vppfilter_type_to_str(*unsupportedOpenCLFilter).c_str());
             return RGY_ERR_UNSUPPORTED;
         }
@@ -1088,6 +1084,8 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
     //読み込み時のcrop
     sInputCrop *inputCrop = (cropRequired) ? &inputParam->input.crop : nullptr;
     const auto resize = std::make_pair(resizeWidth, resizeHeight);
+    const auto normalizationResize = std::make_pair(croppedWidth, croppedHeight);
+    bool normalizationResizePending = adaptResolution;
     const auto inputSurfaceCsp = inputFrame.csp;
     const auto inputSurfaceBitdepth = inputFrame.bitdepth;
     const bool useInputCspForDeint = inputParam->vpp.deintCsp == VppDeintCsp::Input && hasOpenCLVppDeinterlacer(inputParam, true);
@@ -1131,7 +1129,12 @@ RGY_ERR MPPCore::initFilters(MPPParam *inputParam) {
         const VppFilterType ftype2 = (i+1 < filterPipeline.size()) ? getVppFilterType(filterPipeline[i+1]) : VppFilterType::FILTER_NONE;
         if (ftype1 == VppFilterType::FILTER_RGA) {
             std::vector<std::unique_ptr<RGAFilter>> vppFilters;
-            auto err = AddFilterRGAIEP(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop, resize, VuiFiltered);
+            const bool isNormalizationResize = normalizationResizePending && filterPipeline[i] == VppType::RGA_RESIZE;
+            auto err = AddFilterRGAIEP(vppFilters, inputFrame, filterPipeline[i], inputParam, inputCrop,
+                isNormalizationResize ? normalizationResize : resize, VuiFiltered);
+            if (isNormalizationResize) {
+                normalizationResizePending = false;
+            }
             inputCrop = nullptr;
             if (err != RGY_ERR_NONE) {
                 return err;
@@ -1205,6 +1208,8 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     const bool useInputCspForDeint = inputParam->vpp.deintCsp == VppDeintCsp::Input && hasOpenCLVppDeinterlacer(inputParam, true);
     const bool delayCspConvForDeint = useInputCspForDeint && cspConvRequired;
     const bool initialCspConvRequired = cspConvRequired && !delayCspConvForDeint;
+    const bool adaptResolution = inputParam->common.adaptResolution.first > 0
+        && inputParam->common.adaptResolution.second > 0;
     if (m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN) { // hwデコードの場合
         if (cropRequired) {
             filterPipeline.push_back(VppType::RGA_CROP);
@@ -1222,6 +1227,17 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
         } else {
             filterPipeline.push_back(VppType::CL_CROP);
         }
+    }
+    // --adapt-resolution有効時は、正規化resizeより上流にOpenCLフィルタを置かないため、
+    // IEPを先頭crop/cspconvの直後へ移す。IEPは正規化前のインタレース入力を受け取る必要がある。
+    // 未指定時は既存ユーザーのフィルタ順を変えないよう、従来位置へ追加する。
+    if (adaptResolution && inputParam->deint != IEPDeinterlaceMode::DISABLED) {
+        filterPipeline.push_back(VppType::IEP_DEINTERLACE);
+    }
+    // 解像度変更時にブロックを増やせないため、初期解像度へ戻すRGA resizeを常時確保する。
+    // IEPを使わない場合は先頭crop/cspconvの直後、使う場合はIEPの直後になる。
+    if (adaptResolution) {
+        filterPipeline.push_back(VppType::RGA_RESIZE);
     }
     auto addColorspaceFilters = [&]() {
         if (inputParam->vpp.colorspace.enable) {
@@ -1275,7 +1291,7 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.decomb.enable)        filterPipeline.push_back(VppType::CL_DECOMB);
     if (inputParam->vpp.bwdif.enable)         filterPipeline.push_back(VppType::CL_BWDIF);
     if (inputParam->vpp.ivtc.enable)          filterPipeline.push_back(VppType::CL_IVTC);
-    if (inputParam->deint != IEPDeinterlaceMode::DISABLED) filterPipeline.push_back(VppType::IEP_DEINTERLACE);
+    if (!adaptResolution && inputParam->deint != IEPDeinterlaceMode::DISABLED) filterPipeline.push_back(VppType::IEP_DEINTERLACE);
     if (inputParam->vpp.vinverse.enable)      filterPipeline.push_back(VppType::CL_VINVERSE);
     if (inputParam->vpp.decimate.enable)      filterPipeline.push_back(VppType::CL_DECIMATE);
     if (inputParam->vpp.mpdecimate.enable)    filterPipeline.push_back(VppType::CL_MPDECIMATE);
@@ -1305,8 +1321,6 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     if (inputParam->vpp.subburn.size()>0)     filterPipeline.push_back(VppType::CL_SUBBURN);
     if (     resizeRequired == RGY_VPP_RESIZE_TYPE_OPENCL) filterPipeline.push_back(VppType::CL_RESIZE);
     else if (resizeRequired != RGY_VPP_RESIZE_TYPE_NONE)   filterPipeline.push_back(VppType::RGA_RESIZE);
-    // 解像度変更時にフィルタブロックを増やせないため、等倍でも正規化用のRGA resizeを確保しておく。
-    else if (inputParam->common.adaptResolution.enable)    filterPipeline.push_back(VppType::RGA_RESIZE);
     if (inputParam->vpp.unsharp.enable)    filterPipeline.push_back(VppType::CL_UNSHARP);
     if (inputParam->vpp.chromashift.enable) filterPipeline.push_back(VppType::CL_CHROMASHIFT);
     if (inputParam->vpp.deblock.enable)    filterPipeline.push_back(VppType::CL_DEBLOCK);
@@ -1353,11 +1367,15 @@ std::vector<VppType> MPPCore::InitFiltersCreateVppList(const MPPParam *inputPara
     }
 
     // cropとresizeはmfxとopencl両方ともあるので、前後のフィルタがどちらもOpenCLだったら、そちらに合わせる
+    bool normalizationResizePending = adaptResolution;
     for (size_t i = 0; i < filterPipeline.size(); i++) {
         const VppFilterType prev = (i >= 1)                        ? getVppFilterType(filterPipeline[i - 1]) : VppFilterType::FILTER_NONE;
         const VppFilterType next = (i + 1 < filterPipeline.size()) ? getVppFilterType(filterPipeline[i + 1]) : VppFilterType::FILTER_NONE;
         if (filterPipeline[i] == VppType::RGA_RESIZE) {
-            if (resizeRequired == RGY_VPP_RESIZE_TYPE_AUTO // 自動以外の指定があれば、それに従うので、自動の場合のみ変更
+            const bool isNormalizationResize = normalizationResizePending;
+            normalizationResizePending = false;
+            if (!isNormalizationResize // 正規化resizeだけは必ずRGAのまま維持する
+                && resizeRequired == RGY_VPP_RESIZE_TYPE_AUTO // 自動以外の指定があれば、それに従うので、自動の場合のみ変更
                 && m_cl
                 && prev == VppFilterType::FILTER_OPENCL
                 && next == VppFilterType::FILTER_OPENCL) {
@@ -3244,14 +3262,10 @@ bool MPPCore::VppAfsRffAware() const {
 RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
     m_pipelineTasks.clear();
 
-    if (auto avcodecReader = dynamic_cast<RGYInputAvcodec *>(m_pFileReader.get()); avcodecReader != nullptr) {
-        avcodecReader->setAdaptResolution(prm->common.adaptResolution.enable);
-    }
-
     if (m_decoder) {
         auto taskDecode = std::make_unique<PipelineTaskMPPDecode>(m_decoder.get(), 1, m_pFileReader.get(),
             m_pFileReader->getInputCodec() == RGY_CODEC_MPEG2, m_pLog);
-        taskDecode->setAdaptResolution(prm->common.adaptResolution.enable);
+        taskDecode->setAdaptResolution(prm->common.adaptResolution.first > 0 && prm->common.adaptResolution.second > 0);
         m_pipelineTasks.push_back(std::move(taskDecode));
     } else {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(0, m_pFileReader.get(), m_cl, m_pLog));
@@ -3332,15 +3346,10 @@ RGY_ERR MPPCore::initPipeline(MPPParam *prm) {
         return RGY_ERR_INVALID_OPERATION;
     }
 
-    if (prm->common.adaptResolution.enable) {
+    if (prm->common.adaptResolution.first > 0 && prm->common.adaptResolution.second > 0) {
         const auto inputInfo = m_pFileReader->GetInputFrameInfo();
-        // 宣言解像度と実際の符号化寸法がずれる場合に備え、省略時だけ32の倍数へ切り上げる。
-        const int inputMaxWidth = (prm->common.adaptResolution.maxWidth > 0)
-            ? prm->common.adaptResolution.maxWidth
-            : ALIGN(inputInfo.srcWidth, 32);
-        const int inputMaxHeight = (prm->common.adaptResolution.maxHeight > 0)
-            ? prm->common.adaptResolution.maxHeight
-            : ALIGN(inputInfo.srcHeight, 32);
+        const int inputMaxWidth = prm->common.adaptResolution.first;
+        const int inputMaxHeight = prm->common.adaptResolution.second;
         // getNewWorkSurfMpp()は入力だけでなく正規化resizeの出力にも使うため、エンコード解像度も上限に含める。
         const int maxWidth = std::max(inputMaxWidth, m_encWidth);
         const int maxHeight = std::max(inputMaxHeight, m_encHeight);

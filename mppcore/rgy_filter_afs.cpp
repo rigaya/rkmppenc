@@ -359,19 +359,6 @@ int afsStreamStatus::open_log(const tstring& log_filename) {
     return 0;
 }
 
-void afsStreamStatus::resetTemporalState() {
-    m_initialized = false;
-    m_quarter_jitter = 0;
-    m_additional_jitter = 0;
-    m_phase24 = 0;
-    m_position24 = 0;
-    m_prev_jitter = 0;
-    m_prev_rff_smooth = 0;
-    m_prev_status = 0;
-    m_set_frame = -1;
-    std::fill(std::begin(m_pos), std::end(m_pos), afsFrameTs{});
-}
-
 void afsStreamStatus::write_log(const afsFrameTs *const frameTs) {
     if (!m_fpLog) {
         return;
@@ -1218,20 +1205,6 @@ void RGYFilterAfs::close() {
     m_count_motion.reset();
     m_fpTimecode.reset();
     AddMessage(RGY_LOG_DEBUG, _T("closed afs filter.\n"));
-}
-
-void RGYFilterAfs::resetTemporalState() {
-    m_eventSrcAdd.reset();
-    m_eventScanFrame.reset();
-    m_eventMergeScan.reset();
-    m_nFrame = 0;
-    m_nPts = 0;
-    m_source.clear();
-    m_scan.clear();
-    m_stripe.clear();
-    m_status.clear();
-    m_streamsts.resetTemporalState();
-    m_count_motion.reset();
 }
 
 static inline BOOL is_latter_field(int pos_y, int tb_order) {
