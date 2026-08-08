@@ -12121,19 +12121,20 @@ int parse_one_common_option(const TCHAR *option_name, const TCHAR *strInput[], i
         return 0;
     }
     if (IS_OPTION("adapt-resolution")) {
-        common->adaptResolution.enable = true;
-        if (i + 1 < nArgNum && strInput[i + 1][0] != _T('-')) {
-            i++;
-            int a[2] = { 0 };
-            if (   2 == _stscanf_s(strInput[i], _T("%dx%d"), &a[0], &a[1])
-                || 2 == _stscanf_s(strInput[i], _T("%d:%d"), &a[0], &a[1])) {
-                common->adaptResolution.maxWidth  = a[0];
-                common->adaptResolution.maxHeight = a[1];
-            } else {
-                print_cmd_error_invalid_value(option_name, strInput[i]);
-                return 1;
-            }
+        if (i + 1 >= nArgNum) {
+            print_cmd_error_invalid_value(option_name, _T(""));
+            return 1;
         }
+        i++;
+        int resolution[2] = { 0, 0 };
+        // 共通パーサでは形式と正数であることだけを確認する。サーフェス型の上限や初期入力との大小関係は、
+        // encoderとヘッダ解析結果に依存するため、reader初期化後のpipeline側で検証する。
+        if (2 != _stscanf_s(strInput[i], _T("%dx%d"), &resolution[0], &resolution[1])
+            || resolution[0] <= 0 || resolution[1] <= 0) {
+            print_cmd_error_invalid_value(option_name, strInput[i]);
+            return 1;
+        }
+        common->adaptResolution = std::make_pair(resolution[0], resolution[1]);
         return 0;
     }
 #if !ENCODER_MPP
@@ -15540,10 +15541,7 @@ tstring gen_cmd(const RGYParamCommon *param, const RGYParamCommon *defaultPrm, b
 
     OPT_LST(_T("--input-hevc-bsf"), hevcbsf, list_hevc_bsf_mode);
     if (param->adaptResolution != defaultPrm->adaptResolution) {
-        cmd << _T(" --adapt-resolution");
-        if (param->adaptResolution.maxWidth > 0 && param->adaptResolution.maxHeight > 0) {
-            cmd << _T(" ") << param->adaptResolution.maxWidth << _T("x") << param->adaptResolution.maxHeight;
-        }
+        cmd << _T(" --adapt-resolution ") << param->adaptResolution.first << _T("x") << param->adaptResolution.second;
     }
     OPT_STR_PATH(_T("--tcfile-in"), tcfileIn);
     if (param->timebase != defaultPrm->timebase) {

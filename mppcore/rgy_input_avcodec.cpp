@@ -285,6 +285,7 @@ RGYInputAvcodecPrm::RGYInputAvcodecPrm(RGYInputPrm base) :
     qpTableListRef(nullptr),
     inputOpt(),
     hevcbsf(RGYHEVCBsf::INTERNAL),
+    adaptResolution({ 0, 0 }),
     avswDecoder() {
 
 }
@@ -294,10 +295,8 @@ RGYInputAvcodec::RGYInputAvcodec() :
     m_logFramePosList(),
     m_fpPacketList(),
     m_hevcMp42AnnexbBuffer(),
-    m_initialSrcWidth(0),
-    m_initialSrcHeight(0),
-    m_adaptResolution(false),
-    m_pendingResolutionChangeFrame(false),
+    m_maxSrcWidth(0),
+    m_maxSrcHeight(0),
     m_suppressPulldownDetect(false),
     m_pulldownDetected(false) {
     m_readerName = _T("av" DECODER_NAME "/avsw");
@@ -1690,7 +1689,6 @@ RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, co
     // member before getFirstFramePosAndFrameRate runs. Consumed at rgy_input_avcodec.cpp
     // bPulldown-mutation site. Set by --vpp-ivtc expand=on/auto.
     m_suppressPulldownDetect = input_prm->suppressPulldownMutation;
-    m_pendingResolutionChangeFrame = false;
 
     if (input_prm->readVideo) {
         if (inputInfo->type != RGY_INPUT_FMT_AVANY) {
@@ -2316,8 +2314,26 @@ RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, co
         //情報を格納
         m_inputVideoInfo.srcWidth    = m_Demux.video.stream->codecpar->width;
         m_inputVideoInfo.srcHeight   = m_Demux.video.stream->codecpar->height;
-        m_initialSrcWidth            = m_inputVideoInfo.srcWidth;
-        m_initialSrcHeight           = m_inputVideoInfo.srcHeight;
+        // avcodec readerは--avswだけでなく、--avhwへ圧縮パケットを供給する経路でも使われる。
+        // ここではヘッダ解析後の実際の初期解像度を基準に、入力中に許可する物理上限を固定する。
+        // m_inputVideoInfo.srcWidth/Heightはフレームごとに変化する現在の論理解像度、m_maxSrcWidth/Heightは
+        // pipelineが先行確保したサーフェスと一致させる不変の上限で、両者を兼用してはいけない。
+        // 初期値より小さい指定は処理開始前に失敗させる。pipeline側でも同じ検査を行うのは、
+        // avcodec以外のreaderも共通パラメータを通るため。未指定時は初期解像度を上限とし、従来のメモリ使用量を保つ。
+        if (input_prm->adaptResolution.first > 0 && input_prm->adaptResolution.second > 0) {
+            if (input_prm->adaptResolution.first < m_inputVideoInfo.srcWidth
+                || input_prm->adaptResolution.second < m_inputVideoInfo.srcHeight) {
+                AddMessage(RGY_LOG_ERROR, _T("--adapt-resolution %dx%d is smaller than the initial input resolution %dx%d.\n"),
+                    input_prm->adaptResolution.first, input_prm->adaptResolution.second,
+                    m_inputVideoInfo.srcWidth, m_inputVideoInfo.srcHeight);
+                return RGY_ERR_INVALID_PARAM;
+            }
+            m_maxSrcWidth = input_prm->adaptResolution.first;
+            m_maxSrcHeight = input_prm->adaptResolution.second;
+        } else {
+            m_maxSrcWidth = m_inputVideoInfo.srcWidth;
+            m_maxSrcHeight = m_inputVideoInfo.srcHeight;
+        }
         m_inputVideoInfo.sar[0]      = (bAspectRatioUnknown) ? 0 : m_Demux.video.stream->codecpar->sample_aspect_ratio.num;
         m_inputVideoInfo.sar[1]      = (bAspectRatioUnknown) ? 0 : m_Demux.video.stream->codecpar->sample_aspect_ratio.den;
         m_inputVideoInfo.frames      = 0;
@@ -3874,7 +3890,7 @@ RGY_ERR RGYInputAvcodec::GetHeader(RGYBitstream *pBitstream) {
 RGY_ERR RGYInputAvcodec::LoadNextFrameInternal(RGYFrame *pSurface) {
     if (m_Demux.video.codecCtxDecode) {
         //動画のデコードを行う
-        int got_frame = m_pendingResolutionChangeFrame ? TRUE : 0;
+        int got_frame = 0;
         while (!got_frame) {
             if (!m_Demux.thread.thInput.joinable() //入力スレッドがなければ、自分で読み込む
                 && m_Demux.qVideoPkt.get_keep_length() > 0) { //keep_length == 0なら読み込みは終了していて、これ以上読み込む必要はない
@@ -3923,37 +3939,6 @@ RGY_ERR RGYInputAvcodec::LoadNextFrameInternal(RGYFrame *pSurface) {
             }
             got_frame = TRUE;
         }
-
-        // デコード後でなければ実寸は分からない。コピー先が旧寸法ならこのフレームを保持して
-        // RGY_ERR_MORE_SURFACEを返し、呼び出し側に新寸法のサーフェスを再確保させる。
-        if (   m_Demux.video.frame->width  != m_inputVideoInfo.srcWidth
-            || m_Demux.video.frame->height != m_inputVideoInfo.srcHeight) {
-            if (!m_adaptResolution) {
-                AddMessage(RGY_LOG_ERROR, _T("input resolution changed from %dx%d to %dx%d, which is not supported yet.\n"),
-                    m_inputVideoInfo.srcWidth, m_inputVideoInfo.srcHeight, m_Demux.video.frame->width, m_Demux.video.frame->height);
-                AddMessage(RGY_LOG_ERROR, _T("  Please split the input file at the resolution change point.\n"));
-                return RGY_ERR_UNSUPPORTED;
-            }
-            const int newWidth = m_Demux.video.frame->width;
-            const int newHeight = m_Demux.video.frame->height;
-            if (m_inputVideoInfo.crop.e.left + m_inputVideoInfo.crop.e.right >= newWidth
-                || m_inputVideoInfo.crop.e.up + m_inputVideoInfo.crop.e.bottom >= newHeight) {
-                AddMessage(RGY_LOG_ERROR, _T("input crop is too large for the changed resolution %dx%d.\n"), newWidth, newHeight);
-                return RGY_ERR_INVALID_PARAM;
-            }
-            AddMessage(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; updating software decoder output.\n"),
-                m_inputVideoInfo.srcWidth, m_inputVideoInfo.srcHeight, newWidth, newHeight);
-            m_inputVideoInfo.srcWidth = newWidth;
-            m_inputVideoInfo.srcHeight = newHeight;
-        }
-        if (m_adaptResolution && pSurface != nullptr) {
-            const auto surfaceInfo = pSurface->frameInfo();
-            if (surfaceInfo.width != m_inputVideoInfo.srcWidth || surfaceInfo.height != m_inputVideoInfo.srcHeight) {
-                m_pendingResolutionChangeFrame = true;
-                return RGY_ERR_MORE_SURFACE;
-            }
-        }
-        m_pendingResolutionChangeFrame = false;
         auto flags = RGY_FRAME_FLAG_NONE;
         const auto findPos = m_Demux.frames.findpts(m_Demux.video.frame->pts, &m_Demux.video.findPosLastIdx);
         if (findPos.poc != FRAMEPOS_POC_INVALID) {
@@ -3968,14 +3953,7 @@ RGY_ERR RGYInputAvcodec::LoadNextFrameInternal(RGYFrame *pSurface) {
         }
         pSurface->setFlags(flags);
         pSurface->setTimestamp(m_Demux.video.frame->pts);
-        auto duration = rgy_avframe_get_duration(m_Demux.video.frame);
-        if (duration == AV_NOPTS_VALUE || duration <= 0) {
-            duration = (findPos.duration > 0) ? (int64_t)findPos.duration + findPos.duration2 : 0;
-        }
-        if (duration <= 0 && m_inputVideoInfo.fpsN > 0 && m_inputVideoInfo.fpsD > 0) {
-            duration = av_rescale_q(1, av_inv_q(av_make_q(m_inputVideoInfo.fpsN, m_inputVideoInfo.fpsD)), m_Demux.video.stream->time_base);
-        }
-        pSurface->setDuration(duration);
+        pSurface->setDuration(rgy_avframe_get_duration(m_Demux.video.frame));
         pSurface->setPicstruct((m_inputVideoInfo.picstruct == RGY_PICSTRUCT_AUTO) ? picstruct_avframe_to_rgy(m_Demux.video.frame) : m_inputVideoInfo.picstruct);
         pSurface->dataList().clear();
 #if 0
@@ -4012,6 +3990,36 @@ RGY_ERR RGYInputAvcodec::LoadNextFrameInternal(RGYFrame *pSurface) {
             }
         }
 
+        //入力ファイル途中での解像度変更の検出 (--avsw / avhwのsw decode時)
+        //ARIBのマルチ編成TSなどでHD(1440x1080)とSD(720x480)が切り替わる場合にここに来る。
+        //追従する場合はm_inputVideoInfo.srcWidth/Heightを更新して継続し、以降のフレームは新解像度でサーフェスへ書き込まれる。
+        //解像度変更を下流へ伝播させない処理(正規化resizeの挿入)はPipelineTaskOpenCL側で行う。
+        if (   m_Demux.video.frame->width  != m_inputVideoInfo.srcWidth
+            || m_Demux.video.frame->height != m_inputVideoInfo.srcHeight) {
+            const int newWidth = m_Demux.video.frame->width;
+            const int newHeight = m_Demux.video.frame->height;
+            // この判定は、現在解像度を更新したりフレームをサーフェスへコピーしたりする前に行う。
+            // 下流の入力プールはこの上限で先行確保され、途中での再確保は行わない。上限超過を通すと
+            // LoadNextFrameのコピーが確保範囲を超えるため、安全に継続できない。通過後に更新するのは
+            // m_inputVideoInfoの論理解像度だけで、後続のMFX/OpenCL VPPが変更を検出して初期出力解像度へ正規化する。
+            if (newWidth > m_maxSrcWidth || newHeight > m_maxSrcHeight) {
+                AddMessage(RGY_LOG_ERROR, _T("input resolution changed from %dx%d to %dx%d, exceeding the configured resolution limit %dx%d, which is not supported.\n"),
+                    m_inputVideoInfo.srcWidth, m_inputVideoInfo.srcHeight, newWidth, newHeight,
+                    m_maxSrcWidth, m_maxSrcHeight);
+                AddMessage(RGY_LOG_ERROR, _T("  Please split the input file at the resolution change point.\n"));
+                return RGY_ERR_UNSUPPORTED;
+            }
+            if (m_inputVideoInfo.crop.e.left + m_inputVideoInfo.crop.e.right >= newWidth
+                || m_inputVideoInfo.crop.e.up + m_inputVideoInfo.crop.e.bottom >= newHeight) {
+                AddMessage(RGY_LOG_ERROR, _T("input crop is too large for the changed resolution %dx%d.\n"), newWidth, newHeight);
+                return RGY_ERR_INVALID_PARAM;
+            }
+            AddMessage(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; updating software decoder output.\n"),
+                m_inputVideoInfo.srcWidth, m_inputVideoInfo.srcHeight, newWidth, newHeight);
+            m_inputVideoInfo.srcWidth = newWidth;
+            m_inputVideoInfo.srcHeight = newHeight;
+        }
+
         //実際には初期化時と異なるcspの場合があるので、ここで再度チェック
         m_inputCsp = csp_avpixfmt_to_rgy((AVPixelFormat)m_Demux.video.frame->format);
         if (m_convert->getFunc(m_inputCsp, m_inputVideoInfo.csp, m_Demux.video.simdCsp) == nullptr) {
@@ -4021,8 +4029,9 @@ RGY_ERR RGYInputAvcodec::LoadNextFrameInternal(RGYFrame *pSurface) {
         }
 
         //フレームデータをコピー
-        //解像度変更時は上でRGY_ERR_MORE_SURFACEを返し、新寸法で確保したpSurfaceへの再呼び出しを待つ。
-        //RGYFrameMppは各プレーンのポインタを明示保持するため、必ずその新しいframeInfoからコピー先を取得する。
+        //pSurface->ptrArray()は使えない。pSurfaceは確保時(=初期)解像度のままのことがあり、
+        //その場合planarでは各プレーンの先頭オフセットが確保時解像度基準となり、新解像度でのプレーン配置とずれてしまうため、
+        //新解像度で作り直したdstFrameInfoからプレーンのポインタとpitchを求める。
         void *dst_array[RGY_MAX_PLANES];
         auto dstFrameInfo = pSurface->frameInfo();
         dstFrameInfo.width = m_inputVideoInfo.srcWidth;
