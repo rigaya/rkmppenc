@@ -752,7 +752,7 @@ public:
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
         // 可変解像度avswは、readerが大きいAVFrameを検出する前に書き込み先を確保する。
         // 現在寸法ではなく--adapt-resolutionの上限で確保し、拡大時の書き込み超過を防ぐ。
-        const auto inputFrameInfo = m_input->GetInputFrameInfo();
+        const auto inputFrameInfo = m_input->GetInputFrameInfoForAlloc();
         RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
         return std::make_pair(info, m_outMaxQueueSize);
     };
@@ -814,7 +814,7 @@ public:
             surfWork.frame()->setInputFrameId(m_inFrames++);
             m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(surfWork));
         } else if (err == RGY_ERR_MORE_SURFACE) {
-            const auto inputFrameInfo = m_input->GetInputFrameInfo();
+            const auto inputFrameInfo = m_input->GetInputFrameInfoForAlloc();
             const RGYFrameInfo replacementFrame(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight,
                 inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
             const int replacementSurfaceCount = static_cast<int>(m_workSurfs.bufCount());
@@ -835,7 +835,7 @@ public:
     RGY_ERR LoadNextFrameSys() {
         // LoadNextFrame()内で現在より大きいAVFrameを初めて検出しても安全に書き込めるよう、
         // 論理寸法ではなくreaderが返す物理確保上限を使う。
-        const auto inputFrameInfo = m_input->GetInputFrameInfo();
+        const auto inputFrameInfo = m_input->GetInputFrameInfoForAlloc();
         RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_MPP);
         auto surfWork = getNewWorkSurfMpp(info);
         if (surfWork == nullptr) {
