@@ -174,6 +174,7 @@ protected:
     std::unique_ptr<MPPContext> m_decoder;
 
     vector<VppVilterBlock>        m_vpFilters;
+    bool                          m_canFollowResolutionChange; // 正規化resizeより上流の構成が解像度変更を扱えるか
     shared_ptr<RGYFilterParam>    m_pLastFilterParam;
     unique_ptr<RGYFilterSsim>     m_videoQualityMetric;
 

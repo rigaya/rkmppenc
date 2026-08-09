@@ -892,7 +892,7 @@ protected:
     MppBufferGroup m_frameGrp;
     int m_initialWidth;
     int m_initialHeight;
-    bool m_adaptResolution;
+    bool m_canFollowResolutionChange; // 下流で初期解像度へ正規化できる場合のみtrue
     bool m_adjustTimestamp;
     int64_t m_firstBitstreamTimestamp; // bitstreamの最初のtimestamp
     int64_t m_firstFrameTimestamp; // frameの最初のtimestamp
@@ -907,7 +907,7 @@ protected:
 public:
     PipelineTaskMPPDecode(MPPContext *dec, int outMaxQueueSize, RGYInput *input, bool adjustTimestamp, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::MPPDEC, outMaxQueueSize, log), m_dec(dec), m_input(input),
-        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_initialWidth(0), m_initialHeight(0), m_adaptResolution(false), m_adjustTimestamp(adjustTimestamp),
+        m_decInputBitstream(RGYBitstreamInit()), m_frameGrp(), m_initialWidth(0), m_initialHeight(0), m_canFollowResolutionChange(false), m_adjustTimestamp(adjustTimestamp),
         m_firstBitstreamTimestamp(AV_NOPTS_VALUE), m_firstFrameTimestamp(AV_NOPTS_VALUE), m_queueTimestamp(), m_queueTimestampWrap(), m_queueHDR10plusMetadata(), m_dataFlag(),
         m_decInBitStreamEOS(false), m_decOutFrameEOS(false), m_abort(false), m_decOutFrames(0) {
         m_queueHDR10plusMetadata.init(256);
@@ -922,7 +922,7 @@ public:
         m_decInputBitstream.clear();
     };
     void setDec(MPPContext *dec) { m_dec = dec; };
-    void setAdaptResolution(bool enable) { m_adaptResolution = enable; };
+    void setCanFollowResolutionChange(bool enable) { m_canFollowResolutionChange = enable; };
     virtual bool abort() { m_abort = true; return true; }; // 中断指示を受け取ったらtrueを返す
 
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
@@ -1036,7 +1036,7 @@ public:
             } else {
                 resolutionChanged = width != m_initialWidth || height != m_initialHeight;
                 if (resolutionChanged) {
-                    if (m_adaptResolution) {
+                    if (m_canFollowResolutionChange) {
                         PrintMes(RGY_LOG_DEBUG, _T("input resolution changed from %dx%d to %dx%d; updating MPP decoder output.\n"),
                             m_initialWidth, m_initialHeight, width, height);
                     } else {
