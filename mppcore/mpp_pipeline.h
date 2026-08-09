@@ -726,6 +726,22 @@ class PipelineTaskInput : public PipelineTask {
     RGYInput *m_input;
     std::shared_ptr<RGYOpenCLContext> m_cl;
     bool m_abort;
+    RGY_ERR getReaderPostCropResolution(int& width, int& height) {
+        width = 0;
+        height = 0;
+        const auto inputFrameInfo = m_input->GetInputFrameInfo();
+        if (!cropEnabled(inputFrameInfo.crop)) {
+            return RGY_ERR_NONE;
+        }
+        width = inputFrameInfo.srcWidth - inputFrameInfo.crop.e.left - inputFrameInfo.crop.e.right;
+        height = inputFrameInfo.srcHeight - inputFrameInfo.crop.e.up - inputFrameInfo.crop.e.bottom;
+        if (width <= 0 || height <= 0) {
+            PrintMes(RGY_LOG_ERROR, _T("入力cropが現在の解像度%dx%dに対して大きすぎます。\n"),
+                inputFrameInfo.srcWidth, inputFrameInfo.srcHeight);
+            return RGY_ERR_INVALID_PARAM;
+        }
+        return RGY_ERR_NONE;
+    }
 public:
     PipelineTaskInput(int outMaxQueueSize, RGYInput *input, std::shared_ptr<RGYOpenCLContext> cl, std::shared_ptr<RGYLog> log)
         : PipelineTask(PipelineTaskType::INPUT, outMaxQueueSize, log), m_input(input), m_cl(cl), m_abort(false) {
@@ -734,6 +750,8 @@ public:
     virtual ~PipelineTaskInput() {};
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
+        // 可変解像度avswは、readerが大きいAVFrameを検出する前に書き込み先を確保する。
+        // 現在寸法ではなく--adapt-resolutionの上限で確保し、拡大時の書き込み超過を防ぐ。
         const auto inputFrameInfo = m_input->GetInputFrameInfo();
         RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_CPU);
         return std::make_pair(info, m_outMaxQueueSize);
@@ -762,6 +780,18 @@ public:
                 // 解像度変更後のCL作業サーフェスへ切り替えてから、保留中のAVFrameを再取得する。
             } else {
                 PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(err));
+            }
+        }
+        if (err == RGY_ERR_NONE) {
+            int postCropWidth = 0;
+            int postCropHeight = 0;
+            err = getReaderPostCropResolution(postCropWidth, postCropHeight);
+            if (err == RGY_ERR_NONE && postCropWidth > 0 && postCropHeight > 0) {
+                // readerはcrop後の画を左上詰めで書くため、物理確保は維持して論理寸法だけを縮める。
+                clframe->frame.width = postCropWidth;
+                clframe->frame.height = postCropHeight;
+                mappedframe->frame.width = postCropWidth;
+                mappedframe->frame.height = postCropHeight;
             }
         }
         if (err == RGY_ERR_NONE) {
@@ -803,6 +833,8 @@ public:
         return err;
     }
     RGY_ERR LoadNextFrameSys() {
+        // LoadNextFrame()内で現在より大きいAVFrameを初めて検出しても安全に書き込めるよう、
+        // 論理寸法ではなくreaderが返す物理確保上限を使う。
         const auto inputFrameInfo = m_input->GetInputFrameInfo();
         RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_MPP);
         auto surfWork = getNewWorkSurfMpp(info);
@@ -818,6 +850,16 @@ public:
         } else if (err != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Error in reader: %s.\n"), get_err_mes(err));
         } else {
+            int postCropWidth = 0;
+            int postCropHeight = 0;
+            err = getReaderPostCropResolution(postCropWidth, postCropHeight);
+            if (err != RGY_ERR_NONE) {
+                return err;
+            }
+            if (postCropWidth > 0 && postCropHeight > 0) {
+                // strideとバッファ配置は変えず、readerが書いたcrop後の画を論理寸法として公開する。
+                surfWork->setResolution(postCropWidth, postCropHeight);
+            }
             surfWork->setInputFrameId(m_inFrames++);
             m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_workSurfs.addSurface(surfWork)));
         }

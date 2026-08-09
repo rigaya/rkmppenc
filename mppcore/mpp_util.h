@@ -562,6 +562,10 @@ public:
 
     int x_stride() const { return mpp_frame_get_hor_stride(mppframe.get()); }
     int y_stride() const { return mpp_frame_get_ver_stride(mppframe.get()); }
+    void setResolution(const int width, const int height) {
+        mpp_frame_set_width(mppframe.get(), width);
+        mpp_frame_set_height(mppframe.get(), height);
+    }
 
     bool isAllocated() const {
         return mppframe
