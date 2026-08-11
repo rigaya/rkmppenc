@@ -88,12 +88,12 @@ public:
     // argsPrefix は入出力ファイル名など、パースを通すために常に必要な引数
     // codecList はコーデックによって有効・無効が変わるオプションのために順に試すコーデック
     RGYCmdSelfTest(ParseFunc parse, GenFunc gen,
+        const std::vector<std::vector<tstring>>& extraList = { {}, { _T("--vbr"), _T("5000"), _T("-b"), _T("3") } },
         const std::vector<tstring>& argsPrefix = { _T("-i"), _T("rgy_selftest_input.yuv"), _T("-o"), _T("rgy_selftest_output.raw") },
         const std::vector<tstring>& codecList = { _T("h264"), _T("hevc"), _T("av1") }) :
         m_parse(parse), m_gen(gen), m_argsPrefixList(), m_cmdDefaultList(), m_prefixIdx(0) {
-        // レート制御やBフレームの有無によって生成されるかどうかが変わるオプションがあるため、それらを指定した前提も用意する
-        // (パースできない組み合わせは run() 側で対象から外すので、エンコーダごとに変える必要はない)
-        static const std::vector<std::vector<tstring>> extraList = { {}, { _T("--vbr"), _T("5000"), _T("-b"), _T("3") } };
+        // レート制御やBフレームの有無によって生成されるかどうかが変わるオプションがあるため、それらを指定した前提も用意する。
+        // エンコーダ固有の前提は呼び出し側から extraList で指定できる。
         for (const auto& extra : extraList) {
             for (const auto& codec : codecList) {
                 auto prefix = argsPrefix;

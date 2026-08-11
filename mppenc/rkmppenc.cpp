@@ -113,7 +113,9 @@ int parse_print_options(const TCHAR *option_name, const TCHAR *arg1, const RGYPa
                 auto argv = rgy_cmd_selftest_argv(args);
                 return parse_cmd(prm, (int)argv.size() - 1, argv.data());
             },
-            [](const MPPParam *prm) { return gen_cmd(prm, false); });
+            [](const MPPParam *prm) { return gen_cmd(prm, false); },
+            // MPPにはBフレーム指定がないため、--vbrだけを指定した前提を使う
+            { {}, { _T("--vbr"), _T("5000") } });
         return selftest.run((arg1[0] != _T('-')) ? arg1 : _T(""));
     }
     if (0 == _tcscmp(option_name, _T("check-mppinfo"))) {

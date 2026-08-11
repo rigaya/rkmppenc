@@ -856,11 +856,11 @@ tstring gen_cmd(const MPPParam *pParams, bool save_disabled_prm, RGYDisableGenCm
         OPT_LST_H264(_T("--level"), _T(""), level, list_avc_level);
         OPT_LST_H264(_T("--profile"), _T(""), profile, list_avc_profile);
     }
-    //if (pParams->codec == RGY_CODEC_HEVC || save_disabled_prm) {
-    //    OPT_LST_HEVC(_T("--level"), _T(""), level, list_hevc_level);
-    //    OPT_LST_HEVC(_T("--profile"), _T(""), profile, list_hevc_profile);
-    //    OPT_LST_HEVC(_T("--tier"), _T(""), tier, list_hevc_tier);
-    //}
+    if (pParams->codec == RGY_CODEC_HEVC || save_disabled_prm) {
+        OPT_LST_HEVC(_T("--level"), _T(""), level, list_hevc_level);
+        OPT_LST_HEVC(_T("--profile"), _T(""), profile, list_hevc_profile);
+        OPT_LST_HEVC(_T("--tier"), _T(""), tier, list_hevc_tier);
+    }
     //if (pParams->codec == RGY_CODEC_AV1 || save_disabled_prm) {
     //    OPT_LST_AV1(_T("--level"), _T(""), level, list_av1_level);
     //    OPT_LST_AV1(_T("--profile"), _T(""), profile, list_av1_profile);
