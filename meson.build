@@ -211,9 +211,17 @@ int main(void) { return 0; }
   endif
 endif
 if enable_libass
-  libass_dep = dependency('libass', required: true)
+  libass_dep = dependency('libass', required: true, static: get_option('libass_static'))
+  libass_compile_dep = libass_dep.partial_dependency(includes: true, compile_args: true)
+  if get_option('libass_static')
+    libass_link_dep = libass_dep
+  else
+    libass_link_dep = disabler()
+  endif
 else
   libass_dep = disabler()
+  libass_compile_dep = disabler()
+  libass_link_dep = disabler()
 endif
 
 # libdovi / libhdr10plus: system優先、なければ同梱build (configure互換)
@@ -364,6 +372,7 @@ conf_data.set10('ENABLE_SM_READER', false)
 conf_data.set10('ENABLE_LIBAVDEVICE', libavdevice_dep.found())
 conf_data.set10('ENABLE_CUSTOM_VPP', true)
 conf_data.set10('ENABLE_LIBASS_SUBBURN', libass_dep.found())
+conf_data.set10('LIBASS_STATIC_LINK', libass_dep.found() and get_option('libass_static'))
 conf_data.set10('ENABLE_OPENCL', true)
 conf_data.set10('ENABLE_AVCODEC_OUT_THREAD', true)
 conf_data.set10('ENABLE_CPP_REGEX', true)
@@ -587,6 +596,7 @@ mppcore_sources = files(
   'mppcore/rgy_input_sm.cpp',
   'mppcore/rgy_input_vpy.cpp',
   'mppcore/rgy_language.cpp',
+  'mppcore/rgy_libass.cpp',
   'mppcore/rgy_level.cpp',
   'mppcore/rgy_level_av1.cpp',
   'mppcore/rgy_level_h264.cpp',
@@ -663,8 +673,11 @@ endif
 if avisynth_compile_dep.found()
   all_deps += avisynth_compile_dep
 endif
-if libass_dep.found()
-  all_deps += libass_dep
+if libass_compile_dep.found()
+  all_deps += libass_compile_dep
+endif
+if libass_link_dep.found()
+  all_deps += libass_link_dep
 endif
 if libdovi_dep.found()
   all_deps += libdovi_dep
@@ -695,6 +708,7 @@ summary({
   'VapourSynth': enable_vapoursynth and have_vapoursynth_headers,
   'AviSynth': enable_avisynth and have_avisynth_headers,
   'libass': libass_dep.found(),
+  'libass static': libass_dep.found() and get_option('libass_static'),
   'dtl': enable_dtl,
   'libdovi': libdovi_dep.found(),
   'libhdr10plus': libhdr10plus_dep.found(),
