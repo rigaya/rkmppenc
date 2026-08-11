@@ -1,4 +1,31 @@
 # rkmppenc Release Notes
+## 0.19
+
+- Support mid-stream resolution changes; add [--adapt-resolution](./rkmppenc_Options.en.md#--adapt-resolution-intxint) to set the upper limit for mid-stream input resolution.
+- Add support to track PMT changes and follow successor streams within the same program.
+- Support language exclusion for audio/subtitle track selection ([--audio-copy](./rkmppenc_Options.en.md#--audio-copy-intstringintstring) / [--sub-copy](./rkmppenc_Options.en.md#--sub-copy-intstringintstring)).
+- Add high quality deinterlace filter [--vpp-kfm](./rkmppenc_Options.en.md#--vpp-kfm-param1value1param2value2) (supports 24/30/60 mixed VFR), with related [--vpp-rtgmc](./rkmppenc_Options.en.md#--vpp-rtgmc-param1value1) / [--vpp-degrain](./rkmppenc_Options.en.md#--vpp-degrain-param1value1).
+- Add [--vpp-bwdif](./rkmppenc_Options.en.md#--vpp-bwdif-param1value1) and [--vpp-ivtc](./rkmppenc_Options.en.md#--vpp-ivtc-param1value1param2value2).
+- Add [--vpp-softlight](./rkmppenc_Options.en.md#--vpp-softlight-param1value1param2value2), [--vpp-detailsharpen](./rkmppenc_Options.en.md#--vpp-detailsharpen-param1value1param2value2), [--vpp-msmooth](./rkmppenc_Options.en.md#--vpp-msmooth-param1value1param2value2), [--vpp-msharpen](./rkmppenc_Options.en.md#--vpp-msharpen-param1value1param2value2).
+- Add [--vpp-chromashift](./rkmppenc_Options.en.md#--vpp-chromashift-param1value1param2value2), [--vpp-deblock](./rkmppenc_Options.en.md#--vpp-deblock-param1value1param2value2), [--vpp-deflicker](./rkmppenc_Options.en.md#--vpp-deflicker-param1value1param2value2), [--vpp-colorfix](./rkmppenc_Options.en.md#--vpp-colorfix-param1value1param2value2).
+- Add [--vpp-dehalo](./rkmppenc_Options.en.md#--vpp-dehalo-param1value1param2value2), [--vpp-finedehalo](./rkmppenc_Options.en.md#--vpp-finedehalo-param1value1param2value2), [--vpp-hqdering](./rkmppenc_Options.en.md#--vpp-hqdering-param1value1param2value2).
+- Add [--vpp-fft3d](./rkmppenc_Options.en.md#--vpp-fft3d-param1value1param2value2), [--vpp-hqdn3d](./rkmppenc_Options.en.md#--vpp-hqdn3d-param1value1param2value2), [--vpp-stab](./rkmppenc_Options.en.md#--vpp-stab-param1value1param2value2), [--vpp-vinverse](./rkmppenc_Options.en.md#--vpp-vinverse-param1value1param2value2), [--vpp-cas](./rkmppenc_Options.en.md#--vpp-cas-param1value1param2value2), [--vpp-descale](./rkmppenc_Options.en.md#--vpp-descale-param1value1param2value2), [--vpp-maa](./rkmppenc_Options.en.md#--vpp-maa-param1value1param2value2).
+- Extend [--vpp-warpsharp](./rkmppenc_Options.en.md#--vpp-warpsharp-param1value1param2value2) / [--vpp-nlmeans](./rkmppenc_Options.en.md#--vpp-nlmeans-param1value1param2value2); add fsr1 to [--vpp-resize](./rkmppenc_Options.en.md#--vpp-resize-string).
+- Add [--cl-perf-timeline](./rkmppenc_Options.en.md#--cl-perf-timeline-float); add [--vpy-assume-script-dir](./rkmppenc_Options.en.md#--vpy-assume-script-dir).
+- Improve precision of [--vpp-finedehalo](./rkmppenc_Options.en.md#--vpp-finedehalo-param1value1param2value2). (#777)
+- Mark [--vpp-finedehalo](./rkmppenc_Options.en.md#--vpp-finedehalo-param1value1param2value2) as interlace unsupported. (#782)
+- Fix [--vpp-rtgmc](./rkmppenc_Options.en.md#--vpp-rtgmc-param1value1) chroma_motion=false processing. (#777)
+- Fix GPU memory growth in long [--vpp-kfm](./rkmppenc_Options.en.md#--vpp-kfm-param1value1param2value2) mode=24 runs; improve memory retention.
+- Output mp4 trailer even if an error has occurred.
+- Fix audio desync when libavformat returns negative pts.
+- Fix libopus encoding for 5.1 / 7.1 channel layouts.
+- Fix E-AC3 encode finishing with an error.
+- Improve subtitle burn-in for Blu-ray / MPEG-TS (PGS) inputs; fix subtitles not passed to [--vpp-subburn](./rkmppenc_Options.en.md#--vpp-subburn-param1value1param2value2) when no audio processing is used.
+- Fix periodic IDR frames being output only once at the beginning.
+- Automatically disable output thread when [--lowlatency](./rkmppenc_Options.en.md#--lowlatency) is specified.
+- Support odd crop values when output resolution must be even.
+- Fix various stability issues (chapter parsing, bitstream parsing, color conversion, VPP filters, etc.).
+
 ## 0.18
 
 - Fix issue where DTS-X could not be copied.
