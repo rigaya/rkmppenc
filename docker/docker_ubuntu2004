@@ -5,6 +5,7 @@ ARG FFMPEG_DLL_REPO=https://github.com/rigaya/build_scripts.git
 ARG FFMPEG_DLL_REF=master
 ARG BUILD_SCRIPTS_DIR=/opt/build_scripts
 ARG FFMPEG_PREFIX=/opt/build_scripts/ffmpeg_dll/build_dll/arm64/build
+ARG CMAKE_VERSION=3.31.10
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -44,10 +45,17 @@ RUN apt-get update \
       libssl-dev \
     && python3 -m pip install --upgrade pip \
     && python3 -m pip install --upgrade meson ninja \
-    && cmake --version \
     && meson --version \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz" -O /tmp/cmake.tar.gz \
+    && tar -xzf /tmp/cmake.tar.gz -C /opt \
+    && rm /tmp/cmake.tar.gz
+
+ENV PATH=/opt/cmake-${CMAKE_VERSION}-linux-aarch64/bin:$PATH
+
+RUN cmake --version
 
 RUN wget https://github.com/tsukumijima/mpp/releases/download/v1.5.0-1-194af18/librockchip-mpp1_1.5.0-1_arm64.deb && \
     apt-get install -y ./librockchip-mpp1_1.5.0-1_arm64.deb && \
